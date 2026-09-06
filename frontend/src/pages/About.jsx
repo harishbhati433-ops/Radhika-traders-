@@ -18,7 +18,7 @@ export default function About() {
             </p>
             <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
               <div className="flex items-center gap-4">
-                <img src="/images/harish-bhati.jpeg" alt="Harish Bhati" className="h-16 w-16 rounded-full border-2 border-amber-400 object-cover" style={{ objectPosition: "50% 38%" }} data-testid="about-owner-avatar" />
+                <img src="/images/harish-bhati-face.jpeg" alt="Harish Bhati" className="h-20 w-20 rounded-full border-2 border-amber-400 object-cover" data-testid="about-owner-avatar" />
                 <div>
                   <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Owner & Founder</div>
                   <div className="mt-1 font-display text-xl font-bold text-slate-900">Harish Bhati</div>
