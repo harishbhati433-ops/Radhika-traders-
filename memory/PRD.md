@@ -40,3 +40,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## Notes
 - OTP emails send via Resend AND are logged to backend logs (`[OTP ...]`) for testing.
 - Admin KYC approval currently: customer KYC submits as "pending" which already unlocks withdrawal; a formal admin verify toggle is backlog P1.
+
+
+## Update (June 2026)
+- Contact page: WhatsApp 'Chat on WhatsApp' button linked to wa.me/916376541191 with pre-filled message. Footer: WhatsApp + Instagram/Facebook/YouTube icons (social URLs are placeholders — instagram.com/facebook.com/youtube.com — pending real links from user).
+- Backlog: P1 Email OTP (signup/reset), P1 statement PDF/Excel/CSV download; P2 WhatsApp/SMS OTP, P2 automated click/lead tracking.

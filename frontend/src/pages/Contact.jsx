@@ -33,14 +33,14 @@ export default function Contact() {
               <p className="mt-4 text-sm text-red-100">Have questions about campaigns, payouts or partnership? Reach out — we usually respond within a few hours.</p>
             </div>
             <div className="mt-8 space-y-3">
-              <a href="https://wa.me/916376541191" target="_blank" rel="noreferrer" data-testid="contact-whatsapp"
+              <a href="https://wa.me/916376541191?text=Hello%20Radhika%20Traders%2C%20I%20want%20to%20know%20more%20about%20your%20campaigns." target="_blank" rel="noreferrer" data-testid="contact-whatsapp"
                 className="flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-sm font-bold hover:brightness-110">
                 <MessageCircle className="h-4 w-4" /> Chat on WhatsApp
               </a>
               <div className="flex justify-center gap-2">
-                <a href="https://instagram.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/10 p-3 hover:bg-pink-600"><Instagram className="h-5 w-5" /></a>
-                <a href="https://facebook.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/10 p-3 hover:bg-blue-600"><Facebook className="h-5 w-5" /></a>
-                <a href="https://youtube.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/10 p-3 hover:bg-red-600"><Youtube className="h-5 w-5" /></a>
+                <a href="https://instagram.com" target="_blank" rel="noreferrer" data-testid="contact-instagram" className="rounded-lg bg-white/10 p-3 hover:bg-pink-600"><Instagram className="h-5 w-5" /></a>
+                <a href="https://facebook.com" target="_blank" rel="noreferrer" data-testid="contact-facebook" className="rounded-lg bg-white/10 p-3 hover:bg-blue-600"><Facebook className="h-5 w-5" /></a>
+                <a href="https://youtube.com" target="_blank" rel="noreferrer" data-testid="contact-youtube" className="rounded-lg bg-white/10 p-3 hover:bg-red-600"><Youtube className="h-5 w-5" /></a>
               </div>
             </div>
           </div>
