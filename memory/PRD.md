@@ -47,3 +47,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Backlog: P1 Email OTP (signup/reset), P1 statement PDF/Excel/CSV download; P2 WhatsApp/SMS OTP, P2 automated click/lead tracking.
 
 - About page: Owner & Founder Harish Bhati bio added — 7 years market experience (user explicitly said 7, not 6).
+- Owner real photos added (/frontend/public/images/harish-bhati.jpeg, harish-bhati-2.jpeg) on About page (hero + avatar) and Contact owner card. Faces untouched; only camera watermark strip cropped.

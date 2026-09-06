@@ -17,8 +17,13 @@ export default function About() {
               Our team brings <strong>3+ years of individual experience</strong> and <strong>6+ years of combined expertise</strong> in the financial and digital marketing space.
             </p>
             <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Owner & Founder</div>
-              <div className="mt-1 font-display text-xl font-bold text-slate-900">Harish Bhati</div>
+              <div className="flex items-center gap-4">
+                <img src="/images/harish-bhati.jpeg" alt="Harish Bhati" className="h-16 w-16 rounded-full border-2 border-amber-400 object-cover" style={{ objectPosition: "50% 38%" }} data-testid="about-owner-avatar" />
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Owner & Founder</div>
+                  <div className="mt-1 font-display text-xl font-bold text-slate-900">Harish Bhati</div>
+                </div>
+              </div>
               <p className="mt-3 text-sm text-slate-600">
                 Harish Bhati has been working in the financial & affiliate marketing market for <strong>7 years</strong>. With deep hands-on experience across demat accounts, banking products, insurance and digital campaigns, he leads Radhika Traders with a vision to help partners earn genuinely and customers choose the right financial products.
               </p>
@@ -31,8 +36,25 @@ export default function About() {
               </div>
             </div>
           </div>
-          <img src="https://images.pexels.com/photos/8068654/pexels-photo-8068654.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-            alt="Radhika Traders team" className="w-full rounded-3xl object-cover shadow-xl rt-fade-up" style={{ maxHeight: 460 }} />
+          <div className="grid grid-cols-5 gap-4 rt-fade-up" data-testid="about-owner-photos">
+            <div className="col-span-3 relative overflow-hidden rounded-3xl shadow-xl" style={{ height: 560 }}>
+              <img src="/images/harish-bhati.jpeg" alt="Harish Bhati — Owner & Founder, Radhika Traders"
+                className="h-full w-full object-cover object-top" data-testid="about-owner-photo-main" />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 text-white">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Owner & Founder</div>
+                <div className="font-display text-xl font-bold">Harish Bhati</div>
+              </div>
+            </div>
+            <div className="col-span-2 flex flex-col gap-4">
+              <div className="relative flex-1 overflow-hidden rounded-3xl shadow-xl">
+                <img src="/images/harish-bhati-2.jpeg" alt="Harish Bhati" className="h-full w-full object-cover object-top" data-testid="about-owner-photo-2" />
+              </div>
+              <div className="rounded-3xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-5 text-white">
+                <div className="font-display text-4xl font-extrabold text-amber-300">7+</div>
+                <div className="text-xs font-semibold uppercase tracking-wider">Years in the Market</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-16">

@@ -28,8 +28,13 @@ export default function Contact() {
           </div>
           <div className="flex flex-col justify-between rounded-2xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-8 text-white">
             <div>
-              <h3 className="font-display text-2xl font-bold">Owner & Founder</h3>
-              <p className="mt-1 text-lg text-amber-300">Harish Bhati</p>
+              <div className="flex items-center gap-4">
+                <img src="/images/harish-bhati.jpeg" alt="Harish Bhati" className="h-20 w-20 rounded-full border-2 border-amber-300 object-cover shadow-lg" style={{ objectPosition: "50% 38%" }} data-testid="contact-owner-photo" />
+                <div>
+                  <h3 className="font-display text-2xl font-bold">Owner & Founder</h3>
+                  <p className="mt-1 text-lg text-amber-300">Harish Bhati</p>
+                </div>
+              </div>
               <p className="mt-4 text-sm text-red-100">Have questions about campaigns, payouts or partnership? Reach out — we usually respond within a few hours.</p>
             </div>
             <div className="mt-8 space-y-3">
