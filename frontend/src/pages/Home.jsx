@@ -116,7 +116,7 @@ export default function Home() {
         <div className="mb-8">
           <span className="text-xs font-bold uppercase tracking-wider text-red-600">Our People</span>
           <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Radhika Traders Team</h2>
-          <p className="mt-2 max-w-xl text-sm text-slate-600">The team behind every campaign, payout and celebration at our Agar Malwa office.</p>
+          <p className="mt-2 max-w-xl text-sm text-slate-600">The team behind every campaign, payout and celebration at our Agar (M.P.) office.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-3 md:grid-rows-2">
           <img src="/images/team-1.jpeg" alt="Radhika Traders team" data-testid="team-photo-1"

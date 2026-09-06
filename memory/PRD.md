@@ -56,3 +56,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Statement download (PDF/Excel/CSV) verified end-to-end via UI + curl (Sep 2026).
 - Email OTP (signup + forgot-password) verified: real OTP delivered to owner Gmail via Emergent email (Resend), Sep 2026. Note: example.com test addresses get 422 from email service; OTP still logged in backend logs for testing.
 - Earnings Leaderboard: GET /api/leaderboard (current-month credit sums, customers only, names masked "First L."), shown on customer dashboard (components/Leaderboard.jsx) with my rank.
+- Address updated (Sep 2026): "Bada Gawali Pura Rd, nearby Pitambara Hospital, Chhawani Naka, Chhawani, Agar, Madhya Pradesh 465441" in Footer + Contact (both open Google Maps). Home ticker (fake earnings notifications) intentionally KEPT per user for motivation.

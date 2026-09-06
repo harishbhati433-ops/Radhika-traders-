@@ -23,7 +23,7 @@ export function Footer() {
           <ul className="space-y-2.5 text-sm text-slate-400">
             <li><a href="tel:+916376541191" data-testid="footer-phone" className="flex items-center gap-2 hover:text-white"><Phone className="h-4 w-4 text-red-500" /> 6376541191</a></li>
             <li><a href="mailto:radhikatradersofficial@gmail.com" data-testid="footer-email" className="flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4 text-red-500" /> radhikatradersofficial@gmail.com</a></li>
-            <li className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> Bada Gaulipura Road, Chhawani Naka, Near Maa Pitambara Hospital, Agar Malwa, M.P.</li>
+            <li><a href="https://www.google.com/maps/search/?api=1&query=Radhika+Traders+Bada+Gawali+Pura+Rd+Chhawani+Naka+Agar+Madhya+Pradesh+465441" target="_blank" rel="noreferrer" data-testid="footer-address" className="flex items-start gap-2 hover:text-white"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> Bada Gawali Pura Rd, nearby Pitambara Hospital, Chhawani Naka, Chhawani, Agar, Madhya Pradesh 465441</a></li>
           </ul>
         </div>
         <div>

@@ -14,13 +14,13 @@ export default function Contact() {
             {[
               [Phone, "Phone", "6376541191", "tel:+916376541191"],
               [Mail, "Email", "radhikatradersofficial@gmail.com", "mailto:radhikatradersofficial@gmail.com"],
-              [MapPin, "Address", "Bada Gaulipura Road, Chhawani Naka, Near Maa Pitambara Hospital, Radhika Traders, Agar Malwa, M.P.", null],
+              [MapPin, "Address", "Bada Gawali Pura Rd, nearby Pitambara Hospital, Chhawani Naka, Chhawani, Agar, Madhya Pradesh 465441", "https://www.google.com/maps/search/?api=1&query=Radhika+Traders+Bada+Gawali+Pura+Rd+Chhawani+Naka+Agar+Madhya+Pradesh+465441"],
             ].map(([Icon, label, val, href]) => (
               <div key={label} className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="rounded-xl bg-red-50 p-3"><Icon className="h-5 w-5 text-red-600" /></div>
                 <div>
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</div>
-                  {href ? <a href={href} data-testid={`contact-${label.toLowerCase()}-link`} className="text-sm font-semibold text-slate-800 hover:text-red-600">{val}{label === "Phone" && <span className="ml-2 text-xs font-bold text-red-600">Tap to call</span>}</a>
+                  {href ? <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" data-testid={`contact-${label.toLowerCase()}-link`} className="text-sm font-semibold text-slate-800 hover:text-red-600">{val}{label === "Phone" && <span className="ml-2 text-xs font-bold text-red-600">Tap to call</span>}{label === "Address" && <span className="ml-2 text-xs font-bold text-red-600">Open in Maps</span>}</a>
                     : <div className="text-sm font-semibold text-slate-800">{val}</div>}
                 </div>
               </div>

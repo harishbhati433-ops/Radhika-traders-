@@ -795,7 +795,7 @@ async def startup():
             "name": "Harish Bhati", "email": admin_email,
             "password_hash": hash_password(admin_password), "role": "admin",
             "email_verified": True, "referral_code": generate_referral_code(),
-            "mobile": "6376541191", "address": "Agar Malwa, M.P.",
+            "mobile": "6376541191", "address": "Bada Gawali Pura Rd, Chhawani Naka, Agar, Madhya Pradesh 465441",
             "kyc": {"status": "verified"}, "bank": {}, "created_at": now_iso(),
         })
         logger.info("Admin seeded")
