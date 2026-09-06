@@ -6,7 +6,7 @@ import { ShareButtons } from "../components/ShareButtons";
 import api, { fileUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Copy, ArrowLeft, TrendingUp, Wallet, FileText, ListChecks, AlertTriangle, Calendar } from "lucide-react";
+import { Copy, ArrowLeft, TrendingUp, Wallet, FileText, ListChecks, AlertTriangle, Calendar, MousePointerClick } from "lucide-react";
 
 function Field({ label, value }) {
   if (!value) return null;
@@ -24,18 +24,24 @@ export default function CampaignDetail() {
   const nav = useNavigate();
   const [c, setC] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [clicks, setClicks] = useState(null);
 
   useEffect(() => {
     api.get(`/campaigns/slug/${slug}`).then(({ data }) => setC(data)).catch(() => setNotFound(true));
   }, [slug]);
+
+  useEffect(() => {
+    if (user) api.get("/my-clicks").then(({ data }) => setClicks(data)).catch(() => {});
+  }, [user]);
 
   if (notFound) return <PublicLayout><div className="mx-auto max-w-2xl px-6 py-24 text-center"><h1 className="font-display text-2xl font-bold">Campaign not found</h1><Link to="/campaigns" className="mt-4 inline-block text-red-600">← Back to campaigns</Link></div></PublicLayout>;
   if (!c) return <PublicLayout><div className="flex justify-center py-32"><div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div></PublicLayout>;
 
   const origin = window.location.origin;
   const refCode = user?.referral_code;
-  const referralLink = refCode ? `${origin}/campaign/${c.slug}?ref=${refCode}` : `${origin}/campaign/${c.slug}`;
   const primaryLink = (c.affiliate_links || []).find((l) => l.is_primary && l.is_active) || (c.affiliate_links || []).find((l) => l.is_active);
+  const referralLink = refCode ? `${origin}/api/go/${c.slug}?ref=${refCode}` : `${origin}/campaign/${c.slug}`;
+  const myClicks = clicks?.by_campaign?.[c.id] || 0;
 
   const copyRef = () => { navigator.clipboard.writeText(referralLink); toast.success("Referral link copied!"); };
 
@@ -116,6 +122,13 @@ export default function CampaignDetail() {
                     <button data-testid="referral-copy-btn" onClick={copyRef} className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
                   </div>
                   <div className="mt-4"><ShareButtons link={referralLink} message={`${c.offer_name} — Payout ₹${c.payout_amount}!`} testPrefix="detail-share" /></div>
+                  <div className="mt-4 flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
+                    <span className="flex items-center gap-1.5 font-semibold text-emerald-800"><MousePointerClick className="h-3.5 w-3.5" /> Clicks on your link</span>
+                    <span className="font-mono font-bold text-emerald-700" data-testid="referral-clicks">{myClicks}</span>
+                  </div>
+                  <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+                    {primaryLink ? "Customers who open your link go straight to the partner's signup page. Every click is tracked to your account." : "No partner link added yet — your link opens this campaign page."}
+                  </p>
                 </>
               ) : (
                 <div className="mt-3 rounded-lg bg-slate-50 p-4 text-center">

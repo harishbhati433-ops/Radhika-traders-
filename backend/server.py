@@ -13,7 +13,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Query, Header
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
@@ -431,6 +431,50 @@ async def get_campaign_by_slug(slug: str):
     return campaign_out(c)
 
 
+def _primary_link(c: dict) -> Optional[str]:
+    links = [l for l in c.get("affiliate_links", []) if l.get("is_active") and l.get("url")]
+    if not links:
+        return None
+    prim = next((l for l in links if l.get("is_primary")), links[0])
+    return prim["url"]
+
+
+@api.get("/go/{slug}")
+async def go_affiliate(slug: str, request: Request, ref: Optional[str] = None):
+    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+    origin = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
+    if not c:
+        return RedirectResponse(url=f"{origin}/campaigns", status_code=302)
+    target = _primary_link(c) if c.get("status") == "live" and c.get("offer_enabled", True) else None
+    partner = await db.users.find_one({"referral_code": ref}) if ref else None
+    await db.clicks.insert_one({
+        "campaign_id": str(c["_id"]), "slug": slug, "ref_code": ref or "",
+        "user_id": str(partner["_id"]) if partner else None,
+        "redirected_to": target or "", "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
+        "user_agent": request.headers.get("user-agent", "")[:300], "created_at": now_iso(),
+    })
+    return RedirectResponse(url=target or f"{origin}/campaign/{slug}", status_code=302)
+
+
+@api.get("/my-clicks")
+async def my_clicks(user: dict = Depends(get_current_user)):
+    rows = await db.clicks.aggregate([
+        {"$match": {"user_id": user["id"]}},
+        {"$group": {"_id": "$campaign_id", "clicks": {"$sum": 1}}},
+    ]).to_list(1000)
+    return {"total": sum(r["clicks"] for r in rows), "by_campaign": {r["_id"]: r["clicks"] for r in rows}}
+
+
+def _normalize_links(links: list) -> list:
+    out = []
+    for l in links:
+        u = (l.get("url") or "").strip()
+        if u and not u.lower().startswith(("http://", "https://")):
+            u = "https://" + u
+        out.append({**l, "url": u})
+    return out
+
+
 @api.get("/campaigns/{cid}")
 async def get_campaign(cid: str):
     c = await db.campaigns.find_one({"_id": ObjectId(cid)})
@@ -442,7 +486,7 @@ async def get_campaign(cid: str):
 @api.post("/campaigns")
 async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
-    doc["affiliate_links"] = [l for l in doc.get("affiliate_links", [])]
+    doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["slug"] = await unique_slug(body.offer_name)
     doc["is_deleted"] = False
     doc["created_at"] = now_iso()
@@ -455,6 +499,7 @@ async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)
 @api.put("/campaigns/{cid}")
 async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
+    doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["updated_at"] = now_iso()
     current = await db.campaigns.find_one({"_id": ObjectId(cid)})
     if current and current.get("offer_name") != body.offer_name:
