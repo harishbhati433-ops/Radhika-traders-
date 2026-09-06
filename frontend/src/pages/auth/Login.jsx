@@ -19,10 +19,10 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const { data } = await api.post("/auth/login", { email, password, portal: "customer" });
       loginWithToken(data.token, data.user);
       toast.success(`Welcome back, ${data.user.name}!`);
-      nav(data.user.role === "admin" ? "/admin" : "/dashboard");
+      nav("/dashboard");
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Login failed");
     } finally {

@@ -132,6 +132,7 @@ class ResendOtpIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    portal: str = "customer"
 
 
 class ForgotIn(BaseModel):
@@ -358,6 +359,10 @@ async def login(body: LoginIn):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if body.portal == "admin" and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="This login is for admin only. Please use the customer login.")
+    if body.portal != "admin" and user["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Admin accounts cannot log in here. Please use the Admin Login page.")
     if user["role"] == "customer" and not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="Please verify your email first")
     token = create_access_token(str(user["_id"]), email, user["role"])

@@ -40,7 +40,7 @@ def _grep_otp(email: str, purpose: str = "signup", wait: float = 3.0) -> str | N
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "portal": "admin"})
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
     data = r.json()
     assert data["user"]["role"] == "admin"
@@ -81,7 +81,7 @@ class TestAuth:
         assert admin_token
 
     def test_login_bad_password(self):
-        r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": "wrong"})
+        r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": "wrong", "portal": "admin"})
         assert r.status_code == 401
 
     def test_login_before_verify_blocked(self):

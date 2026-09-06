@@ -68,3 +68,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Category tiles (CategoryTiles.jsx) on public Campaigns + customer Campaigns pages; categories seeded idempotently incl. Mutual Fund.
 - Home hero: zero-investment messaging + green strip.
 - Iteration 2 testing (Sep 2026): 37/37 backend tests pass + UI smoke pass for affiliate redirect, payout details, mark-paid proof, banners, refer&earn, category tiles, home zero-investment. All NEED RE-PUBLISH to reach live radhikatraders.net.
+- Login separation (Sep 2026): /api/auth/login takes portal ("customer"|"admin"); admin accounts rejected (403) on customer /login, customers rejected on /admin/login. Tests updated to pass portal=admin.

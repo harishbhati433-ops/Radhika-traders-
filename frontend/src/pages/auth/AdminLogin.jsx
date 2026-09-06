@@ -19,7 +19,7 @@ export default function AdminLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const { data } = await api.post("/auth/login", { email, password, portal: "admin" });
       if (data.user.role !== "admin") {
         toast.error("This login is for admins only.");
         setLoading(false);
