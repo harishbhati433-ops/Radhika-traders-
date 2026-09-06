@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
+import { Leaderboard } from "../../components/Leaderboard";
 import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
@@ -60,23 +61,28 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold text-slate-900">Available Campaigns</h2>
-        <Link to="/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">View all <ArrowRight className="h-4 w-4" /></Link>
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {campaigns.map((c) => (
-          <Link key={c.id} to={`/campaign/${c.slug}`} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 hover:rt-gold-card">
-            <div>
-              <div className="font-display font-bold text-slate-900">{c.offer_name}</div>
-              <div className="text-xs text-slate-500">{c.company} · {c.category}</div>
-            </div>
-            <div className="text-right">
-              <div className="font-mono font-bold text-emerald-600">₹{c.payout_amount}</div>
-              <div className="text-[10px] uppercase text-slate-400">{c.payout_type}</div>
-            </div>
-          </Link>
-        ))}
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold text-slate-900">Available Campaigns</h2>
+            <Link to="/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">View all <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {campaigns.map((c) => (
+              <Link key={c.id} to={`/campaign/${c.slug}`} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 hover:rt-gold-card">
+                <div>
+                  <div className="font-display font-bold text-slate-900">{c.offer_name}</div>
+                  <div className="text-xs text-slate-500">{c.company} · {c.category}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-emerald-600">₹{c.payout_amount}</div>
+                  <div className="text-[10px] uppercase text-slate-400">{c.payout_type}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="lg:col-span-2"><Leaderboard /></div>
       </div>
     </DashboardLayout>
   );

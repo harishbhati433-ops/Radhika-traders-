@@ -55,3 +55,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Floating WhatsApp bubble (components/WhatsAppFloat.jsx) rendered globally in App.js, bottom-right, links to wa.me/916376541191.
 - Statement download (PDF/Excel/CSV) verified end-to-end via UI + curl (Sep 2026).
 - Email OTP (signup + forgot-password) verified: real OTP delivered to owner Gmail via Emergent email (Resend), Sep 2026. Note: example.com test addresses get 422 from email service; OTP still logged in backend logs for testing.
+- Earnings Leaderboard: GET /api/leaderboard (current-month credit sums, customers only, names masked "First L."), shown on customer dashboard (components/Leaderboard.jsx) with my rank.

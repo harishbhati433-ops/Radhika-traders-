@@ -521,6 +521,35 @@ async def get_transactions(user: dict = Depends(get_current_user)):
     return [{**{k: v for k, v in t.items() if k != "_id"}, "id": str(t["_id"])} for t in txns]
 
 
+def _mask_name(name: str) -> str:
+    parts = (name or "Partner").strip().split()
+    return parts[0] + (f" {parts[-1][0]}." if len(parts) > 1 else "")
+
+
+@api.get("/leaderboard")
+async def leaderboard(user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    pipeline = [
+        {"$match": {"type": "credit", "created_at": {"$gte": month_start}}},
+        {"$group": {"_id": "$user_id", "earned": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"earned": -1}},
+    ]
+    rows = await db.transactions.aggregate(pipeline).to_list(500)
+    ids = [ObjectId(r["_id"]) for r in rows if ObjectId.is_valid(r["_id"])]
+    users = {str(u["_id"]): u for u in await db.users.find({"_id": {"$in": ids}}, {"name": 1, "role": 1}).to_list(500)}
+    ranked = []
+    for r in rows:
+        u = users.get(r["_id"])
+        if not u or u.get("role") != "customer":
+            continue
+        ranked.append({"user_id": r["_id"], "name": _mask_name(u.get("name")), "earned": round(r["earned"], 2), "count": r["count"]})
+    me = next(({"rank": i + 1, **r} for i, r in enumerate(ranked) if r["user_id"] == user["id"]), None)
+    top = [{"rank": i + 1, "name": r["name"], "earned": r["earned"], "count": r["count"], "is_me": r["user_id"] == user["id"]}
+           for i, r in enumerate(ranked[:10])]
+    return {"month": now.strftime("%B %Y"), "top": top, "me": me and {"rank": me["rank"], "earned": me["earned"], "count": me["count"]}, "total_partners": len(ranked)}
+
+
 # ----------------------------- Withdrawals -----------------------------
 @api.post("/withdrawals")
 async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_user)):
