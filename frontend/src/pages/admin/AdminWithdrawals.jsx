@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
+import { PayoutDetails } from "../../components/PayoutDetails";
 import { toast } from "sonner";
 import { Check, X, IndianRupee } from "lucide-react";
 
@@ -38,15 +39,16 @@ export default function AdminWithdrawals() {
 
       <div className="space-y-3">
         {list.length === 0 ? <p className="py-12 text-center text-slate-500" data-testid="wd-empty">No requests.</p> : list.map((w) => (
-          <div key={w.id} data-testid={`wd-row-${w.id}`} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="min-w-0">
+          <div key={w.id} data-testid={`wd-row-${w.id}`} className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-lg font-bold text-slate-900 flex items-center"><IndianRupee className="h-4 w-4" />{w.amount}</span>
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>
               </div>
               <div className="text-sm font-semibold text-slate-700">{w.user_name} <span className="font-normal text-slate-400">· {w.user_email}</span></div>
-              <div className="text-xs text-slate-500">{w.method} · {w.details} · {(w.created_at || "").slice(0, 10)}</div>
+              <div className="text-xs text-slate-500">Requested {(w.created_at || "").slice(0, 10)}</div>
               {w.admin_note && <div className="text-xs text-rose-500">Note: {w.admin_note}</div>}
+              <PayoutDetails w={w} />
             </div>
             <div className="flex flex-wrap gap-2">
               {w.status === "pending" && <button onClick={() => update(w, "approved")} data-testid={`wd-approve-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Approve</button>}

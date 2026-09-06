@@ -210,7 +210,7 @@ class CreditIn(BaseModel):
 class WithdrawIn(BaseModel):
     amount: float
     method: str
-    details: str
+    details: str = ""
 
 
 class WithdrawStatusIn(BaseModel):
@@ -606,9 +606,20 @@ async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_
     wallet = await compute_wallet(user["id"])
     if body.amount > wallet["balance"]:
         raise HTTPException(status_code=400, detail="Insufficient available balance")
+    bank = full.get("bank", {}) or {}
+    details = (body.details or "").strip()
+    if not details:
+        details = bank.get("upi", "") if body.method == "UPI" else bank.get("bank_account", "")
+    if not details:
+        raise HTTPException(status_code=400, detail="Please enter your UPI ID or bank account number")
     doc = {
         "user_id": user["id"], "user_name": full.get("name"), "user_email": full.get("email"),
-        "amount": body.amount, "method": body.method, "details": body.details,
+        "user_mobile": full.get("mobile", ""),
+        "amount": body.amount, "method": body.method, "details": details,
+        "payout_info": {
+            "account_holder": bank.get("account_holder", ""), "bank_account": bank.get("bank_account", ""),
+            "ifsc": bank.get("ifsc", ""), "upi": bank.get("upi", ""), "pan": full.get("kyc", {}).get("pan", ""),
+        },
         "status": "pending", "admin_note": "", "created_at": now_iso(), "updated_at": now_iso(),
     }
     res = await db.withdrawals.insert_one(doc)

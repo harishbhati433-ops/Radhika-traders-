@@ -32,6 +32,9 @@ export default function Withdrawals() {
   useEffect(load, []);
 
   const kycDone = user?.kyc?.status === "pending" || user?.kyc?.status === "verified";
+  const bank = user?.bank || {};
+  const saved = method === "UPI" ? bank.upi : bank.bank_account;
+  useEffect(() => { setDetails(saved || ""); }, [method, saved]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -66,7 +69,13 @@ export default function Withdrawals() {
                   <option>UPI</option><option>Bank Transfer</option>
                 </select>
               </div>
-              <div><Label>Payment Details (UPI ID / Account no.)</Label><Input data-testid="withdraw-details" required value={details} onChange={(e) => setDetails(e.target.value)} className="mt-1.5" placeholder="name@upi or A/C number" /></div>
+              <div>
+                <Label>{method === "UPI" ? "UPI ID" : "Bank Account Number"}</Label>
+                <Input data-testid="withdraw-details" required value={details} onChange={(e) => setDetails(e.target.value)} className="mt-1.5" placeholder={method === "UPI" ? "yourname@upi" : "Account number"} />
+                {method === "Bank Transfer" && bank.ifsc && <p className="mt-1 text-xs text-slate-500">Holder: <b>{bank.account_holder}</b> · IFSC: <b>{bank.ifsc}</b> (from your KYC)</p>}
+                {method === "UPI" && !bank.upi && <p className="mt-1 text-xs text-amber-700">Tip: add your UPI ID in <Link to="/profile" className="underline">Profile & KYC</Link> to auto-fill next time.</p>}
+              </div>
+              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Payment is transferred manually by Radhika Traders to the UPI ID / bank account above, usually within 24–48 hours. You will see the status here.</p>
               <button type="submit" data-testid="withdraw-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />} Submit Request
               </button>
@@ -84,7 +93,7 @@ export default function Withdrawals() {
                 <div key={w.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-3" data-testid={`withdraw-${w.id}`}>
                   <div>
                     <div className="font-mono font-bold text-slate-900">₹{w.amount}</div>
-                    <div className="text-xs text-slate-400">{w.method} · {(w.created_at || "").slice(0, 10)}</div>
+                    <div className="text-xs text-slate-400">{w.method} · {w.details} · {(w.created_at || "").slice(0, 10)}</div>
                     {w.admin_note && <div className="text-xs text-slate-500">Note: {w.admin_note}</div>}
                   </div>
                   <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>
