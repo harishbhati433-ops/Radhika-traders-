@@ -607,11 +607,33 @@ async def update_withdrawal(wid: str, body: WithdrawStatusIn, admin: dict = Depe
 @api.get("/admin/customers")
 async def list_customers(admin: dict = Depends(require_admin)):
     users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(5000)
+    ids = [str(u["_id"]) for u in users]
+    txns = await db.transactions.find({"user_id": {"$in": ids}}).to_list(100000)
+    wds = await db.withdrawals.find({"user_id": {"$in": ids}}).to_list(100000)
+    agg = {i: {"credit": 0.0, "debit": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
+    for t in txns:
+        a = agg.get(t["user_id"])
+        if a and t["type"] in ("credit", "debit"):
+            a[t["type"]] += t["amount"]
+    for w in wds:
+        a = agg.get(w["user_id"])
+        if not a:
+            continue
+        if w["status"] == "paid":
+            a["paid"] += w["amount"]
+        elif w["status"] in ("pending", "approved"):
+            a["pending"] += w["amount"]
     out = []
     for u in users:
-        w = await compute_wallet(str(u["_id"]))
+        a = agg[str(u["_id"])]
         pu = public_user(u)
-        pu["wallet"] = w
+        pu["wallet"] = {
+            "balance": round(a["credit"] - a["debit"] - a["pending"], 2),
+            "total_earnings": round(a["credit"], 2),
+            "total_credited": round(a["credit"], 2),
+            "total_withdrawn": round(a["paid"], 2),
+            "pending_withdrawal": round(a["pending"], 2),
+        }
         out.append(pu)
     return out
 
@@ -814,61 +836,6 @@ async def seed_demo_data():
         for name in ["Demat", "Savings A/C", "Credit Card", "Insurance", "Loan", "Digital Marketing"]:
             await db.categories.insert_one({"name": name, "slug": slugify(name), "enabled": True,
                                             "is_deleted": False, "created_at": now_iso()})
-    if await db.campaigns.count_documents({}) == 0:
-        demos = [
-            {"offer_name": "Angel One Demat", "company": "Angel One", "category": "Demat",
-             "payout_amount": 550, "payout_type": "Per Account", "campaign_type": "Account Opening",
-             "benefits": "Free Demat + Trading account, zero AMC first year", "customer_benefit": "Free account opening",
-             "investment": "No investment required", "min_requirement": "First trade within 30 days",
-             "max_payout": "Rs.550 per verified account", "payment_timeline": "T+30 days",
-             "requirements": "PAN, Aadhaar, Bank proof", "important_notes": "Account must complete first trade",
-             "description": "Open a free Angel One Demat account and start trading with India's leading broker.",
-             "status": "live"},
-            {"offer_name": "Zerodha Account", "company": "Zerodha", "category": "Demat",
-             "payout_amount": 400, "payout_type": "Per Account", "campaign_type": "First Trade",
-             "benefits": "Lowest brokerage, Kite platform", "customer_benefit": "Rs.0 equity delivery",
-             "investment": "Rs.200 account opening", "min_requirement": "Complete KYC + 1 trade",
-             "max_payout": "Rs.400", "payment_timeline": "T+45 days",
-             "description": "Join Zerodha, India's largest stock broker with the Kite app.", "status": "live"},
-            {"offer_name": "HDFC Tata Neu Credit Card", "company": "HDFC Bank", "category": "Credit Card",
-             "payout_amount": 1200, "payout_type": "Per Card", "campaign_type": "Non-Trade",
-             "benefits": "NeuCoins on every spend, welcome bonus", "customer_benefit": "Up to 10% back on Tata brands",
-             "investment": "No joining fee (conditional)", "min_requirement": "Card approved + first swipe",
-             "max_payout": "Rs.1200", "payment_timeline": "T+60 days",
-             "description": "Apply for the HDFC Tata Neu Infinity Credit Card and earn generous rewards.", "status": "live"},
-            {"offer_name": "AU Small Finance Savings A/C", "company": "AU Bank", "category": "Savings A/C",
-             "payout_amount": 450, "payout_type": "Per Account", "campaign_type": "Account Opening",
-             "benefits": "High interest savings, zero balance", "customer_benefit": "Up to 7% interest",
-             "investment": "Zero balance account", "min_requirement": "Video KYC completed",
-             "max_payout": "Rs.450", "payment_timeline": "T+30 days",
-             "description": "Open an AU Small Finance Bank digital savings account instantly.", "status": "live"},
-            {"offer_name": "SBI SimplyCLICK Card", "company": "SBI Card", "category": "Credit Card",
-             "payout_amount": 900, "payout_type": "Per Card", "campaign_type": "Non-Trade",
-             "benefits": "Online shopping rewards", "customer_benefit": "10X rewards on online spends",
-             "investment": "Rs.499 annual fee", "min_requirement": "Card issued",
-             "max_payout": "Rs.900", "payment_timeline": "T+60 days",
-             "description": "Apply for the SBI SimplyCLICK credit card, ideal for online shoppers.", "status": "paused"},
-            {"offer_name": "Term Life Insurance", "company": "PolicyBazaar", "category": "Insurance",
-             "payout_amount": 2200, "payout_type": "Per Policy", "campaign_type": "Non-Trade",
-             "benefits": "High cover, low premium term plans", "customer_benefit": "Tax saving + family protection",
-             "investment": "Premium as per plan", "min_requirement": "Policy issued & paid",
-             "max_payout": "Rs.2200", "payment_timeline": "T+90 days",
-             "description": "Help customers secure their family with affordable term insurance plans.", "status": "live"},
-        ]
-        for d in demos:
-            d.setdefault("offer_enabled", True)
-            d.setdefault("affiliate_links", [])
-            for f in ["affiliate_payout", "special_bonus", "validity", "important_conditions",
-                      "start_date", "end_date", "budget", "report_frequency", "payment_terms",
-                      "logo_url", "banner_url", "requirements", "important_notes", "min_requirement",
-                      "max_payout", "payment_timeline", "investment", "customer_benefit"]:
-                d.setdefault(f, "")
-            d["slug"] = await unique_slug(d["offer_name"])
-            d["is_deleted"] = False
-            d["created_at"] = now_iso()
-            d["updated_at"] = now_iso()
-            await db.campaigns.insert_one(d)
-        logger.info("Demo campaigns seeded")
 
 
 @app.on_event("shutdown")
