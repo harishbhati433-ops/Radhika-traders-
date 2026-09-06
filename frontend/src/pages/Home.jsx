@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { CampaignCard } from "../components/CampaignCard";
 import api from "../lib/api";
-import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee } from "lucide-react";
 
 const ticker = [
   "Rahul earned ₹1,200 on HDFC Credit Card campaign",
@@ -40,11 +40,14 @@ export default function Home() {
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/50 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-700">
               <BadgeCheck className="h-3.5 w-3.5" /> Trusted Partner since 2023
             </span>
+            <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white" data-testid="hero-zero-investment-badge">
+              <IndianRupee className="h-3.5 w-3.5" /> ₹0 Investment · 100% Free to Join
+            </span>
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Earn with India's top <span className="text-red-600">financial</span> affiliate campaigns
+              Earn with <span className="text-emerald-600">zero investment</span> — India's top <span className="text-red-600">financial</span> affiliate campaigns
             </h1>
             <p className="mt-5 max-w-lg text-base text-slate-600 sm:text-lg">
-              Share Demat, Credit Card, Savings & Insurance campaigns. Track your earnings, manage your wallet and withdraw seamlessly — all with Radhika Traders.
+              <strong className="text-slate-900">No investment. No fees. No hidden charges.</strong> Just share Demat, Credit Card, Savings & Insurance campaigns with your network and earn a payout on every conversion — paid directly to your UPI or bank account.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/signup" data-testid="hero-get-started" className="rt-gradient-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold">
@@ -55,7 +58,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="mt-10 flex gap-8">
-              {[["50+", "Campaigns"], ["₹2,200", "Max Payout"], ["100%", "Secure"]].map(([v, l]) => (
+              {[["₹0", "Investment Needed"], ["₹2,200", "Max Payout"], ["100%", "Free & Secure"]].map(([v, l]) => (
                 <div key={l}>
                   <div className="font-display text-2xl font-extrabold text-slate-900">{v}</div>
                   <div className="text-xs font-medium text-slate-500">{l}</div>
@@ -75,6 +78,21 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Zero investment strip */}
+      <section className="bg-emerald-600 text-white" data-testid="zero-investment-strip">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div>
+            <div className="font-display text-xl font-extrabold sm:text-2xl">Zero Investment. Real Earnings.</div>
+            <div className="text-sm text-emerald-100">आपको एक भी रुपया लगाने की ज़रूरत नहीं — बस link share करें और हर conversion पर payout पाएँ।</div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-bold">
+            {["No joining fee", "No deposit", "No hidden charges", "Withdraw to UPI / Bank"].map((t) => (
+              <span key={t} className="rounded-full bg-white/15 px-3 py-1.5">{t}</span>
+            ))}
           </div>
         </div>
       </section>

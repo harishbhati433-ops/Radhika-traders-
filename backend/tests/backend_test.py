@@ -143,9 +143,13 @@ class TestCampaigns:
             assert c.get("status") != "closed"
 
     def test_search_and_filter(self):
-        r = requests.get(f"{API}/campaigns", params={"search": "Angel"})
+        items = requests.get(f"{API}/campaigns").json()
+        if not items:
+            pytest.skip("no seeded campaigns")
+        needle = items[0]["offer_name"].split()[0]
+        r = requests.get(f"{API}/campaigns", params={"search": needle})
         assert r.status_code == 200
-        assert any("Angel" in c["offer_name"] for c in r.json())
+        assert any(needle in c["offer_name"] for c in r.json())
         r2 = requests.get(f"{API}/campaigns", params={"category": "Demat"})
         assert all(c["category"] == "Demat" for c in r2.json())
         r3 = requests.get(f"{API}/campaigns", params={"campaign_type": "First Trade"})
@@ -326,3 +330,214 @@ class TestUpload:
         g = requests.get(f"{BASE_URL}{url}")
         assert g.status_code == 200
         assert "image" in g.headers.get("content-type", "")
+
+
+
+# ---------- Affiliate redirect ----------
+class TestAffiliate:
+    def test_go_redirect_with_ref_and_click_logged(self, cust_headers):
+        r = requests.get(f"{API}/go/choice-trade-test", params={"ref": "RTA12499"},
+                         allow_redirects=False)
+        assert r.status_code == 302
+        loc = r.headers.get("location", "")
+        assert loc.startswith("https://offertracking.in/"), f"Expected external primary URL, got {loc}"
+
+    def test_go_unknown_slug_redirects_to_campaigns_list(self):
+        r = requests.get(f"{API}/go/no-such-slug-xyz", allow_redirects=False)
+        assert r.status_code == 302
+        assert r.headers.get("location", "").endswith("/campaigns")
+
+    def test_my_clicks_counts_referrer(self):
+        # login as the seeded referrer testcust
+        lr = requests.post(f"{API}/auth/login",
+                           json={"email": "testcust@example.com", "password": "Test@1234"})
+        if lr.status_code != 200:
+            pytest.skip("seeded testcust login failed")
+        tok = lr.json()["token"]
+        h = {"Authorization": f"Bearer {tok}"}
+        # hit the redirect using the referrer's code
+        requests.get(f"{API}/go/choice-trade-test", params={"ref": "RTA12499"},
+                     allow_redirects=False)
+        time.sleep(0.5)
+        r = requests.get(f"{API}/my-clicks", headers=h)
+        assert r.status_code == 200
+        data = r.json()
+        assert "total" in data and "by_campaign" in data
+        assert data["total"] >= 1
+
+
+# ---------- Withdrawal payout details / user_mobile ----------
+class TestWithdrawalPayout:
+    def test_upi_empty_details_autofill_from_kyc(self, admin_headers):
+        # Fresh customer with bank UPI, credit, submit withdrawal with empty details
+        email = f"test_wpayout_{uuid.uuid4().hex[:8]}@example.com"
+        pw = "Passw0rd!"
+        requests.post(f"{API}/auth/register", json={
+            "name": "WPayout", "email": email, "mobile": "9998887777", "password": pw
+        })
+        code = _grep_otp(email, "signup", wait=5)
+        assert code
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        tok = v.json()["token"]
+        uid = v.json()["user"]["id"]
+        h = {"Authorization": f"Bearer {tok}"}
+        # KYC with bank UPI
+        requests.put(f"{API}/profile/kyc", json={
+            "pan": "AAAPZ1234K", "aadhaar": "111122223333",
+            "bank_account": "50100123456789", "ifsc": "HDFC0000123",
+            "account_holder": "WPayout Test", "upi": "wpayout@ybl"
+        }, headers=h)
+        # credit
+        requests.post(f"{API}/admin/credit",
+                      json={"user_id": uid, "amount": 500, "description": "test"},
+                      headers=admin_headers)
+        # withdraw empty details
+        r = requests.post(f"{API}/withdrawals",
+                          json={"amount": 150, "method": "UPI", "details": ""},
+                          headers=h)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["details"] == "wpayout@ybl", f"Expected auto-fill UPI, got {data.get('details')!r}"
+        assert data.get("user_mobile") == "9998887777"
+        pi = data.get("payout_info") or {}
+        for k in ("account_holder", "bank_account", "ifsc", "upi", "pan"):
+            assert k in pi, f"payout_info missing {k}"
+        assert pi["upi"] == "wpayout@ybl"
+        assert pi["bank_account"] == "50100123456789"
+        assert pi["pan"] == "AAAPZ1234K"
+
+
+# ---------- Mark paid with proof + UTR ----------
+class TestMarkPaidWithProof:
+    def test_mark_paid_with_proof_and_utr(self, admin_headers):
+        email = f"test_paid_{uuid.uuid4().hex[:8]}@example.com"
+        pw = "Passw0rd!"
+        requests.post(f"{API}/auth/register", json={
+            "name": "PaidUser", "email": email, "mobile": "9998887766", "password": pw})
+        code = _grep_otp(email, "signup", wait=5)
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        tok = v.json()["token"]; uid = v.json()["user"]["id"]
+        h = {"Authorization": f"Bearer {tok}"}
+        requests.put(f"{API}/profile/kyc", json={
+            "pan": "ABCPZ1234K", "bank_account": "50100999", "ifsc": "HDFC0000123",
+            "account_holder": "Paid User", "upi": "paid@ybl"}, headers=h)
+        requests.post(f"{API}/admin/credit",
+                      json={"user_id": uid, "amount": 500, "description": "test"},
+                      headers=admin_headers)
+        wr = requests.post(f"{API}/withdrawals",
+                           json={"amount": 200, "method": "UPI", "details": "paid@ybl"},
+                           headers=h)
+        wid = wr.json()["id"]
+        # upload proof (admin)
+        files = {"file": ("proof.png", b"\x89PNG\r\n\x1a\n" + b"0" * 40, "image/png")}
+        up = requests.post(f"{API}/upload", files=files, headers=admin_headers)
+        assert up.status_code == 200
+        proof_url = up.json()["url"]
+        # mark paid
+        p = requests.patch(f"{API}/admin/withdrawals/{wid}",
+                           json={"status": "paid", "proof_url": proof_url, "utr": "UTR123ABC"},
+                           headers=admin_headers)
+        assert p.status_code == 200
+        # customer sees proof + utr
+        items = requests.get(f"{API}/withdrawals", headers=h).json()
+        w = next(x for x in items if x["id"] == wid)
+        assert w["status"] == "paid"
+        assert w["utr"] == "UTR123ABC"
+        assert w["proof_url"] == proof_url
+
+
+# ---------- Banners CRUD + public filter ----------
+class TestBanners:
+    def test_banner_crud_and_visibility(self, admin_headers, cust_headers):
+        # create
+        r = requests.post(f"{API}/admin/banners",
+                          json={"title": "TEST_Banner", "subtitle": "sub",
+                                "image_url": "/api/files/x.png", "link": "/campaigns",
+                                "enabled": True, "order": 1},
+                          headers=admin_headers)
+        assert r.status_code == 200, r.text
+        bid = r.json()["id"]
+        assert "_id" not in r.json()
+        # customer sees enabled
+        pub = requests.get(f"{API}/banners", headers=cust_headers).json()
+        assert any(b["id"] == bid for b in pub)
+        # disable
+        r2 = requests.put(f"{API}/admin/banners/{bid}",
+                          json={"title": "TEST_Banner", "subtitle": "sub",
+                                "image_url": "/api/files/x.png", "link": "/campaigns",
+                                "enabled": False, "order": 1},
+                          headers=admin_headers)
+        assert r2.status_code == 200 and r2.json()["enabled"] is False
+        # customer no longer sees it
+        pub2 = requests.get(f"{API}/banners", headers=cust_headers).json()
+        assert not any(b["id"] == bid for b in pub2)
+        # admin all=true sees it
+        adm = requests.get(f"{API}/banners", params={"all": "true"}, headers=admin_headers).json()
+        assert any(b["id"] == bid for b in adm)
+        # delete
+        d = requests.delete(f"{API}/admin/banners/{bid}", headers=admin_headers)
+        assert d.status_code == 200
+
+    def test_banner_admin_only(self, cust_headers):
+        r = requests.post(f"{API}/admin/banners",
+                          json={"image_url": "/x.png"}, headers=cust_headers)
+        assert r.status_code == 403
+
+
+# ---------- Refer & Earn ----------
+class TestReferAndEarn:
+    def test_settings_public_and_admin_update(self, admin_headers):
+        r = requests.get(f"{API}/settings/public")
+        assert r.status_code == 200
+        assert "referral_bonus" in r.json()
+        # set 20
+        u = requests.put(f"{API}/admin/settings",
+                         json={"referral_bonus": 20}, headers=admin_headers)
+        assert u.status_code == 200 and float(u.json()["referral_bonus"]) == 20.0
+        assert requests.get(f"{API}/settings/public").json()["referral_bonus"] == 20.0
+        # negative rejected
+        n = requests.put(f"{API}/admin/settings",
+                         json={"referral_bonus": -1}, headers=admin_headers)
+        assert n.status_code == 400
+
+    def test_signup_with_ref_credits_referrer(self, admin_headers):
+        # ensure bonus = 20
+        requests.put(f"{API}/admin/settings",
+                     json={"referral_bonus": 20}, headers=admin_headers)
+        # get testcust wallet + referrals baseline
+        lr = requests.post(f"{API}/auth/login",
+                           json={"email": "testcust@example.com", "password": "Test@1234"})
+        if lr.status_code != 200:
+            pytest.skip("seeded testcust login failed")
+        tok = lr.json()["token"]
+        h = {"Authorization": f"Bearer {tok}"}
+        ref0 = requests.get(f"{API}/my-referrals", headers=h).json()
+        # new signup referred_by=RTA12499
+        email = f"test_referred_{uuid.uuid4().hex[:8]}@example.com"
+        rr = requests.post(f"{API}/auth/register", json={
+            "name": "Refd", "email": email, "mobile": "9000000000",
+            "password": "Passw0rd!", "referred_by": "RTA12499"})
+        assert rr.status_code == 200, rr.text
+        code = _grep_otp(email, "signup", wait=5)
+        assert code, "referred signup OTP not found"
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        assert v.status_code == 200
+        time.sleep(0.5)
+        ref1 = requests.get(f"{API}/my-referrals", headers=h).json()
+        assert ref1["count"] == ref0["count"] + 1
+        assert round(ref1["earned"] - ref0["earned"], 2) == 20.0
+
+
+# ---------- Campaign affiliate link normalization ----------
+class TestAffiliateLinkNormalize:
+    def test_missing_scheme_normalized_to_https(self, admin_headers):
+        payload = {"offer_name": f"TEST_Norm_{uuid.uuid4().hex[:6]}",
+                   "affiliate_links": [{"id": "a", "label": "Primary",
+                                        "url": "example.com/track", "is_primary": True,
+                                        "is_active": True}]}
+        r = requests.post(f"{API}/campaigns", json=payload, headers=admin_headers)
+        assert r.status_code == 200, r.text
+        c = r.json()
+        assert c["affiliate_links"][0]["url"].startswith("https://")
+        # cleanup
+        requests.delete(f"{API}/campaigns/{c['id']}", headers=admin_headers)

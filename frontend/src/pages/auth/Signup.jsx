@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { AuthShell } from "../../components/AuthShell";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -10,6 +10,9 @@ import { Loader2, ShieldCheck } from "lucide-react";
 
 export default function Signup() {
   const [step, setStep] = useState(1);
+  const [params] = useSearchParams();
+  const referredBy = (params.get("ref") || localStorage.getItem("rt_ref") || "").toUpperCase();
+  if (params.get("ref")) localStorage.setItem("rt_ref", params.get("ref").toUpperCase());
   const [form, setForm] = useState({ name: "", email: "", mobile: "", password: "", address: "" });
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,7 +25,7 @@ export default function Signup() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post("/auth/register", form);
+      await api.post("/auth/register", { ...form, referred_by: referredBy });
       toast.success("OTP sent to your email");
       setStep(2);
     } catch (err) {
@@ -50,7 +53,7 @@ export default function Signup() {
 
   return (
     <AuthShell title={step === 1 ? "Create your account" : "Verify your email"}
-      subtitle={step === 1 ? "Start earning with Radhika Traders" : `Enter the 6-digit code sent to ${form.email}`}>
+      subtitle={step === 1 ? (referredBy ? `Invited by partner ${referredBy} · Zero investment, free to join` : "Start earning with Radhika Traders — zero investment") : `Enter the 6-digit code sent to ${form.email}`}>
       {step === 1 ? (
         <form onSubmit={requestOtp} className="space-y-3.5">
           <div><Label>Full Name</Label><Input data-testid="signup-name" required value={form.name} onChange={set("name")} className="mt-1.5" placeholder="Your name" /></div>

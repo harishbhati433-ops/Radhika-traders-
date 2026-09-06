@@ -29,6 +29,7 @@ import AdminCampaigns from "./pages/admin/AdminCampaigns";
 import AdminCategories from "./pages/admin/AdminCategories";
 import AdminCustomers from "./pages/admin/AdminCustomers";
 import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
+import AdminBanners from "./pages/admin/AdminBanners";
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
           <Route path="/admin/categories" element={<ProtectedRoute role="admin"><AdminCategories /></ProtectedRoute>} />
           <Route path="/admin/customers" element={<ProtectedRoute role="admin"><AdminCustomers /></ProtectedRoute>} />
           <Route path="/admin/withdrawals" element={<ProtectedRoute role="admin"><AdminWithdrawals /></ProtectedRoute>} />
+          <Route path="/admin/banners" element={<ProtectedRoute role="admin"><AdminBanners /></ProtectedRoute>} />
         </Routes>
         <WhatsAppFloat />
       </BrowserRouter>

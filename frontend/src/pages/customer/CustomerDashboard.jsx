@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { Leaderboard } from "../../components/Leaderboard";
+import { OfferBanners } from "../../components/OfferBanners";
+import { ReferEarnCard } from "../../components/ReferEarnCard";
 import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
@@ -41,6 +43,8 @@ export default function CustomerDashboard() {
         </Link>
       )}
 
+      <OfferBanners />
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat icon={Wallet} label="Available Balance" value={`₹${wallet?.balance ?? "…"}`} tone="emerald" />
         <Stat icon={TrendingUp} label="Total Earnings" value={`₹${wallet?.total_earnings ?? "…"}`} tone="red" />
@@ -60,6 +64,8 @@ export default function CustomerDashboard() {
           </button>
         </div>
       </div>
+
+      <div className="mt-6"><ReferEarnCard code={user?.referral_code} /></div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">

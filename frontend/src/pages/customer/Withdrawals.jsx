@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
-import api, { formatApiErrorDetail } from "../../lib/api";
+import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Receipt } from "lucide-react";
 
 const STATUS = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -95,6 +95,12 @@ export default function Withdrawals() {
                     <div className="font-mono font-bold text-slate-900">₹{w.amount}</div>
                     <div className="text-xs text-slate-400">{w.method} · {w.details} · {(w.created_at || "").slice(0, 10)}</div>
                     {w.admin_note && <div className="text-xs text-slate-500">Note: {w.admin_note}</div>}
+                    {w.status === "paid" && (w.proof_url || w.utr) && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-emerald-700" data-testid={`withdraw-proof-${w.id}`}>
+                        <Receipt className="h-3.5 w-3.5" /> {w.utr && <span>UTR: <b>{w.utr}</b></span>}
+                        {w.proof_url && <a href={fileUrl(w.proof_url)} target="_blank" rel="noreferrer" className="font-semibold underline">View payment proof</a>}
+                      </div>
+                    )}
                   </div>
                   <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>
                 </div>

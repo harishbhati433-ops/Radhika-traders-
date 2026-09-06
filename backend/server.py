@@ -23,7 +23,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp,
     generate_referral_code, get_current_user_from_db,
 )
-from email_service import send_otp_email
+from email_service import send_otp_email, send_payment_email
 from storage_service import init_storage, put_object, get_object, APP_NAME
 
 mongo_url = os.environ["MONGO_URL"]
@@ -107,6 +107,16 @@ class RegisterIn(BaseModel):
     mobile: str
     password: str
     address: Optional[str] = ""
+    referred_by: Optional[str] = ""
+
+
+class SettingsIn(BaseModel):
+    referral_bonus: float = 0
+
+
+async def get_settings() -> dict:
+    s = await db.settings.find_one({"key": "app"}) or {}
+    return {"referral_bonus": float(s.get("referral_bonus", 0))}
 
 
 class OtpVerifyIn(BaseModel):
@@ -216,6 +226,17 @@ class WithdrawIn(BaseModel):
 class WithdrawStatusIn(BaseModel):
     status: str
     admin_note: Optional[str] = ""
+    proof_url: Optional[str] = ""
+    utr: Optional[str] = ""
+
+
+class BannerIn(BaseModel):
+    title: str = ""
+    subtitle: str = ""
+    image_url: str
+    link: str = ""
+    enabled: bool = True
+    order: int = 0
 
 
 # ----------------------------- Auth -----------------------------
@@ -236,6 +257,8 @@ async def register(body: RegisterIn):
         "referral_code": generate_referral_code(),
         "kyc": {"status": "not_submitted"},
         "bank": {},
+        "referred_by_code": (body.referred_by or "").strip().upper(),
+        "referral_bonus_paid": False,
         "created_at": now_iso(),
     }
     if existing:
@@ -265,8 +288,50 @@ async def verify_otp(body: OtpVerifyIn):
     await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
     await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
     user = await db.users.find_one({"email": email})
+    await pay_referral_bonus(user)
     token = create_access_token(str(user["_id"]), email, user["role"])
     return {"token": token, "user": public_user(user)}
+
+
+async def pay_referral_bonus(new_user: dict):
+    code = new_user.get("referred_by_code")
+    if not code or new_user.get("referral_bonus_paid"):
+        return
+    referrer = await db.users.find_one({"referral_code": code, "role": "customer"})
+    if not referrer or str(referrer["_id"]) == str(new_user["_id"]):
+        return
+    amount = (await get_settings())["referral_bonus"]
+    await db.users.update_one({"_id": new_user["_id"]}, {"$set": {"referral_bonus_paid": True, "referred_by_user_id": str(referrer["_id"])}})
+    if amount <= 0:
+        return
+    await db.transactions.insert_one({
+        "user_id": str(referrer["_id"]), "amount": amount, "type": "credit",
+        "description": f"Referral bonus - {new_user.get('name', 'new partner')} joined", "ref_id": f"REF-{uuid.uuid4().hex[:8].upper()}",
+        "campaign_id": None, "status": "completed", "created_at": now_iso(),
+    })
+
+
+@api.get("/settings/public")
+async def public_settings():
+    return await get_settings()
+
+
+@api.put("/admin/settings")
+async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)):
+    if body.referral_bonus < 0:
+        raise HTTPException(status_code=400, detail="Bonus cannot be negative")
+    await db.settings.update_one({"key": "app"}, {"$set": {"referral_bonus": body.referral_bonus, "updated_at": now_iso()}}, upsert=True)
+    return await get_settings()
+
+
+@api.get("/my-referrals")
+async def my_referrals(user: dict = Depends(get_current_user)):
+    joined = await db.users.find({"referred_by_user_id": user["id"]}, {"name": 1, "created_at": 1}).sort("created_at", -1).to_list(500)
+    earned = await db.transactions.aggregate([
+        {"$match": {"user_id": user["id"], "type": "credit", "ref_id": {"$regex": "^REF-"}}},
+        {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
+    return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0,
+            "recent": [{"name": _mask_name(j.get("name")), "joined_at": j.get("created_at")} for j in joined[:5]]}
 
 
 @api.post("/auth/resend-otp")
@@ -642,21 +707,61 @@ async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(re
 
 
 @api.patch("/admin/withdrawals/{wid}")
-async def update_withdrawal(wid: str, body: WithdrawStatusIn, admin: dict = Depends(require_admin)):
+async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, admin: dict = Depends(require_admin)):
     if body.status not in ("pending", "approved", "paid", "rejected"):
         raise HTTPException(status_code=400, detail="Invalid status")
     w = await db.withdrawals.find_one({"_id": ObjectId(wid)})
     if not w:
         raise HTTPException(status_code=404, detail="Not found")
     await db.withdrawals.update_one({"_id": ObjectId(wid)},
-        {"$set": {"status": body.status, "admin_note": body.admin_note or "", "updated_at": now_iso()}})
+        {"$set": {"status": body.status, "admin_note": body.admin_note or "", "updated_at": now_iso(),
+                  "proof_url": body.proof_url or w.get("proof_url", ""), "utr": body.utr or w.get("utr", ""),
+                  **({"paid_at": now_iso()} if body.status == "paid" else {})}})
     if body.status == "paid":
         await db.transactions.insert_one({
             "user_id": w["user_id"], "amount": w["amount"], "type": "debit",
-            "description": f"Withdrawal paid ({w['method']})", "ref_id": f"WD-{wid[:8]}",
+            "description": f"Withdrawal paid ({w['method']})", "ref_id": body.utr or f"WD-{wid[:8]}",
             "status": "completed", "campaign_id": None, "created_at": now_iso(),
         })
+        base = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
+        proof_link = f"{base}{body.proof_url}" if body.proof_url and body.proof_url.startswith("/") else (body.proof_url or "")
+        await send_payment_email(w.get("user_email", ""), w.get("user_name", ""), w["amount"], w["method"],
+                                 w.get("details", ""), body.utr or "", proof_link)
     return {"message": "Withdrawal updated"}
+
+
+# ----------------------------- Banners -----------------------------
+def banner_out(b: dict) -> dict:
+    return {**{k: v for k, v in b.items() if k != "_id"}, "id": str(b["_id"])}
+
+
+@api.get("/banners")
+async def list_banners(all: bool = False, user: dict = Depends(get_current_user)):
+    q = {} if (all and user.get("role") == "admin") else {"enabled": True}
+    items = await db.banners.find(q).sort([("order", 1), ("created_at", -1)]).to_list(100)
+    return [banner_out(b) for b in items]
+
+
+@api.post("/admin/banners")
+async def create_banner(body: BannerIn, admin: dict = Depends(require_admin)):
+    doc = {**body.model_dump(), "created_at": now_iso()}
+    res = await db.banners.insert_one(doc)
+    return banner_out(await db.banners.find_one({"_id": res.inserted_id}))
+
+
+@api.put("/admin/banners/{bid}")
+async def update_banner(bid: str, body: BannerIn, admin: dict = Depends(require_admin)):
+    await db.banners.update_one({"_id": ObjectId(bid)}, {"$set": body.model_dump()})
+    b = await db.banners.find_one({"_id": ObjectId(bid)})
+    if not b:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return banner_out(b)
+
+
+@api.delete("/admin/banners/{bid}")
+async def delete_banner(bid: str, admin: dict = Depends(require_admin)):
+    await db.banners.delete_one({"_id": ObjectId(bid)})
+    return {"message": "Banner deleted"}
 
 
 # ----------------------------- Admin: customers & credit -----------------------------
@@ -888,8 +993,8 @@ async def startup():
 
 
 async def seed_demo_data():
-    if await db.categories.count_documents({}) == 0:
-        for name in ["Demat", "Savings A/C", "Credit Card", "Insurance", "Loan", "Digital Marketing"]:
+    for name in ["Demat", "Mutual Fund", "Savings A/C", "Credit Card", "Insurance", "Loan", "Digital Marketing"]:
+        if not await db.categories.find_one({"slug": slugify(name)}):
             await db.categories.insert_one({"name": name, "slug": slugify(name), "enabled": True,
                                             "is_deleted": False, "created_at": now_iso()})
 

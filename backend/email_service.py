@@ -139,3 +139,28 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
         f'<p style="font-size:12px;color:#94a3b8">If you did not request this, you can safely ignore this email.</p>'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_payment_email(to: str, name: str, amount: float, method: str, details: str, utr: str, proof_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Payment of Rs.{amount:g} sent to you - Radhika Traders"
+    rows = [("Amount", f"Rs. {amount:g}"), ("Method", method), ("Paid to", details)]
+    if utr:
+        rows.append(("UTR / Ref No.", utr))
+    table = "".join(
+        f'<tr><td style="padding:6px 0;color:#64748b;font-size:13px">{escape(k)}</td>'
+        f'<td style="padding:6px 0;text-align:right;font-weight:bold;color:#0B0F17;font-size:13px">{escape(str(v))}</td></tr>'
+        for k, v in rows)
+    proof = (f'<p style="margin-top:18px;text-align:center"><a href="{escape(proof_link)}" '
+             f'style="display:inline-block;background:#991B1B;color:#fff;padding:10px 22px;border-radius:999px;'
+             f'text-decoration:none;font-weight:bold;font-size:13px">View Payment Proof</a></p>') if proof_link else ""
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")},</p>'
+        f'<p style="font-size:14px;color:#334155">Good news! Your withdrawal has been <b>paid</b>. Details:</p>'
+        f'<table width="100%" style="border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;margin:12px 0">{table}</table>'
+        f'{proof}'
+        f'<p style="font-size:12px;color:#94a3b8;margin-top:16px">Please allow a few minutes for the amount to reflect in your account. '
+        f'You can also see this proof under Withdrawals in your Radhika Traders dashboard.</p>'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))

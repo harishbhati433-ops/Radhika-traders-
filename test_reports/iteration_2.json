@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 2 — Regression + new-feature test pass on preview env. Added 11 new pytest cases (affiliate redirect / clicks, withdrawal payout auto-fill + payout_info + user_mobile, mark-paid with proof+UTR, banners CRUD & visibility, refer-earn settings + credit on referred signup, affiliate link normalization). Total 37/37 pytest pass. UI smoke covered: home (zero-badge, strip, team, whatsapp-float), public /campaigns with 8 category-tiles, customer login → dashboard (refer-earn-card with signup ref link, count=2 earned=₹40, offer-banners carousel with image), /campaign/choice-trade-test (referral-link-input = `${origin}/api/go/choice-trade-test?ref=RTA12499`, referral-clicks=7), admin login → /admin (referral-bonus-setting + presets 0/10/20/50 + custom + save all present), /admin/banners (title, subtitle, link, order, add, upload, toggle-<id>, delete-<id> all present), /admin/withdrawals (5 wd-payout cards, 4 UPI + 1 acc, 2 mark-paid buttons → MarkPaidDialog with upload+utr+confirm). Customer /withdrawals shows UTR + View proof link for paid rows. All redirects work: /api/go/choice-trade-test?ref=RTA12499 → 302 to external offertracking.in; unknown slug → 302 to /campaigns.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/banners", "issue": "Requires auth (Depends(get_current_user)); public dashboard/home won't see banners while logged out. Not blocking since banners are shown on the customer dashboard (behind login), but if design intends public exposure the dependency should be optional."},
+      {"endpoint": "Admin dashboard route", "issue": "Only /admin serves the dashboard; navigating to /admin/dashboard logs a react-router warning 'No routes matched location'. Consider adding an alias/redirect."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Make /api/banners auth-optional if banners are intended to be visible to logged-out users too.",
+    "(Optional) Add /admin/dashboard route alias to /admin to remove the react-router 'no routes matched' warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py now 1005 lines — still recommend splitting into routers (auth, campaigns, wallet, admin, banners, affiliate).",
+    "@app.on_event('startup') still deprecated (FastAPI lifespan preferred).",
+    "compute_wallet double-debit reported in iteration_1 appears resolved: paid-flow test now asserts balance = w0.balance - amount and total_withdrawn increments by amount exactly once (pass).",
+    "No rate limiting / brute-force lockout on /auth/login (playbook requirement)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestAffiliate, TestWithdrawalPayout, TestMarkPaidWithProof, TestBanners, TestReferAndEarn, TestAffiliateLinkNormalize + made search test resilient to seeded data)"
+  ],
+  "success_rate": {"backend": "100% (37/37)", "frontend": "100% smoke on all new-feature testids"},
+  "test_credentials": "Admin: bhatiharish276@gmail.com / Radhika@2023. Customer testcust@example.com / Test@1234 (RTA12499). Fresh customers minted per test via /signup + OTP grep from /var/log/supervisor/backend.*.log.",
+  "seed_data_creation": "Tests create TEST_ prefixed campaigns/banners and clean them up. New per-run test users test_*@example.com (email provider rejects example.com but OTP is logged — verify succeeds).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "backend_test.py has full coverage for iteration-2 features. Referral-bonus test requires the seeded testcust (RTA12499) to exist and sets referral_bonus=20 as a side effect — reset if needed via PUT /api/admin/settings. Admin dashboard route is /admin (NOT /admin/dashboard). Category tiles: 7 seeded categories + 'all' tile = 8. Choice-trade-test campaign has been clicked many times by tests, so referral-clicks count grows monotonically."
+}

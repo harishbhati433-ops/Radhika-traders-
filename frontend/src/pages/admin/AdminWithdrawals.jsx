@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
-import api, { formatApiErrorDetail } from "../../lib/api";
+import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { PayoutDetails } from "../../components/PayoutDetails";
+import { MarkPaidDialog } from "../../components/MarkPaidDialog";
 import { toast } from "sonner";
-import { Check, X, IndianRupee } from "lucide-react";
+import { Check, X, IndianRupee, Receipt } from "lucide-react";
 
 const TABS = ["all", "pending", "approved", "paid", "rejected"];
 const STATUS = {
@@ -17,14 +18,15 @@ const STATUS = {
 export default function AdminWithdrawals() {
   const [tab, setTab] = useState("all");
   const [list, setList] = useState([]);
+  const [paying, setPaying] = useState(null);
 
   const load = () => api.get("/admin/withdrawals", { params: tab === "all" ? {} : { status: tab } }).then(({ data }) => setList(data));
   useEffect(() => { load(); }, [tab]);
 
-  const update = async (w, status) => {
+  const update = async (w, status, extra = {}) => {
     let note = "";
     if (status === "rejected") { note = window.prompt("Reason for rejection (optional):") || ""; }
-    try { await api.patch(`/admin/withdrawals/${w.id}`, { status, admin_note: note }); toast.success(`Marked ${status}`); load(); }
+    try { await api.patch(`/admin/withdrawals/${w.id}`, { status, admin_note: note, ...extra }); toast.success(`Marked ${status}`); setPaying(null); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
 
@@ -48,16 +50,23 @@ export default function AdminWithdrawals() {
               <div className="text-sm font-semibold text-slate-700">{w.user_name} <span className="font-normal text-slate-400">· {w.user_email}</span></div>
               <div className="text-xs text-slate-500">Requested {(w.created_at || "").slice(0, 10)}</div>
               {w.admin_note && <div className="text-xs text-rose-500">Note: {w.admin_note}</div>}
+              {w.status === "paid" && (w.proof_url || w.utr) && (
+                <div className="mt-1 flex items-center gap-2 text-xs text-emerald-700">
+                  <Receipt className="h-3.5 w-3.5" /> {w.utr && <span>UTR {w.utr}</span>}
+                  {w.proof_url && <a href={fileUrl(w.proof_url)} target="_blank" rel="noreferrer" className="font-semibold underline" data-testid={`wd-proof-link-${w.id}`}>View proof</a>}
+                </div>
+              )}
               <PayoutDetails w={w} />
             </div>
             <div className="flex flex-wrap gap-2">
               {w.status === "pending" && <button onClick={() => update(w, "approved")} data-testid={`wd-approve-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Approve</button>}
-              {(w.status === "pending" || w.status === "approved") && <button onClick={() => update(w, "paid")} data-testid={`wd-paid-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Mark Paid</button>}
+              {(w.status === "pending" || w.status === "approved") && <button onClick={() => setPaying(w)} data-testid={`wd-paid-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Mark Paid</button>}
               {w.status !== "paid" && w.status !== "rejected" && <button onClick={() => update(w, "rejected")} data-testid={`wd-reject-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white"><X className="h-3.5 w-3.5" /> Reject</button>}
             </div>
           </div>
         ))}
       </div>
+      {paying && <MarkPaidDialog w={paying} onClose={() => setPaying(null)} onConfirm={(extra) => update(paying, "paid", extra)} />}
     </DashboardLayout>
   );
 }
