@@ -1,0 +1,68 @@
+import "@/App.css";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Toaster } from "sonner";
+import { AuthProvider } from "./context/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
+import Home from "./pages/Home";
+import About from "./pages/About";
+import Services from "./pages/Services";
+import Contact from "./pages/Contact";
+import Campaigns from "./pages/Campaigns";
+import CampaignDetail from "./pages/CampaignDetail";
+
+import Login from "./pages/auth/Login";
+import Signup from "./pages/auth/Signup";
+import AdminLogin from "./pages/auth/AdminLogin";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+
+import CustomerDashboard from "./pages/customer/CustomerDashboard";
+import Wallet from "./pages/customer/Wallet";
+import Withdrawals from "./pages/customer/Withdrawals";
+import Profile from "./pages/customer/Profile";
+import Statements from "./pages/customer/Statements";
+import CustomerCampaigns from "./pages/customer/CustomerCampaigns";
+
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCampaigns from "./pages/admin/AdminCampaigns";
+import AdminCategories from "./pages/admin/AdminCategories";
+import AdminCustomers from "./pages/admin/AdminCustomers";
+import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
+
+function App() {
+  return (
+    <AuthProvider>
+      <Toaster position="top-right" richColors />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaign/:slug" element={<CampaignDetail />} />
+
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+
+          <Route path="/dashboard" element={<ProtectedRoute role="customer"><CustomerDashboard /></ProtectedRoute>} />
+          <Route path="/my-campaigns" element={<ProtectedRoute role="customer"><CustomerCampaigns /></ProtectedRoute>} />
+          <Route path="/wallet" element={<ProtectedRoute role="customer"><Wallet /></ProtectedRoute>} />
+          <Route path="/withdrawals" element={<ProtectedRoute role="customer"><Withdrawals /></ProtectedRoute>} />
+          <Route path="/statements" element={<ProtectedRoute role="customer"><Statements /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute role="customer"><Profile /></ProtectedRoute>} />
+
+          <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/campaigns" element={<ProtectedRoute role="admin"><AdminCampaigns /></ProtectedRoute>} />
+          <Route path="/admin/categories" element={<ProtectedRoute role="admin"><AdminCategories /></ProtectedRoute>} />
+          <Route path="/admin/customers" element={<ProtectedRoute role="admin"><AdminCustomers /></ProtectedRoute>} />
+          <Route path="/admin/withdrawals" element={<ProtectedRoute role="admin"><AdminWithdrawals /></ProtectedRoute>} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
+
+export default App;

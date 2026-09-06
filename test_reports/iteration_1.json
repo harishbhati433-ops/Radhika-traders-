@@ -1,0 +1,46 @@
+{
+  "summary": "Ran 27 pytest backend tests + smoke UI tests. 27/27 backend pass after fixing one ObjectId-serialization bug in POST /api/withdrawals. Discovered a CRITICAL wallet accounting bug: when admin marks a withdrawal as 'paid', the balance is debited twice (once via total_withdrawn and once via a newly-inserted debit txn). Frontend admin+customer flows (signup+OTP verify, login, dashboard, campaigns, categories, customers, withdrawals page, profile/KYC, statements) all load and integrate correctly.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/admin/withdrawals/{id} (status=paid) + GET /api/wallet", "issue": "Double-counting: compute_wallet sums 'paid' withdrawals into total_withdrawn AND the mark-paid handler also inserts a debit transaction (ref_id WD-*), so balance drops by 2x the withdrawal amount. Fix option A: do NOT insert debit txn on paid (rely on total_withdrawn). Fix option B: remove total_withdrawn from balance formula and rely only on debit txns. Admin dashboard's total_wallet_balance formula already tries to avoid this by filtering ref_id.startswith('WD'), which confirms the inconsistency between the two computations.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/withdrawals", "issue": "FIXED by testing agent: response dict included Mongo ObjectId `_id` (from insert_one mutation) causing 500 Internal Server Error on serialization. Changed to filter out `_id` key."},
+      {"endpoint": "GET /api/campaigns/slug/radhika-connect", "issue": "Review request mentions this slug but it is not in the seeded demo campaigns (only angel-one-demat, zerodha-account, hdfc-tata-neu-credit-card, au-small-finance-savings-a-c, sbi-simplyclick-card, term-life-insurance). Tested with an actual seeded slug instead — endpoint works. Consider seeding a 'Radhika Connect' campaign if it is expected."},
+      {"endpoint": "server.py startup", "issue": "@app.on_event('startup') is deprecated in FastAPI; use lifespan. Not blocking."},
+      {"endpoint": "POST /api/upload", "issue": "Unused local `backend = os.environ.get('PUBLIC_BASE','')` dead code."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix wallet double-debit on withdrawal 'paid'. Either remove the debit-transaction insert in update_withdrawal(paid) OR change compute_wallet balance formula to exclude total_withdrawn (since debit txn already accounts for it). Recommend removing the debit-txn insert since dashboard already excludes WD-prefixed debits.",
+    "Optional: seed a 'Radhika Connect' campaign so /api/campaigns/slug/radhika-connect returns 200.",
+    "Optional: migrate startup event to FastAPI lifespan; remove dead PUBLIC_BASE var."
+  ],
+  "critical_code_review_comments": [
+    "compute_wallet and admin_dashboard use inconsistent balance formulas → source of the double-debit bug.",
+    "insert_one mutates the input dict adding `_id` (ObjectId); several handlers return that dict directly. Only POST /api/withdrawals hit the bug (now fixed); audit similar patterns elsewhere if new handlers are added.",
+    "server.py is 845 lines — consider splitting into routers (auth, campaigns, wallet, admin) for maintainability.",
+    "OTP verify does not enforce single-active-OTP lookup by expiry; find_one with used=False can hit an older unexpired record if multiple exist (delete_many before insert mitigates it — OK).",
+    "No rate limiting / brute-force protection on /auth/login and /auth/register (spec mentioned 5-fail lockout for auth playbook)."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (fixed _id in POST /api/withdrawals response)",
+    "/app/backend/tests/backend_test.py (created)"
+  ],
+  "success_rate": {"backend": "100% (27/27 after fix)", "frontend": "100% smoke"},
+  "test_credentials": "Admin: bhatiharish276@gmail.com / Radhika@2023. Customer created dynamically per test via signup + OTP grepped from /var/log/supervisor/backend.*.log.",
+  "seed_data_creation": "Test creates TEST_ prefixed campaigns and categories, archives them for cleanup. Multiple test customers (test_*@example.com) remain in DB across runs — acceptable for isolated test emails.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/backend_test.py has full coverage; run with `pytest backend/tests/backend_test.py -v`. After main agent fixes the wallet double-debit bug, re-run TestWalletAndWithdrawals class. Customer fixture is session-scoped and shared across all wallet tests, so leftover pending withdrawals from prior partial runs may cause flaky arithmetic — the tests now use relative-delta assertions (w0 baseline) to avoid this.",
+  "rca_of_the_issue": "Wallet double-debit RCA: In server.py, compute_wallet() (lines 494-508) computes balance = credited - debited - total_withdrawn - pending. Meanwhile update_withdrawal() at line 566-571 inserts a debit transaction when status='paid'. This causes the paid amount to be subtracted twice: once via total_withdrawn and once via total_debited. Reproduction: (1) admin credits customer Rs.500, (2) customer requests Rs.200 withdrawal after KYC, (3) admin marks paid, (4) GET /api/wallet returns balance=100 instead of expected 300. Mitigation: remove the debit-txn insert in the paid handler (preferred, since admin_dashboard already treats WD-prefixed debits specially) OR drop total_withdrawn from compute_wallet's balance formula."
+}

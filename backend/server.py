@@ -1,0 +1,847 @@
+import os
+import io
+import re
+import uuid
+import logging
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
+
+from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
+
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Query, Header
+from fastapi.responses import Response, StreamingResponse
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr
+from bson import ObjectId
+
+from auth_utils import (
+    hash_password, verify_password, create_access_token, generate_otp,
+    generate_referral_code, get_current_user_from_db,
+)
+from email_service import send_otp_email
+from storage_service import init_storage, put_object, get_object, APP_NAME
+
+mongo_url = os.environ["MONGO_URL"]
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ["DB_NAME"]]
+
+MIN_WITHDRAWAL = float(os.environ.get("MIN_WITHDRAWAL", "100"))
+
+app = FastAPI()
+api = APIRouter(prefix="/api")
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+MIME_TYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+              "gif": "image/gif", "webp": "image/webp"}
+
+
+# ----------------------------- Helpers -----------------------------
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def slugify(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return s or uuid.uuid4().hex[:8]
+
+
+async def unique_slug(text: str, exclude_id: str = None) -> str:
+    base = slugify(text)
+    slug = base
+    i = 1
+    while True:
+        q = {"slug": slug, "is_deleted": False}
+        if exclude_id:
+            q["_id"] = {"$ne": ObjectId(exclude_id)}
+        existing = await db.campaigns.find_one(q)
+        if not existing:
+            return slug
+        i += 1
+        slug = f"{base}-{i}"
+
+
+def public_user(u: dict) -> dict:
+    return {
+        "id": str(u.get("_id", u.get("id"))),
+        "name": u.get("name"),
+        "email": u.get("email"),
+        "mobile": u.get("mobile"),
+        "address": u.get("address"),
+        "role": u.get("role"),
+        "email_verified": u.get("email_verified", False),
+        "referral_code": u.get("referral_code"),
+        "kyc": u.get("kyc", {"status": "not_submitted"}),
+        "bank": u.get("bank", {}),
+        "created_at": u.get("created_at"),
+    }
+
+
+async def get_current_user(request: Request) -> dict:
+    return await get_current_user_from_db(request, db)
+
+
+async def require_admin(request: Request) -> dict:
+    user = await get_current_user_from_db(request, db)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def campaign_out(c: dict) -> dict:
+    c = dict(c)
+    c["id"] = str(c.pop("_id"))
+    return c
+
+
+# ----------------------------- Models -----------------------------
+class RegisterIn(BaseModel):
+    name: str
+    email: EmailStr
+    mobile: str
+    password: str
+    address: Optional[str] = ""
+
+
+class OtpVerifyIn(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ResendOtpIn(BaseModel):
+    email: EmailStr
+    purpose: str = "signup"
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class ForgotIn(BaseModel):
+    email: EmailStr
+
+
+class ResetIn(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+
+class ProfileIn(BaseModel):
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+    address: Optional[str] = None
+
+
+class KycIn(BaseModel):
+    pan: str
+    aadhaar: Optional[str] = ""
+    bank_account: str
+    ifsc: str
+    account_holder: str
+    upi: Optional[str] = ""
+
+
+class CategoryIn(BaseModel):
+    name: str
+    enabled: bool = True
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class AffiliateLink(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    label: str = "Primary Link"
+    url: str
+    is_primary: bool = False
+    is_active: bool = True
+
+
+class CampaignIn(BaseModel):
+    offer_name: str
+    company: str = ""
+    category: str = ""
+    payout_amount: float = 0
+    payout_type: str = "Fixed"
+    benefits: str = ""
+    customer_benefit: str = ""
+    affiliate_payout: str = ""
+    investment: str = ""
+    campaign_type: str = "First Trade"
+    description: str = ""
+    requirements: str = ""
+    important_notes: str = ""
+    min_requirement: str = ""
+    max_payout: str = ""
+    special_bonus: str = ""
+    payment_timeline: str = ""
+    validity: str = ""
+    important_conditions: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    budget: str = ""
+    report_frequency: str = ""
+    payment_terms: str = ""
+    logo_url: str = ""
+    banner_url: str = ""
+    status: str = "live"
+    offer_enabled: bool = True
+    affiliate_links: List[AffiliateLink] = []
+
+
+class CreditIn(BaseModel):
+    user_id: str
+    amount: float
+    description: str = "Earning credit"
+    campaign_id: Optional[str] = None
+    ref_id: Optional[str] = None
+
+
+class WithdrawIn(BaseModel):
+    amount: float
+    method: str
+    details: str
+
+
+class WithdrawStatusIn(BaseModel):
+    status: str
+    admin_note: Optional[str] = ""
+
+
+# ----------------------------- Auth -----------------------------
+@api.post("/auth/register")
+async def register(body: RegisterIn):
+    email = body.email.lower()
+    existing = await db.users.find_one({"email": email})
+    if existing and existing.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Email already registered. Please login.")
+    doc = {
+        "name": body.name,
+        "email": email,
+        "mobile": body.mobile,
+        "address": body.address or "",
+        "password_hash": hash_password(body.password),
+        "role": "customer",
+        "email_verified": False,
+        "referral_code": generate_referral_code(),
+        "kyc": {"status": "not_submitted"},
+        "bank": {},
+        "created_at": now_iso(),
+    }
+    if existing:
+        await db.users.update_one({"email": email}, {"$set": doc})
+    else:
+        await db.users.insert_one(doc)
+    code = generate_otp()
+    await db.otp_codes.delete_many({"email": email, "purpose": "signup"})
+    await db.otp_codes.insert_one({
+        "email": email, "code": code, "purpose": "signup",
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+        "used": False, "created_at": now_iso(),
+    })
+    await send_otp_email(email, body.name, code, "signup")
+    logger.info(f"[OTP signup] {email} -> {code}")
+    return {"message": "OTP sent to your email", "email": email}
+
+
+@api.post("/auth/verify-otp")
+async def verify_otp(body: OtpVerifyIn):
+    email = body.email.lower()
+    rec = await db.otp_codes.find_one({"email": email, "purpose": "signup", "used": False})
+    if not rec or rec["code"] != body.code:
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
+    user = await db.users.find_one({"email": email})
+    token = create_access_token(str(user["_id"]), email, user["role"])
+    return {"token": token, "user": public_user(user)}
+
+
+@api.post("/auth/resend-otp")
+async def resend_otp(body: ResendOtpIn):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+    code = generate_otp()
+    await db.otp_codes.delete_many({"email": email, "purpose": body.purpose})
+    await db.otp_codes.insert_one({
+        "email": email, "code": code, "purpose": body.purpose,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+        "used": False, "created_at": now_iso(),
+    })
+    await send_otp_email(email, user.get("name", ""), code, body.purpose)
+    logger.info(f"[OTP {body.purpose}] {email} -> {code}")
+    return {"message": "OTP resent"}
+
+
+@api.post("/auth/login")
+async def login(body: LoginIn):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(body.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if user["role"] == "customer" and not user.get("email_verified"):
+        raise HTTPException(status_code=403, detail="Please verify your email first")
+    token = create_access_token(str(user["_id"]), email, user["role"])
+    return {"token": token, "user": public_user(user)}
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotIn):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if user:
+        code = generate_otp()
+        await db.otp_codes.delete_many({"email": email, "purpose": "reset"})
+        await db.otp_codes.insert_one({
+            "email": email, "code": code, "purpose": "reset",
+            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+            "used": False, "created_at": now_iso(),
+        })
+        await send_otp_email(email, user.get("name", ""), code, "reset")
+        logger.info(f"[OTP reset] {email} -> {code}")
+    return {"message": "If the email exists, an OTP has been sent"}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetIn):
+    email = body.email.lower()
+    rec = await db.otp_codes.find_one({"email": email, "purpose": "reset", "used": False})
+    if not rec or rec["code"] != body.code:
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    return {"message": "Password reset successful. Please login."}
+
+
+@api.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return public_user(full)
+
+
+# ----------------------------- Profile / KYC -----------------------------
+@api.put("/profile")
+async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)):
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if upd:
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": upd})
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return public_user(full)
+
+
+@api.put("/profile/kyc")
+async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
+    kyc = body.model_dump()
+    kyc["status"] = "pending"
+    kyc["submitted_at"] = now_iso()
+    bank = {"account_holder": body.account_holder, "bank_account": body.bank_account,
+            "ifsc": body.ifsc, "upi": body.upi}
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"kyc": kyc, "bank": bank}})
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return public_user(full)
+
+
+# ----------------------------- Categories -----------------------------
+@api.get("/categories")
+async def list_categories(all: bool = False):
+    q = {"is_deleted": False}
+    if not all:
+        q["enabled"] = True
+    cats = await db.categories.find(q).sort("name", 1).to_list(1000)
+    return [{"id": str(c["_id"]), "name": c["name"], "slug": c["slug"], "enabled": c.get("enabled", True)} for c in cats]
+
+
+@api.post("/categories")
+async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)):
+    doc = {"name": body.name, "slug": slugify(body.name), "enabled": body.enabled,
+           "is_deleted": False, "created_at": now_iso()}
+    res = await db.categories.insert_one(doc)
+    return {"id": str(res.inserted_id), **{k: doc[k] for k in ("name", "slug", "enabled")}}
+
+
+@api.put("/categories/{cat_id}")
+async def update_category(cat_id: str, body: CategoryUpdate, admin: dict = Depends(require_admin)):
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "name" in upd:
+        upd["slug"] = slugify(upd["name"])
+    await db.categories.update_one({"_id": ObjectId(cat_id)}, {"$set": upd})
+    c = await db.categories.find_one({"_id": ObjectId(cat_id)})
+    return {"id": str(c["_id"]), "name": c["name"], "slug": c["slug"], "enabled": c.get("enabled", True)}
+
+
+@api.delete("/categories/{cat_id}")
+async def delete_category(cat_id: str, admin: dict = Depends(require_admin)):
+    await db.categories.update_one({"_id": ObjectId(cat_id)}, {"$set": {"is_deleted": True}})
+    return {"message": "Category deleted"}
+
+
+# ----------------------------- Campaigns -----------------------------
+@api.get("/campaigns")
+async def list_campaigns(
+    search: Optional[str] = None, category: Optional[str] = None,
+    campaign_type: Optional[str] = None, status: Optional[str] = None,
+    min_payout: Optional[float] = None, admin_view: bool = False,
+):
+    q = {"is_deleted": False}
+    if not admin_view:
+        q["offer_enabled"] = True
+        q["status"] = {"$ne": "closed"}
+    if status:
+        q["status"] = status
+    if category:
+        q["category"] = category
+    if campaign_type:
+        q["campaign_type"] = campaign_type
+    if min_payout is not None:
+        q["payout_amount"] = {"$gte": min_payout}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        q["$or"] = [{"offer_name": rx}, {"company": rx}, {"category": rx}]
+    items = await db.campaigns.find(q).sort("updated_at", -1).to_list(1000)
+    return [campaign_out(c) for c in items]
+
+
+@api.get("/campaigns/archived")
+async def list_archived(admin: dict = Depends(require_admin)):
+    items = await db.campaigns.find({"is_deleted": True}).sort("updated_at", -1).to_list(1000)
+    return [campaign_out(c) for c in items]
+
+
+@api.get("/campaigns/slug/{slug}")
+async def get_campaign_by_slug(slug: str):
+    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+    if not c:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return campaign_out(c)
+
+
+@api.get("/campaigns/{cid}")
+async def get_campaign(cid: str):
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    if not c:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return campaign_out(c)
+
+
+@api.post("/campaigns")
+async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)):
+    doc = body.model_dump()
+    doc["affiliate_links"] = [l for l in doc.get("affiliate_links", [])]
+    doc["slug"] = await unique_slug(body.offer_name)
+    doc["is_deleted"] = False
+    doc["created_at"] = now_iso()
+    doc["updated_at"] = now_iso()
+    res = await db.campaigns.insert_one(doc)
+    c = await db.campaigns.find_one({"_id": res.inserted_id})
+    return campaign_out(c)
+
+
+@api.put("/campaigns/{cid}")
+async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(require_admin)):
+    doc = body.model_dump()
+    doc["updated_at"] = now_iso()
+    current = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    if current and current.get("offer_name") != body.offer_name:
+        doc["slug"] = await unique_slug(body.offer_name, exclude_id=cid)
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": doc})
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    return campaign_out(c)
+
+
+@api.patch("/campaigns/{cid}/status")
+async def update_campaign_status(cid: str, status: str = Query(...), admin: dict = Depends(require_admin)):
+    if status not in ("live", "paused", "closed"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
+    return {"message": "Status updated"}
+
+
+@api.patch("/campaigns/{cid}/toggle-offer")
+async def toggle_offer(cid: str, enabled: bool = Query(...), admin: dict = Depends(require_admin)):
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"offer_enabled": enabled, "updated_at": now_iso()}})
+    return {"message": "Offer updated"}
+
+
+@api.delete("/campaigns/{cid}")
+async def archive_campaign(cid: str, admin: dict = Depends(require_admin)):
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"is_deleted": True, "updated_at": now_iso()}})
+    return {"message": "Campaign archived"}
+
+
+@api.post("/campaigns/{cid}/restore")
+async def restore_campaign(cid: str, admin: dict = Depends(require_admin)):
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"is_deleted": False, "updated_at": now_iso()}})
+    return {"message": "Campaign restored"}
+
+
+# ----------------------------- Wallet -----------------------------
+async def compute_wallet(user_id: str) -> dict:
+    txns = await db.transactions.find({"user_id": user_id}).to_list(5000)
+    total_credited = sum(t["amount"] for t in txns if t["type"] == "credit")
+    total_debited = sum(t["amount"] for t in txns if t["type"] == "debit")
+    wds = await db.withdrawals.find({"user_id": user_id}).to_list(5000)
+    total_withdrawn = sum(w["amount"] for w in wds if w["status"] == "paid")
+    pending_withdrawal = sum(w["amount"] for w in wds if w["status"] in ("pending", "approved"))
+    # Paid withdrawals are already recorded as debit transactions, so they are
+    # included in total_debited. Only subtract pending (not-yet-debited) amounts here.
+    balance = total_credited - total_debited - pending_withdrawal
+    return {
+        "balance": round(balance, 2),
+        "total_earnings": round(total_credited, 2),
+        "total_credited": round(total_credited, 2),
+        "total_withdrawn": round(total_withdrawn, 2),
+        "pending_withdrawal": round(pending_withdrawal, 2),
+    }
+
+
+@api.get("/wallet")
+async def get_wallet(user: dict = Depends(get_current_user)):
+    return await compute_wallet(user["id"])
+
+
+@api.get("/wallet/transactions")
+async def get_transactions(user: dict = Depends(get_current_user)):
+    txns = await db.transactions.find({"user_id": user["id"]}).sort("created_at", -1).to_list(5000)
+    return [{**{k: v for k, v in t.items() if k != "_id"}, "id": str(t["_id"])} for t in txns]
+
+
+# ----------------------------- Withdrawals -----------------------------
+@api.post("/withdrawals")
+async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if full.get("kyc", {}).get("status") not in ("pending", "verified"):
+        raise HTTPException(status_code=400, detail="Please complete your KYC before withdrawal")
+    if body.amount < MIN_WITHDRAWAL:
+        raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(MIN_WITHDRAWAL)}")
+    wallet = await compute_wallet(user["id"])
+    if body.amount > wallet["balance"]:
+        raise HTTPException(status_code=400, detail="Insufficient available balance")
+    doc = {
+        "user_id": user["id"], "user_name": full.get("name"), "user_email": full.get("email"),
+        "amount": body.amount, "method": body.method, "details": body.details,
+        "status": "pending", "admin_note": "", "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    res = await db.withdrawals.insert_one(doc)
+    return {**{k: v for k, v in doc.items() if k != "_id"}, "id": str(res.inserted_id)}
+
+
+@api.get("/withdrawals")
+async def my_withdrawals(user: dict = Depends(get_current_user)):
+    items = await db.withdrawals.find({"user_id": user["id"]}).sort("created_at", -1).to_list(5000)
+    return [{**{k: v for k, v in w.items() if k != "_id"}, "id": str(w["_id"])} for w in items]
+
+
+@api.get("/admin/withdrawals")
+async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {}
+    if status:
+        q["status"] = status
+    items = await db.withdrawals.find(q).sort("created_at", -1).to_list(5000)
+    return [{**{k: v for k, v in w.items() if k != "_id"}, "id": str(w["_id"])} for w in items]
+
+
+@api.patch("/admin/withdrawals/{wid}")
+async def update_withdrawal(wid: str, body: WithdrawStatusIn, admin: dict = Depends(require_admin)):
+    if body.status not in ("pending", "approved", "paid", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    w = await db.withdrawals.find_one({"_id": ObjectId(wid)})
+    if not w:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.withdrawals.update_one({"_id": ObjectId(wid)},
+        {"$set": {"status": body.status, "admin_note": body.admin_note or "", "updated_at": now_iso()}})
+    if body.status == "paid":
+        await db.transactions.insert_one({
+            "user_id": w["user_id"], "amount": w["amount"], "type": "debit",
+            "description": f"Withdrawal paid ({w['method']})", "ref_id": f"WD-{wid[:8]}",
+            "status": "completed", "campaign_id": None, "created_at": now_iso(),
+        })
+    return {"message": "Withdrawal updated"}
+
+
+# ----------------------------- Admin: customers & credit -----------------------------
+@api.get("/admin/customers")
+async def list_customers(admin: dict = Depends(require_admin)):
+    users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(5000)
+    out = []
+    for u in users:
+        w = await compute_wallet(str(u["_id"]))
+        pu = public_user(u)
+        pu["wallet"] = w
+        out.append(pu)
+    return out
+
+
+@api.post("/admin/credit")
+async def credit_wallet(body: CreditIn, admin: dict = Depends(require_admin)):
+    u = await db.users.find_one({"_id": ObjectId(body.user_id)})
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    doc = {
+        "user_id": body.user_id, "amount": abs(body.amount), "type": "credit",
+        "description": body.description, "ref_id": body.ref_id or f"CR-{uuid.uuid4().hex[:8].upper()}",
+        "campaign_id": body.campaign_id, "status": "completed", "created_at": now_iso(),
+    }
+    await db.transactions.insert_one(doc)
+    return {"message": "Wallet credited"}
+
+
+@api.get("/admin/dashboard")
+async def admin_dashboard(admin: dict = Depends(require_admin)):
+    campaigns = await db.campaigns.find({"is_deleted": False}).to_list(5000)
+    total_campaigns = len(campaigns)
+    live = sum(1 for c in campaigns if c.get("status") == "live")
+    paused = sum(1 for c in campaigns if c.get("status") == "paused")
+    closed = sum(1 for c in campaigns if c.get("status") == "closed")
+    enabled = sum(1 for c in campaigns if c.get("offer_enabled"))
+    total_customers = await db.users.count_documents({"role": "customer"})
+    all_txns = await db.transactions.find({}).to_list(20000)
+    total_earnings = sum(t["amount"] for t in all_txns if t["type"] == "credit")
+    all_wds = await db.withdrawals.find({}).to_list(20000)
+    total_paid = sum(w["amount"] for w in all_wds if w["status"] == "paid")
+    total_pending_amt = sum(w["amount"] for w in all_wds if w["status"] in ("pending", "approved"))
+    total_wallet = total_earnings - total_paid - total_pending_amt - \
+        sum(t["amount"] for t in all_txns if t["type"] == "debit" and not t.get("ref_id", "").startswith("WD"))
+    recent = sorted(campaigns, key=lambda c: c.get("updated_at", ""), reverse=True)[:5]
+    return {
+        "total_campaigns": total_campaigns, "live": live, "paused": paused, "closed": closed,
+        "enabled_offers": enabled, "disabled_offers": total_campaigns - enabled,
+        "total_customers": total_customers,
+        "total_wallet_balance": round(total_earnings - total_paid - total_pending_amt, 2),
+        "total_earnings": round(total_earnings, 2),
+        "withdrawals_total": len(all_wds),
+        "withdrawals_pending": sum(1 for w in all_wds if w["status"] == "pending"),
+        "withdrawals_paid": sum(1 for w in all_wds if w["status"] == "paid"),
+        "recent_campaigns": [campaign_out(c) for c in recent],
+    }
+
+
+# ----------------------------- Image upload -----------------------------
+@api.post("/upload")
+async def upload_image(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
+    ct = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
+    path = f"{APP_NAME}/uploads/{uuid.uuid4().hex}.{ext}"
+    data = await file.read()
+    result = put_object(path, data, ct)
+    await db.files.insert_one({
+        "storage_path": result["path"], "original_filename": file.filename,
+        "content_type": ct, "size": result.get("size"), "is_deleted": False,
+        "created_at": now_iso(),
+    })
+    backend = os.environ.get("PUBLIC_BASE", "")
+    return {"path": result["path"], "url": f"/api/files/{result['path']}"}
+
+
+@api.get("/files/{path:path}")
+async def serve_file(path: str):
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    data, ct = get_object(path)
+    return Response(content=data, media_type=record.get("content_type", ct))
+
+
+# ----------------------------- Statements -----------------------------
+async def _statement_rows(user_id: str):
+    txns = await db.transactions.find({"user_id": user_id}).sort("created_at", -1).to_list(5000)
+    rows = []
+    for t in txns:
+        rows.append({
+            "Date": (t.get("created_at") or "")[:19].replace("T", " "),
+            "Description": t.get("description", ""),
+            "Type": t.get("type", "").upper(),
+            "Amount": t.get("amount", 0),
+            "Reference": t.get("ref_id", ""),
+            "Status": t.get("status", ""),
+        })
+    return rows
+
+
+@api.get("/statement")
+async def download_statement(format: str = "csv", user: dict = Depends(get_current_user)):
+    rows = await _statement_rows(user["id"])
+    wallet = await compute_wallet(user["id"])
+    fname = f"radhika_statement_{datetime.now().strftime('%Y%m%d')}"
+    if format == "csv":
+        import csv
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=["Date", "Description", "Type", "Amount", "Reference", "Status"])
+        w.writeheader()
+        w.writerows(rows)
+        return Response(content=buf.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": f"attachment; filename={fname}.csv"})
+    if format == "excel":
+        import pandas as pd
+        buf = io.BytesIO()
+        df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Date", "Description", "Type", "Amount", "Reference", "Status"])
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Statement")
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                 headers={"Content-Disposition": f"attachment; filename={fname}.xlsx"})
+    if format == "pdf":
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=1.5 * cm)
+        styles = getSampleStyleSheet()
+        title = ParagraphStyle("t", parent=styles["Title"], textColor=colors.HexColor("#991B1B"))
+        elems = [Paragraph("RADHIKA TRADERS", title),
+                 Paragraph("Wallet Statement · Trusted Partner for Financial Growth", styles["Normal"]),
+                 Spacer(1, 10),
+                 Paragraph(f"Account: {user.get('name')} ({user.get('email')})", styles["Normal"]),
+                 Paragraph(f"Available Balance: Rs. {wallet['balance']} | Total Earnings: Rs. {wallet['total_earnings']}", styles["Normal"]),
+                 Spacer(1, 14)]
+        data = [["Date", "Description", "Type", "Amount", "Reference", "Status"]]
+        for r in rows:
+            data.append([r["Date"], r["Description"], r["Type"], f"Rs.{r['Amount']}", r["Reference"], r["Status"]])
+        if len(data) == 1:
+            data.append(["-", "No transactions yet", "-", "-", "-", "-"])
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#991B1B")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        elems.append(table)
+        doc.build(elems)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f"attachment; filename={fname}.pdf"})
+    raise HTTPException(status_code=400, detail="Invalid format")
+
+
+@api.get("/")
+async def root():
+    return {"message": "Radhika Traders API"}
+
+
+app.include_router(api)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def startup():
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.otp_codes.create_index("email")
+        await db.campaigns.create_index("slug")
+    except Exception as e:
+        logger.warning(f"Index creation: {e}")
+    # Seed admin
+    admin_email = os.environ["ADMIN_EMAIL"].lower()
+    admin_password = os.environ["ADMIN_PASSWORD"]
+    existing = await db.users.find_one({"email": admin_email})
+    if not existing:
+        await db.users.insert_one({
+            "name": "Harish Bhati", "email": admin_email,
+            "password_hash": hash_password(admin_password), "role": "admin",
+            "email_verified": True, "referral_code": generate_referral_code(),
+            "mobile": "6376541191", "address": "Agar Malwa, M.P.",
+            "kyc": {"status": "verified"}, "bank": {}, "created_at": now_iso(),
+        })
+        logger.info("Admin seeded")
+    elif not verify_password(admin_password, existing.get("password_hash", "")):
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password), "role": "admin"}})
+    try:
+        init_storage()
+        logger.info("Storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+    await seed_demo_data()
+
+
+async def seed_demo_data():
+    if await db.categories.count_documents({}) == 0:
+        for name in ["Demat", "Savings A/C", "Credit Card", "Insurance", "Loan", "Digital Marketing"]:
+            await db.categories.insert_one({"name": name, "slug": slugify(name), "enabled": True,
+                                            "is_deleted": False, "created_at": now_iso()})
+    if await db.campaigns.count_documents({}) == 0:
+        demos = [
+            {"offer_name": "Angel One Demat", "company": "Angel One", "category": "Demat",
+             "payout_amount": 550, "payout_type": "Per Account", "campaign_type": "Account Opening",
+             "benefits": "Free Demat + Trading account, zero AMC first year", "customer_benefit": "Free account opening",
+             "investment": "No investment required", "min_requirement": "First trade within 30 days",
+             "max_payout": "Rs.550 per verified account", "payment_timeline": "T+30 days",
+             "requirements": "PAN, Aadhaar, Bank proof", "important_notes": "Account must complete first trade",
+             "description": "Open a free Angel One Demat account and start trading with India's leading broker.",
+             "status": "live"},
+            {"offer_name": "Zerodha Account", "company": "Zerodha", "category": "Demat",
+             "payout_amount": 400, "payout_type": "Per Account", "campaign_type": "First Trade",
+             "benefits": "Lowest brokerage, Kite platform", "customer_benefit": "Rs.0 equity delivery",
+             "investment": "Rs.200 account opening", "min_requirement": "Complete KYC + 1 trade",
+             "max_payout": "Rs.400", "payment_timeline": "T+45 days",
+             "description": "Join Zerodha, India's largest stock broker with the Kite app.", "status": "live"},
+            {"offer_name": "HDFC Tata Neu Credit Card", "company": "HDFC Bank", "category": "Credit Card",
+             "payout_amount": 1200, "payout_type": "Per Card", "campaign_type": "Non-Trade",
+             "benefits": "NeuCoins on every spend, welcome bonus", "customer_benefit": "Up to 10% back on Tata brands",
+             "investment": "No joining fee (conditional)", "min_requirement": "Card approved + first swipe",
+             "max_payout": "Rs.1200", "payment_timeline": "T+60 days",
+             "description": "Apply for the HDFC Tata Neu Infinity Credit Card and earn generous rewards.", "status": "live"},
+            {"offer_name": "AU Small Finance Savings A/C", "company": "AU Bank", "category": "Savings A/C",
+             "payout_amount": 450, "payout_type": "Per Account", "campaign_type": "Account Opening",
+             "benefits": "High interest savings, zero balance", "customer_benefit": "Up to 7% interest",
+             "investment": "Zero balance account", "min_requirement": "Video KYC completed",
+             "max_payout": "Rs.450", "payment_timeline": "T+30 days",
+             "description": "Open an AU Small Finance Bank digital savings account instantly.", "status": "live"},
+            {"offer_name": "SBI SimplyCLICK Card", "company": "SBI Card", "category": "Credit Card",
+             "payout_amount": 900, "payout_type": "Per Card", "campaign_type": "Non-Trade",
+             "benefits": "Online shopping rewards", "customer_benefit": "10X rewards on online spends",
+             "investment": "Rs.499 annual fee", "min_requirement": "Card issued",
+             "max_payout": "Rs.900", "payment_timeline": "T+60 days",
+             "description": "Apply for the SBI SimplyCLICK credit card, ideal for online shoppers.", "status": "paused"},
+            {"offer_name": "Term Life Insurance", "company": "PolicyBazaar", "category": "Insurance",
+             "payout_amount": 2200, "payout_type": "Per Policy", "campaign_type": "Non-Trade",
+             "benefits": "High cover, low premium term plans", "customer_benefit": "Tax saving + family protection",
+             "investment": "Premium as per plan", "min_requirement": "Policy issued & paid",
+             "max_payout": "Rs.2200", "payment_timeline": "T+90 days",
+             "description": "Help customers secure their family with affordable term insurance plans.", "status": "live"},
+        ]
+        for d in demos:
+            d.setdefault("offer_enabled", True)
+            d.setdefault("affiliate_links", [])
+            for f in ["affiliate_payout", "special_bonus", "validity", "important_conditions",
+                      "start_date", "end_date", "budget", "report_frequency", "payment_terms",
+                      "logo_url", "banner_url", "requirements", "important_notes", "min_requirement",
+                      "max_payout", "payment_timeline", "investment", "customer_benefit"]:
+                d.setdefault(f, "")
+            d["slug"] = await unique_slug(d["offer_name"])
+            d["is_deleted"] = False
+            d["created_at"] = now_iso()
+            d["updated_at"] = now_iso()
+            await db.campaigns.insert_one(d)
+        logger.info("Demo campaigns seeded")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    client.close()

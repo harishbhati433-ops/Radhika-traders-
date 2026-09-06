@@ -1,0 +1,46 @@
+import { Link } from "react-router-dom";
+import { Logo } from "./Logo";
+import { Phone, Mail, MapPin, Instagram, Facebook, Youtube, MessageCircle } from "lucide-react";
+
+export function Footer() {
+  return (
+    <footer className="mt-20 bg-[#0B0F17] text-slate-300">
+      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 md:grid-cols-4">
+        <div className="md:col-span-1">
+          <Logo light />
+          <p className="mt-4 text-sm text-slate-400">Affiliate marketing & financial services partner since 15 June 2023. Demat, savings, credit cards, insurance, loans & more.</p>
+        </div>
+        <div>
+          <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Quick Links</h4>
+          <ul className="space-y-2 text-sm">
+            <li><Link to="/campaigns" className="hover:text-white">Campaigns</Link></li>
+            <li><Link to="/services" className="hover:text-white">Services</Link></li>
+            <li><Link to="/about" className="hover:text-white">About Us</Link></li>
+            <li><Link to="/contact" className="hover:text-white">Contact</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Contact</h4>
+          <ul className="space-y-2.5 text-sm text-slate-400">
+            <li className="flex items-center gap-2"><Phone className="h-4 w-4 text-red-500" /> 6376541191</li>
+            <li className="flex items-center gap-2"><Mail className="h-4 w-4 text-red-500" /> radhikatradersofficial@gmail.com</li>
+            <li className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> Bada Gaulipura Road, Chhawani Naka, Near Maa Pitambara Hospital, Agar Malwa, M.P.</li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Follow Us</h4>
+          <div className="flex gap-2">
+            <a href="https://wa.me/916376541191" target="_blank" rel="noreferrer" className="rounded-lg bg-white/5 p-2.5 hover:bg-emerald-600"><MessageCircle className="h-4 w-4" /></a>
+            <a href="https://instagram.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/5 p-2.5 hover:bg-pink-600"><Instagram className="h-4 w-4" /></a>
+            <a href="https://facebook.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
+            <a href="https://youtube.com" target="_blank" rel="noreferrer" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>
+          </div>
+          <Link to="/admin/login" className="mt-6 inline-block text-xs text-slate-500 hover:text-amber-400" data-testid="footer-admin-link">Admin Login →</Link>
+        </div>
+      </div>
+      <div className="border-t border-white/10 py-5 text-center text-xs text-slate-500">
+        © {new Date().getFullYear()} Radhika Traders · Owner & Founder: Harish Bhati · All rights reserved.
+      </div>
+    </footer>
+  );
+}

@@ -1,0 +1,112 @@
+{
+  "theme": {
+    "archetype": "LUXURY_FINTECH_HYBRID",
+    "mode": "light_with_dark_accents",
+    "description": "Premium Red + Gold + Black on crisp Warm Alabaster/White base. Reflects financial trust, wealth acceleration, and high-conversion affiliate empowerment for Radhika Traders."
+  },
+  "typography": {
+    "font_family_headings": "Cabinet Grotesk / Clash Display / Outfit, sans-serif",
+    "font_family_body": "Plus Jakarta Sans / IBM Plex Sans, sans-serif",
+    "font_family_mono": "JetBrains Mono / Source Code Pro, monospace",
+    "google_fonts_import": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-950",
+      "h3": "text-xl sm:text-2xl font-bold text-slate-900",
+      "h4": "text-lg sm:text-xl font-semibold text-slate-900",
+      "body_lead": "text-base sm:text-lg text-slate-600 leading-relaxed",
+      "body": "text-sm sm:text-base text-slate-600 leading-normal",
+      "caption": "text-xs font-semibold tracking-wider uppercase text-slate-500",
+      "currency_large": "font-mono font-bold tracking-tight text-emerald-600 dark:text-emerald-400"
+    }
+  },
+  "color_palette": {
+    "brand_crimson_red": "#DC2626",
+    "brand_crimson_hover": "#B91C1C",
+    "brand_crimson_deep": "#991B1B",
+    "brand_gold": "#D97706",
+    "brand_gold_accent": "#F59E0B",
+    "brand_gold_glow": "rgba(217, 119, 6, 0.15)",
+    "brand_black_obsidian": "#0B0F17",
+    "brand_charcoal": "#1E293B",
+    "surface_white": "#FFFFFF",
+    "surface_alabaster": "#F8FAFC",
+    "surface_card_light": "#FFFFFF",
+    "surface_card_border": "#E2E8F0",
+    "status_live_badge": {
+      "bg": "bg-emerald-50 text-emerald-700 border-emerald-200",
+      "dot": "bg-emerald-500"
+    },
+    "status_paused_badge": {
+      "bg": "bg-amber-50 text-amber-700 border-amber-200",
+      "dot": "bg-amber-500"
+    },
+    "status_closed_badge": {
+      "bg": "bg-rose-50 text-rose-700 border-rose-200",
+      "dot": "bg-rose-500"
+    }
+  },
+  "layout_and_grids": {
+    "header_nav": "Sticky glassmorphism banner with high optical clarity (backdrop-blur-xl bg-white/90 border-b border-slate-200/80), z-50 with responsive desktop menu and mobile drawer. Includes logo, quick links, live ticker ribbon, wallet pill, and CTA.",
+    "ticker_ribbon": "High-impact gold & dark-slate micro-ticker on top of landing showcasing live affiliate earnings ('Rahul earned ₹1,200 on Demat campaign', 'New HDFC Credit Card campaign added').",
+    "tetris_bento_grid": "For landing & showcase: 12-column grid layout with asymmetric spans (col-span-8 for top earning campaign highlight, col-span-4 for quick payout card, col-span-4 for instant referral link generator).",
+    "dashboard_grid": "Dense 4-column KPI overview (Total Earnings, Active Referrals, Available Wallet Balance, Pending Withdrawals) followed by interactive payout velocity charts and campaign offer table.",
+    "mobile_first_design": "Card elements use compact touch targets with tap-to-copy referral link, instant WhatsApp/Telegram trigger buttons, and swipeable tab navigation."
+  },
+  "image_urls": {
+    "hero_financial_advisor": {
+      "url": "https://images.unsplash.com/photo-1526948531399-320e7e40f0ca?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHw0fHxmaW5hbmNpYWwlMjBhZHZpc29yJTIwb2ZmaWNlJTIwYnVzaW5lc3N8ZW58MHx8fHwxNzg4Njk1MjA4fDA&ixlib=rb-4.1.0&q=85",
+      "category": "hero_background_or_about",
+      "alt": "Radhika Traders executive financial advisory meeting in modern office"
+    },
+    "credit_card_technology": {
+      "url": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjcmVkaXQlMjBjYXJkJTIwcGF5bWVudCUyMHRlY2hub2xvZ3l8ZW58MHx8fHwxNzg4Njk1MjA4fDA&ixlib=rb-4.1.0&q=85",
+      "category": "service_credit_cards",
+      "alt": "Instant digital credit card and fintech reward activation"
+    },
+    "stock_market_trading": {
+      "url": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxzdG9jayUyMG1hcmtldCUyMGludmVzdG1lbnQlMjB0cmFkaW5nfGVufDB8fHx8MTc4ODY5NTIwOHww&ixlib=rb-4.1.0&q=85",
+      "category": "service_demat_trading",
+      "alt": "Live trading charts and Demat account high payout campaigns"
+    },
+    "business_consultation": {
+      "url": "https://images.pexels.com/photos/8068654/pexels-photo-8068654.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "category": "about_us_founder",
+      "alt": "Harish Bhati and core advisory team reviewing strategic campaigns"
+    },
+    "card_payment_pos": {
+      "url": "https://images.unsplash.com/photo-1609429019995-8c40f49535a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHw0fHxjcmVkaXQlMjBjYXJkJTIwcGF5bWVudCUyMHRlY2hub2xvZ3l8ZW58MHx8fHwxNzg4Njk1MjA4fDA&ixlib=rb-4.1.0&q=85",
+      "category": "campaign_detail_banner",
+      "alt": "Premium metal banking card and instant cashback offers"
+    }
+  },
+  "key_components": {
+    "BrandHeader": "Sticky navigation with Radhika Traders luxury crest/badge logo, navigation links, campaign category dropdown, customer wallet badge, login/signup/dashboard trigger.",
+    "LiveCampaignCard": "Rich interactive card with company logo, offer type badge, live payout tag (₹300 - ₹2500 per lead), requirement pills, key benefits preview, 1-click share to WhatsApp/Telegram, and 'Get Referral Link' action.",
+    "CampaignDetailModalOrPage": "Comprehensive breakdown containing Banner header, Payout terms, Step-by-step conversion rules, target audience criteria, personalized referral link builder, QR code generator, and instant share buttons.",
+    "CustomerWalletDashboard": "Interactive wallet balance card (Available, In-Review, Lifetime Earnings), Withdrawal request form with Bank/UPI details, Real-time status tracker, and CSV/Excel/PDF statement exporter.",
+    "AdminCampaignManager": "Admin control center for CRUD operations on campaigns (Upload banner URL, set payout, title, rules, category: Demat, Savings, Credit Card, Insurance, Loan, Digital Marketing, change status LIVE/PAUSED/CLOSED), view customer list, approve/reject withdrawals, and review analytics.",
+    "KYCVerificationCard": "Profile and KYC verification system with PAN/Aadhaar/Bank detail input, status indicator (Verified/Pending/Not Submitted), and security badges."
+  },
+  "visual_enhancers": {
+    "gold_borders": "1px solid rgba(217, 119, 6, 0.25) with subtle gold box-shadow on active cards",
+    "glass_stat_cards": "bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow",
+    "live_indicators": "Pulsing green ring on LIVE campaigns to convey real-time freshness",
+    "gradient_buttons": "Primary CTA with `bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white font-semibold shadow-sm hover:from-red-700 hover:to-red-900 active:scale-[0.98]`",
+    "gold_badges": "bg-amber-500/10 text-amber-700 border border-amber-300/40 rounded-full px-2.5 py-0.5 text-xs font-bold"
+  },
+  "instructions_to_main_agent": [
+    "Use JavaScript (.js / .jsx) files throughout the frontend application as configured.",
+    "Ensure the branding 'RADHIKA TRADERS · Trusted Partner for Financial Growth' (Founder: Harish Bhati) is prominently featured on Landing, Header, About Us, and Footer.",
+    "Provide a preloaded set of realistic Indian financial campaigns across categories: Demat (AngelOne, Zerodha, Upstox), Savings A/C (AU Small Finance Bank, Kotak 811, IndusInd), Credit Cards (HDFC Tata Neu, SBI SimplyCLICK, Axis Neo), Insurance & Loans with clear ₹ payouts (e.g. ₹450 to ₹2200).",
+    "Implement real working client-side or fullstack logic with FastAPI backend: campaign listing with filters & search, referral link generation with user ID, customer wallet balance computation, mock/real OTP login modal, withdrawal request workflow, statement PDF/CSV export simulation.",
+    "Every key interactive element, button, tab, search input, card, and modal trigger must have a unique `data-testid` attribute (e.g. `data-testid='campaign-card-angelone'`, `data-testid='wallet-withdraw-btn'`, `data-testid='filter-category-demat'`).",
+    "Ensure high contrast: text must always remain readable, never use pure transparent dropdown or modal backgrounds."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": {
+    "anti_ai_slop": "Do not center-align the whole app. Avoid generic blue gradients. Use the defined Crimson Red + Warm Amber Gold + Obsidian Black color scheme on clean alabaster surfaces.",
+    "accessibility": "Ensure all text on red or gold badges meets APCA/WCAG AA contrast standards. Use high-contrast hover states.",
+    "smooth_transitions": "Animate tabs, filter switches, and modal opens with crisp 150-200ms ease-out transitions. Never use universal `transition: all`.",
+    "toasts": "Use Sonner for live feedback on copy referral link, withdrawal submitted, campaign created, and login."
+  }
+}
