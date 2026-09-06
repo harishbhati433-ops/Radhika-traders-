@@ -48,3 +48,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 - About page: Owner & Founder Harish Bhati bio added — 7 years market experience (user explicitly said 7, not 6).
 - Owner real photos added (/frontend/public/images/harish-bhati.jpeg, harish-bhati-2.jpeg) on About page (hero + avatar) and Contact owner card. Faces untouched; only camera watermark strip cropped.
+- Avatar uses face-centered crop /images/harish-bhati-face.jpeg (user asked face clearly visible). Team photos: user will upload; add a "Radhika Traders Team" section (NOT on About page — put on Home or a separate Team section). No names/roles needed, just photos.
