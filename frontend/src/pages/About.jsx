@@ -16,9 +16,19 @@ export default function About() {
             <p className="mt-4 text-base text-slate-600">
               Our team brings <strong>3+ years of individual experience</strong> and <strong>6+ years of combined expertise</strong> in the financial and digital marketing space.
             </p>
-            <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5">
+            <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
               <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Owner & Founder</div>
               <div className="mt-1 font-display text-xl font-bold text-slate-900">Harish Bhati</div>
+              <p className="mt-3 text-sm text-slate-600">
+                Harish Bhati has been working in the financial & affiliate marketing market for <strong>7 years</strong>. With deep hands-on experience across demat accounts, banking products, insurance and digital campaigns, he leads Radhika Traders with a vision to help partners earn genuinely and customers choose the right financial products.
+              </p>
+              <div className="mt-4 flex items-center gap-3">
+                <div className="rounded-xl bg-red-600 px-3 py-2 text-center text-white">
+                  <div className="font-display text-2xl font-extrabold leading-none">7+</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider">Years</div>
+                </div>
+                <div className="text-xs text-slate-500">Market experience in financial services & affiliate marketing</div>
+              </div>
             </div>
           </div>
           <img src="https://images.pexels.com/photos/8068654/pexels-photo-8068654.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"

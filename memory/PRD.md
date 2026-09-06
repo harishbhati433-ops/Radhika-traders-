@@ -45,3 +45,5 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## Update (June 2026)
 - Contact page: WhatsApp 'Chat on WhatsApp' button linked to wa.me/916376541191 with pre-filled message. Footer: WhatsApp + Social links set: Instagram https://www.instagram.com/growthwithharishbhati, Facebook https://www.facebook.com/share/1BadZkWMoV/, YouTube https://youtube.com/@radhikatradersofficial.
 - Backlog: P1 Email OTP (signup/reset), P1 statement PDF/Excel/CSV download; P2 WhatsApp/SMS OTP, P2 automated click/lead tracking.
+
+- About page: Owner & Founder Harish Bhati bio added — 7 years market experience (user explicitly said 7, not 6).
