@@ -31,9 +31,9 @@ export function Footer() {
           <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Follow Us</h4>
           <div className="flex gap-2">
             <a href="https://wa.me/916376541191" target="_blank" rel="noreferrer" data-testid="footer-whatsapp" className="rounded-lg bg-white/5 p-2.5 hover:bg-emerald-600"><MessageCircle className="h-4 w-4" /></a>
-            <a href="https://instagram.com" target="_blank" rel="noreferrer" data-testid="footer-instagram" className="rounded-lg bg-white/5 p-2.5 hover:bg-pink-600"><Instagram className="h-4 w-4" /></a>
-            <a href="https://facebook.com" target="_blank" rel="noreferrer" data-testid="footer-facebook" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
-            <a href="https://youtube.com" target="_blank" rel="noreferrer" data-testid="footer-youtube" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>
+            <a href="https://www.instagram.com/growthwithharishbhati" target="_blank" rel="noreferrer" data-testid="footer-instagram" className="rounded-lg bg-white/5 p-2.5 hover:bg-pink-600"><Instagram className="h-4 w-4" /></a>
+            <a href="https://www.facebook.com/share/1BadZkWMoV/" target="_blank" rel="noreferrer" data-testid="footer-facebook" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
+            <a href="https://youtube.com/@radhikatradersofficial" target="_blank" rel="noreferrer" data-testid="footer-youtube" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>
           </div>
           <Link to="/admin/login" className="mt-6 inline-block text-xs text-slate-500 hover:text-amber-400" data-testid="footer-admin-link">Admin Login →</Link>
         </div>

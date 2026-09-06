@@ -38,9 +38,9 @@ export default function Contact() {
                 <MessageCircle className="h-4 w-4" /> Chat on WhatsApp
               </a>
               <div className="flex justify-center gap-2">
-                <a href="https://instagram.com" target="_blank" rel="noreferrer" data-testid="contact-instagram" className="rounded-lg bg-white/10 p-3 hover:bg-pink-600"><Instagram className="h-5 w-5" /></a>
-                <a href="https://facebook.com" target="_blank" rel="noreferrer" data-testid="contact-facebook" className="rounded-lg bg-white/10 p-3 hover:bg-blue-600"><Facebook className="h-5 w-5" /></a>
-                <a href="https://youtube.com" target="_blank" rel="noreferrer" data-testid="contact-youtube" className="rounded-lg bg-white/10 p-3 hover:bg-red-600"><Youtube className="h-5 w-5" /></a>
+                <a href="https://www.instagram.com/growthwithharishbhati" target="_blank" rel="noreferrer" data-testid="contact-instagram" className="rounded-lg bg-white/10 p-3 hover:bg-pink-600"><Instagram className="h-5 w-5" /></a>
+                <a href="https://www.facebook.com/share/1BadZkWMoV/" target="_blank" rel="noreferrer" data-testid="contact-facebook" className="rounded-lg bg-white/10 p-3 hover:bg-blue-600"><Facebook className="h-5 w-5" /></a>
+                <a href="https://youtube.com/@radhikatradersofficial" target="_blank" rel="noreferrer" data-testid="contact-youtube" className="rounded-lg bg-white/10 p-3 hover:bg-red-600"><Youtube className="h-5 w-5" /></a>
               </div>
             </div>
           </div>
