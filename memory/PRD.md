@@ -53,3 +53,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Phone number clickable (tel:+916376541191) in Footer + Contact; Contact has "Call Now" button.
 - Official logo added: /images/logo-mark.jpeg (RT monogram, used in Logo.jsx navbar/dashboard), /images/logo-full.jpeg (Footer + AuthShell left panel), favicon.png + title updated in index.html.
 - Floating WhatsApp bubble (components/WhatsAppFloat.jsx) rendered globally in App.js, bottom-right, links to wa.me/916376541191.
+- Statement download (PDF/Excel/CSV) verified end-to-end via UI + curl (Sep 2026).
