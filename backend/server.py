@@ -158,6 +158,7 @@ class KycIn(BaseModel):
     ifsc: str
     account_holder: str
     upi: Optional[str] = ""
+    upi_qr_url: Optional[str] = ""
 
 
 class CategoryIn(BaseModel):
@@ -421,7 +422,7 @@ async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
     kyc["status"] = "pending"
     kyc["submitted_at"] = now_iso()
     bank = {"account_holder": body.account_holder, "bank_account": body.bank_account,
-            "ifsc": body.ifsc, "upi": body.upi}
+            "ifsc": body.ifsc, "upi": body.upi, "upi_qr_url": body.upi_qr_url or ""}
     await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"kyc": kyc, "bank": bank}})
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     return public_user(full)
@@ -688,7 +689,8 @@ async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_
         "amount": body.amount, "method": body.method, "details": details,
         "payout_info": {
             "account_holder": bank.get("account_holder", ""), "bank_account": bank.get("bank_account", ""),
-            "ifsc": bank.get("ifsc", ""), "upi": bank.get("upi", ""), "pan": full.get("kyc", {}).get("pan", ""),
+            "ifsc": bank.get("ifsc", ""), "upi": bank.get("upi", ""), "upi_qr_url": bank.get("upi_qr_url", ""),
+            "pan": full.get("kyc", {}).get("pan", ""),
         },
         "status": "pending", "admin_note": "", "created_at": now_iso(), "updated_at": now_iso(),
     }
@@ -850,7 +852,9 @@ async def admin_dashboard(admin: dict = Depends(require_admin)):
 
 # ----------------------------- Image upload -----------------------------
 @api.post("/upload")
-async def upload_image(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+async def upload_image(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if user.get("role") != "admin" and not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
     ct = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
     path = f"{APP_NAME}/uploads/{uuid.uuid4().hex}.{ext}"

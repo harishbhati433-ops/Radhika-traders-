@@ -1,5 +1,6 @@
 import { toast } from "sonner";
-import { Copy, Smartphone, Landmark, Phone } from "lucide-react";
+import { fileUrl } from "../lib/api";
+import { Copy, Smartphone, Landmark, Phone, QrCode } from "lucide-react";
 
 function Row({ label, value, testId }) {
   if (!value) return null;
@@ -36,6 +37,12 @@ export function PayoutDetails({ w }) {
       )}
       {isUpi && p.bank_account && <Row label="Alt A/C" value={`${p.bank_account} · ${p.ifsc}`} />}
       {!isUpi && p.upi && <Row label="Alt UPI" value={p.upi} />}
+      {p.upi_qr_url && (
+        <a href={fileUrl(p.upi_qr_url)} target="_blank" rel="noreferrer" data-testid={`wd-qr-${w.id}`} className="mt-2 flex items-center gap-3 rounded-lg bg-white p-2 ring-1 ring-slate-200 hover:ring-red-300">
+          <img src={fileUrl(p.upi_qr_url)} alt="UPI QR" className="h-20 w-20 rounded object-contain" />
+          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1"><QrCode className="h-3.5 w-3.5" /> Scan & pay via UPI QR<br /><span className="font-normal text-slate-400">Tap to enlarge</span></span>
+        </a>
+      )}
       {w.user_mobile && (
         <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
           <Phone className="h-3 w-3" /> <a href={`tel:+91${w.user_mobile}`} className="font-semibold hover:text-red-600">{w.user_mobile}</a>

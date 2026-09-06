@@ -5,6 +5,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { ImageUpload } from "../../components/ImageUpload";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
 
@@ -14,7 +15,7 @@ export default function Profile() {
   const [kyc, setKyc] = useState({
     account_holder: user?.bank?.account_holder || user?.name || "", pan: user?.kyc?.pan || "",
     aadhaar: user?.kyc?.aadhaar || "", bank_account: user?.bank?.bank_account || "",
-    ifsc: user?.bank?.ifsc || "", upi: user?.bank?.upi || "",
+    ifsc: user?.bank?.ifsc || "", upi: user?.bank?.upi || "", upi_qr_url: user?.bank?.upi_qr_url || "",
   });
   const [savingP, setSavingP] = useState(false);
   const [savingK, setSavingK] = useState(false);
@@ -77,6 +78,7 @@ export default function Profile() {
               <div><Label>IFSC</Label><Input data-testid="kyc-ifsc" required value={kyc.ifsc} onChange={setK("ifsc")} className="mt-1.5" /></div>
               <div><Label>UPI ID</Label><Input data-testid="kyc-upi" value={kyc.upi} onChange={setK("upi")} className="mt-1.5" placeholder="name@upi" /></div>
             </div>
+            <ImageUpload label="UPI QR code (optional — PhonePe / GPay / Paytm QR screenshot)" value={kyc.upi_qr_url} onChange={(v) => setKyc({ ...kyc, upi_qr_url: v })} testId="kyc-upi-qr" />
             <button type="submit" data-testid="kyc-save" disabled={savingK} className="flex items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-bold text-white hover:brightness-125 disabled:opacity-60">
               {savingK && <Loader2 className="h-4 w-4 animate-spin" />} Submit KYC
             </button>
