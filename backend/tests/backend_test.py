@@ -316,10 +316,18 @@ class TestStatements:
 
 # ---------- Upload ----------
 class TestUpload:
-    def test_upload_admin_only(self, cust_headers):
-        files = {"file": ("t.png", b"\x89PNG\r\n\x1a\nfake", "image/png")}
+    def test_customer_can_upload_image(self, cust_headers):
+        # NEW: customers are allowed to upload images (for KYC UPI QR)
+        files = {"file": ("t.png", b"\x89PNG\r\n\x1a\n" + b"0" * 40, "image/png")}
         r = requests.post(f"{API}/upload", files=files, headers=cust_headers)
-        assert r.status_code == 403
+        assert r.status_code == 200, r.text
+        assert r.json()["url"].startswith("/api/files/")
+
+    def test_customer_cannot_upload_non_image(self, cust_headers):
+        # non-image should be rejected with 400 for customers
+        files = {"file": ("bad.txt", b"not an image", "text/plain")}
+        r = requests.post(f"{API}/upload", files=files, headers=cust_headers)
+        assert r.status_code == 400
 
     def test_upload_and_serve(self, admin_headers):
         files = {"file": ("t.png", b"\x89PNG\r\n\x1a\n" + b"0" * 40, "image/png")}
@@ -541,3 +549,92 @@ class TestAffiliateLinkNormalize:
         assert c["affiliate_links"][0]["url"].startswith("https://")
         # cleanup
         requests.delete(f"{API}/campaigns/{c['id']}", headers=admin_headers)
+
+
+# ---------- NEW: Login portal separation ----------
+class TestLoginPortalSeparation:
+    def test_admin_on_customer_portal_blocked(self):
+        r = requests.post(f"{API}/auth/login", json={
+            "email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "portal": "customer"})
+        assert r.status_code == 403
+        assert "Admin accounts cannot log in here" in r.json().get("detail", "")
+
+    def test_admin_default_portal_blocked(self):
+        # No portal in payload defaults to 'customer' → admin should be blocked
+        r = requests.post(f"{API}/auth/login", json={
+            "email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+        assert r.status_code == 403
+
+    def test_customer_on_admin_portal_blocked(self):
+        r = requests.post(f"{API}/auth/login", json={
+            "email": "testcust@example.com", "password": "Test@1234", "portal": "admin"})
+        if r.status_code == 401:
+            pytest.skip("seeded testcust login failed")
+        assert r.status_code == 403
+        assert "admin only" in r.json().get("detail", "").lower()
+
+    def test_admin_correct_portal_ok(self):
+        r = requests.post(f"{API}/auth/login", json={
+            "email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "portal": "admin"})
+        assert r.status_code == 200
+        assert r.json()["user"]["role"] == "admin"
+
+    def test_customer_correct_portal_ok(self):
+        r = requests.post(f"{API}/auth/login", json={
+            "email": "testcust@example.com", "password": "Test@1234", "portal": "customer"})
+        if r.status_code == 401:
+            pytest.skip("seeded testcust login failed")
+        assert r.status_code == 200
+        assert r.json()["user"]["role"] == "customer"
+
+
+# ---------- NEW: UPI QR upload + KYC snapshot in withdrawals ----------
+class TestUpiQrUpload:
+    def test_customer_upload_qr_and_kyc_and_withdrawal_snapshot(self, admin_headers):
+        # Fresh customer
+        email = f"test_qr_{uuid.uuid4().hex[:8]}@example.com"
+        pw = "Passw0rd!"
+        requests.post(f"{API}/auth/register", json={
+            "name": "QRUser", "email": email, "mobile": "9111222333", "password": pw})
+        code = _grep_otp(email, "signup", wait=5)
+        assert code
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        assert v.status_code == 200
+        tok = v.json()["token"]; uid = v.json()["user"]["id"]
+        h = {"Authorization": f"Bearer {tok}"}
+
+        # Step 1: customer uploads QR image
+        files = {"file": ("qr.png", b"\x89PNG\r\n\x1a\n" + b"0" * 60, "image/png")}
+        up = requests.post(f"{API}/upload", files=files, headers=h)
+        assert up.status_code == 200, up.text
+        qr_url = up.json()["url"]
+        assert qr_url.startswith("/api/files/")
+
+        # Step 2: submit KYC with upi_qr_url
+        r = requests.put(f"{API}/profile/kyc", json={
+            "pan": "QQQPZ1234K", "aadhaar": "111122223333",
+            "bank_account": "50100987654321", "ifsc": "HDFC0000123",
+            "account_holder": "QR User", "upi": "qr@ybl", "upi_qr_url": qr_url
+        }, headers=h)
+        assert r.status_code == 200, r.text
+        # verify persisted in bank.upi_qr_url via /auth/me
+        me = requests.get(f"{API}/auth/me", headers=h).json()
+        assert me.get("bank", {}).get("upi_qr_url") == qr_url
+
+        # Step 3: admin credits and customer requests withdrawal
+        requests.post(f"{API}/admin/credit",
+                      json={"user_id": uid, "amount": 500, "description": "qr test"},
+                      headers=admin_headers)
+        wr = requests.post(f"{API}/withdrawals",
+                           json={"amount": 150, "method": "UPI", "details": "qr@ybl"},
+                           headers=h)
+        assert wr.status_code == 200, wr.text
+        data = wr.json()
+        pi = data.get("payout_info") or {}
+        assert pi.get("upi_qr_url") == qr_url, f"payout_info.upi_qr_url missing: {pi}"
+
+    def test_customer_upload_non_image_rejected(self, cust_headers):
+        files = {"file": ("bad.pdf", b"%PDF-1.4 fake", "application/pdf")}
+        r = requests.post(f"{API}/upload", files=files, headers=cust_headers)
+        assert r.status_code == 400
+

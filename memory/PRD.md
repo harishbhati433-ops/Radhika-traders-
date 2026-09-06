@@ -70,3 +70,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Iteration 2 testing (Sep 2026): 37/37 backend tests pass + UI smoke pass for affiliate redirect, payout details, mark-paid proof, banners, refer&earn, category tiles, home zero-investment. All NEED RE-PUBLISH to reach live radhikatraders.net.
 - Login separation (Sep 2026): /api/auth/login takes portal ("customer"|"admin"); admin accounts rejected (403) on customer /login, customers rejected on /admin/login. Tests updated to pass portal=admin.
 - UPI QR (Sep 2026): KYC has upi_qr_url (customer uploads via /api/upload — now allowed for customers, images only); stored in bank.upi_qr_url, snapshotted into withdrawal payout_info; admin PayoutDetails shows QR thumbnail (wd-qr-<id>).
+- Iteration 3 final pre-publish regression (Sep 2026): 45/45 backend tests pass, all UI flows + 8 public pages clean. Cleared for Re-publish.

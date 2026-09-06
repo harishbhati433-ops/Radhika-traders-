@@ -1,0 +1,36 @@
+{
+  "summary": "Final pre-publish regression PASS. Backend: 45/45 pytest cases green (37 existing iteration-2 + 8 new for login-portal-separation and UPI-QR upload/KYC/withdrawal snapshot). Frontend: portal separation verified end-to-end — admin on /login blocked with correct toast 'Admin accounts cannot log in here…' (stayed on /login); customer on /admin/login blocked with 'admin only' toast (stayed on /admin/login); correct-portal logins redirect properly (admin→/admin, customer→/dashboard). Customer /profile shows the new kyc-upi-qr ImageUpload. /admin/withdrawals displays 13 payout cards and 2 wd-qr-<id> thumbnails linking to QR images (confirmed the E2E: customer upload → PUT /api/profile/kyc {upi_qr_url} → POST /api/withdrawals snapshots payout_info.upi_qr_url → admin sees thumbnail). All 8 public pages (/, /about, /services, /contact, /campaigns, /login, /signup, /admin/login) load with 0 real console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/banners", "issue": "Still requires auth; logged-out users can't see banners (carry-over from iter-2, non-blocking)."},
+      {"endpoint": "Admin dashboard route", "issue": "Only /admin serves dashboard; /admin/dashboard logs react-router warning (carry-over, non-blocking)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1014 lines — recommend splitting into routers (auth, campaigns, wallet, admin, banners, affiliate) before further feature additions.",
+    "@app.on_event('startup') is deprecated in modern FastAPI; migrate to lifespan.",
+    "No brute-force lockout / rate limiting on /api/auth/login — playbook non-conformance; consider adding a per-email + per-IP counter with 5-fail lockout.",
+    "/api/upload authorization is now content-type gated (customers can only upload images); a stronger check on the raw file magic bytes (not just Content-Type header, which is client-supplied) would prevent malicious uploads. Currently a client could send arbitrary bytes with 'Content-Type: image/png' and the server would store it as an image."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (replaced 'test_upload_admin_only' with 'test_customer_can_upload_image' + 'test_customer_cannot_upload_non_image'; added TestLoginPortalSeparation with 5 cases; added TestUpiQrUpload with 2 cases covering QR upload → KYC persist (verified via /auth/me bank.upi_qr_url) → withdrawal payout_info.upi_qr_url snapshot)"
+  ],
+  "success_rate": {"backend": "100% (45/45)", "frontend": "100% on all critical flows and new-feature testids"},
+  "test_credentials": "Admin: bhatiharish276@gmail.com / Radhika@2023 (portal:'admin'). Customer testcust@example.com / Test@1234 (RTA12499, KYC done). Fresh customers minted per test via /signup with OTP grep from /var/log/supervisor/backend.*.log.",
+  "seed_data_creation": "Each pytest run creates 3 fresh customers (test_wpayout_*, test_paid_*, test_qr_*) and one TEST_Banner, TEST_Cat_*, TEST_Offer_*, TEST_Norm_*. All test-scoped resources are prefixed TEST_ or use random uuid emails and are safe for repeat runs. Referral bonus setting is written to 20 as a side effect of TestReferAndEarn — reset via PUT /api/admin/settings if a different value is needed pre-launch.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "45 pytest cases cover: auth (5) + login portal separation (5) + upload (3) + campaigns CRUD (5) + categories (1) + wallet/withdrawals (7) + statements (3) + affiliate redirect+clicks (3) + withdrawal payout autofill (1) + mark-paid with proof/UTR (1) + banners CRUD (2) + refer-earn (2) + affiliate link normalization (1) + UPI QR upload+snapshot (2) + dashboard/isolation (4). Screenshot of /admin/withdrawals confirmed the QR thumbnail wd-qr-<id> renders inside wd-payout-<id> card. External offertracking.in is unreachable from sandbox — /api/go/* only asserts the 302 Location header.",
+  "rca of the issue": "N/A — no failures. All new features (login portal separation, customer UPI QR upload, upi_qr_url persistence in KYC, payout_info.upi_qr_url snapshot at withdrawal time, admin wd-qr-<id> thumbnail) verified working end-to-end through both API and UI."
+}
