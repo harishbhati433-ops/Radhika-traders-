@@ -12,7 +12,7 @@ export default function Contact() {
         <div className="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">
           <div className="space-y-4">
             {[
-              [Phone, "Phone", "6376541191", "tel:6376541191"],
+              [Phone, "Phone", "6376541191", "tel:+916376541191"],
               [Mail, "Email", "radhikatradersofficial@gmail.com", "mailto:radhikatradersofficial@gmail.com"],
               [MapPin, "Address", "Bada Gaulipura Road, Chhawani Naka, Near Maa Pitambara Hospital, Radhika Traders, Agar Malwa, M.P.", null],
             ].map(([Icon, label, val, href]) => (
@@ -20,7 +20,7 @@ export default function Contact() {
                 <div className="rounded-xl bg-red-50 p-3"><Icon className="h-5 w-5 text-red-600" /></div>
                 <div>
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</div>
-                  {href ? <a href={href} className="text-sm font-semibold text-slate-800 hover:text-red-600">{val}</a>
+                  {href ? <a href={href} data-testid={`contact-${label.toLowerCase()}-link`} className="text-sm font-semibold text-slate-800 hover:text-red-600">{val}{label === "Phone" && <span className="ml-2 text-xs font-bold text-red-600">Tap to call</span>}</a>
                     : <div className="text-sm font-semibold text-slate-800">{val}</div>}
                 </div>
               </div>
@@ -38,6 +38,10 @@ export default function Contact() {
               <p className="mt-4 text-sm text-red-100">Have questions about campaigns, payouts or partnership? Reach out — we usually respond within a few hours.</p>
             </div>
             <div className="mt-8 space-y-3">
+              <a href="tel:+916376541191" data-testid="contact-call-now"
+                className="flex items-center justify-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 hover:brightness-110">
+                <Phone className="h-4 w-4" /> Call Now · 6376541191
+              </a>
               <a href="https://wa.me/916376541191?text=Hello%20Radhika%20Traders%2C%20I%20want%20to%20know%20more%20about%20your%20campaigns." target="_blank" rel="noreferrer" data-testid="contact-whatsapp"
                 className="flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-sm font-bold hover:brightness-110">
                 <MessageCircle className="h-4 w-4" /> Chat on WhatsApp

@@ -111,6 +111,25 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Team */}
+      <section className="mx-auto max-w-7xl px-6 py-16" data-testid="team-section">
+        <div className="mb-8">
+          <span className="text-xs font-bold uppercase tracking-wider text-red-600">Our People</span>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Radhika Traders Team</h2>
+          <p className="mt-2 max-w-xl text-sm text-slate-600">The team behind every campaign, payout and celebration at our Agar Malwa office.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3 md:grid-rows-2">
+          <img src="/images/team-1.jpeg" alt="Radhika Traders team" data-testid="team-photo-1"
+            className="h-64 w-full rounded-3xl object-cover shadow-lg md:col-span-2 md:row-span-2 md:h-full" style={{ objectPosition: "50% 30%" }} />
+          <img src="/images/team-2.jpeg" alt="Radhika Traders anniversary celebration" data-testid="team-photo-2"
+            className="h-64 w-full rounded-3xl object-cover shadow-lg" />
+          <div className="grid grid-cols-2 gap-4">
+            <img src="/images/team-3.jpeg" alt="Radhika Traders team" data-testid="team-photo-3" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
+            <img src="/images/team-4.jpeg" alt="Radhika Traders team" data-testid="team-photo-4" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="mx-auto max-w-7xl px-6 py-16">
         <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] p-10 text-center sm:p-16">

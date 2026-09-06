@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Logo } from "./Logo";
 import { Phone, Mail, MapPin, Instagram, Facebook, Youtube, MessageCircle } from "lucide-react";
 
 export function Footer() {
@@ -7,7 +6,7 @@ export function Footer() {
     <footer className="mt-20 bg-[#0B0F17] text-slate-300">
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 md:grid-cols-4">
         <div className="md:col-span-1">
-          <Logo light />
+          <img src="/images/logo-full.jpeg" alt="Radhika Traders" className="w-44 rounded-2xl" data-testid="footer-logo-full" />
           <p className="mt-4 text-sm text-slate-400">Affiliate marketing & financial services partner since 15 June 2023. Demat, savings, credit cards, insurance, loans & more.</p>
         </div>
         <div>
@@ -22,8 +21,8 @@ export function Footer() {
         <div>
           <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Contact</h4>
           <ul className="space-y-2.5 text-sm text-slate-400">
-            <li className="flex items-center gap-2"><Phone className="h-4 w-4 text-red-500" /> 6376541191</li>
-            <li className="flex items-center gap-2"><Mail className="h-4 w-4 text-red-500" /> radhikatradersofficial@gmail.com</li>
+            <li><a href="tel:+916376541191" data-testid="footer-phone" className="flex items-center gap-2 hover:text-white"><Phone className="h-4 w-4 text-red-500" /> 6376541191</a></li>
+            <li><a href="mailto:radhikatradersofficial@gmail.com" data-testid="footer-email" className="flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4 text-red-500" /> radhikatradersofficial@gmail.com</a></li>
             <li className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> Bada Gaulipura Road, Chhawani Naka, Near Maa Pitambara Hospital, Agar Malwa, M.P.</li>
           </ul>
         </div>
