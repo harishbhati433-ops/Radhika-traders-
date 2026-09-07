@@ -1235,21 +1235,25 @@ async def admin_delete_notifications(title: str = Query(...), created_at: str = 
 async def list_customers(admin: dict = Depends(require_admin)):
     users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(5000)
     ids = [str(u["_id"]) for u in users]
-    txns = await db.transactions.find({"user_id": {"$in": ids}}).to_list(100000)
-    wds = await db.withdrawals.find({"user_id": {"$in": ids}}).to_list(100000)
     agg = {i: {"credit": 0.0, "debit": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
-    for t in txns:
-        a = agg.get(t["user_id"])
-        if a and t["type"] in ("credit", "debit"):
-            a[t["type"]] += t["amount"]
-    for w in wds:
-        a = agg.get(w["user_id"])
+    txn_rows = await db.transactions.aggregate([
+        {"$match": {"user_id": {"$in": ids}, "type": {"$in": ["credit", "debit"]}}},
+        {"$group": {"_id": {"u": "$user_id", "t": "$type"}, "total": {"$sum": "$amount"}}},
+    ]).to_list(None)
+    for r in txn_rows:
+        a = agg.get(r["_id"]["u"])
+        if a:
+            a[r["_id"]["t"]] += float(r["total"] or 0)
+    wd_rows = await db.withdrawals.aggregate([
+        {"$match": {"user_id": {"$in": ids}, "status": {"$in": ["paid", "pending", "approved"]}}},
+        {"$group": {"_id": {"u": "$user_id", "s": "$status"}, "total": {"$sum": "$amount"}}},
+    ]).to_list(None)
+    for r in wd_rows:
+        a = agg.get(r["_id"]["u"])
         if not a:
             continue
-        if w["status"] == "paid":
-            a["paid"] += w["amount"]
-        elif w["status"] in ("pending", "approved"):
-            a["pending"] += w["amount"]
+        key = "paid" if r["_id"]["s"] == "paid" else "pending"
+        a[key] += float(r["total"] or 0)
     out = []
     for u in users:
         a = agg[str(u["_id"])]

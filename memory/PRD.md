@@ -80,3 +80,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - PHASE 3 (Sep 2026): KYC auto-verifies on submit (PAN/IFSC/acct/aadhaar/UPI format validation + duplicate PAN check); admin can still reject/deactivate. Transaction password (4-6 digit PIN, bcrypt): POST /api/security/transaction-password (set via login password; reset via email OTP purpose txn from /security/transaction-password/otp), 5 wrong attempts -> 30 min lock; required on POST /api/withdrawals (transaction_password). POST /api/security/change-password. GET /api/security/status (has_txn_password + last 10 security_logs). Forgot email: POST /api/auth/recover-email {mobile, pan|dob} -> masked email, 5/hour rate limit, logged. Profile has dob field + Security section (SecuritySettings.jsx); /forgot-email page; Login has Forgot Email link.
 - Live sync (Sep 2026): lib/useLivePoll.js polls every 10s + on tab focus; used in CustomerCampaigns, CustomerDashboard, public Campaigns, CampaignDetail. NotificationBell polls 15s. Admin status changes reflect on customer panel without refresh.
 - Iteration 5: 67/67 backend tests + UI pass for Phase 3 (KYC auto-verify, txn PIN, change password, forgot email).
+
+## 2026-06 — Deployment readiness check (pre-republish)
+- deployment_agent: PASS (no blockers). Only perf warnings.
+- Fixed: /api/admin/customers wallet totals now computed via Mongo aggregation ($group/$sum) instead of loading up to 100k txns/withdrawals in memory. Verified values match /api/wallet.
+- Remaining perf backlog (P2): pagination/projection for /admin/leads, /leads, /campaigns list.
