@@ -15,6 +15,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use((r) => r, (err) => {
+  if (err.response?.status === 401 && localStorage.getItem("rt_token")) {
+    localStorage.removeItem("rt_token");
+    window.dispatchEvent(new Event("rt:logout"));
+  }
+  return Promise.reject(err);
+});
+
 export function fileUrl(path) {
   if (!path) return "";
   if (path.startsWith("http")) return path;

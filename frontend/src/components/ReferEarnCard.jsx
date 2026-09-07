@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { ShareButtons } from "./ShareButtons";
-import { Gift, Users, Copy } from "lucide-react";
+import { Gift, Users, Copy, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 export function ReferEarnCard({ code }) {
   const [bonus, setBonus] = useState(0);
   const [stats, setStats] = useState(null);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     api.get("/settings/public").then(({ data }) => setBonus(data.referral_bonus)).catch(() => {});
@@ -43,6 +44,24 @@ export function ReferEarnCard({ code }) {
         <button onClick={copy} data-testid="refer-copy" className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
       </div>
       <div className="mt-3"><ShareButtons link={link} message={bonus > 0 ? `Join Radhika Traders with zero investment and start earning! Sign up with my link:` : `Join Radhika Traders — earn with zero investment. Sign up with my link:`} testPrefix="refer-share" /></div>
+      {stats?.recent?.length > 0 && (
+        <div className="mt-5 rounded-xl border border-slate-200 bg-white" data-testid="refer-joined-list">
+          <button type="button" onClick={() => setOpen(!open)} data-testid="refer-joined-toggle" className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-bold text-slate-800">
+            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-red-600" /> People joined from your link ({stats.count})</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          {open && (
+            <ul className="divide-y divide-slate-100 border-t border-slate-100">
+              {stats.recent.map((r, i) => (
+                <li key={i} data-testid={`refer-joined-${i}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                  <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-700">{(r.name || "?")[0]}</span><span className="font-semibold text-slate-800">{r.name}</span></span>
+                  <span className="flex items-center gap-2 text-xs text-slate-500">{(r.joined_at || "").slice(0, 10)}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${r.kyc === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>KYC {r.kyc.replace("_", " ")}</span></span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

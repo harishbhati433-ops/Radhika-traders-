@@ -15,6 +15,8 @@ export function Footer() {
             <li><Link to="/campaigns" className="hover:text-white">Campaigns</Link></li>
             <li><Link to="/services" className="hover:text-white">Services</Link></li>
             <li><Link to="/about" className="hover:text-white">About Us</Link></li>
+            <li><Link to="/partners" className="hover:text-white">Partner With Us</Link></li>
+            <li><Link to="/#team" className="hover:text-white">Our Team</Link></li>
             <li><Link to="/contact" className="hover:text-white">Contact</Link></li>
           </ul>
         </div>

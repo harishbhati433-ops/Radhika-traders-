@@ -30,6 +30,13 @@ import AdminCategories from "./pages/admin/AdminCategories";
 import AdminCustomers from "./pages/admin/AdminCustomers";
 import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
 import AdminBanners from "./pages/admin/AdminBanners";
+import AdminKyc from "./pages/admin/AdminKyc";
+import AdminBroadcast from "./pages/admin/AdminBroadcast";
+import OfferEnded from "./pages/OfferEnded";
+import Partners from "./pages/Partners";
+import LeadForm from "./pages/LeadForm";
+import AdminLeads from "./pages/admin/AdminLeads";
+import MyLeads from "./pages/customer/MyLeads";
 
 function App() {
   return (
@@ -62,6 +69,13 @@ function App() {
           <Route path="/admin/customers" element={<ProtectedRoute role="admin"><AdminCustomers /></ProtectedRoute>} />
           <Route path="/admin/withdrawals" element={<ProtectedRoute role="admin"><AdminWithdrawals /></ProtectedRoute>} />
           <Route path="/admin/banners" element={<ProtectedRoute role="admin"><AdminBanners /></ProtectedRoute>} />
+          <Route path="/admin/kyc" element={<ProtectedRoute role="admin"><AdminKyc /></ProtectedRoute>} />
+          <Route path="/admin/broadcast" element={<ProtectedRoute role="admin"><AdminBroadcast /></ProtectedRoute>} />
+          <Route path="/offer-ended" element={<OfferEnded />} />
+          <Route path="/partners" element={<Partners />} />
+          <Route path="/join/:slug" element={<LeadForm />} />
+          <Route path="/my-leads" element={<ProtectedRoute role="customer"><MyLeads /></ProtectedRoute>} />
+          <Route path="/admin/leads" element={<ProtectedRoute role="admin"><AdminLeads /></ProtectedRoute>} />
         </Routes>
         <WhatsAppFloat />
       </BrowserRouter>

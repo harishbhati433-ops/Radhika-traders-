@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { Menu, X, LogOut } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 
 export function DashboardLayout({ nav, children, title }) {
   const { user, logout } = useAuth();
@@ -10,7 +11,7 @@ export function DashboardLayout({ nav, children, title }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
-  const doLogout = () => { logout(); navigate("/"); };
+  const doLogout = () => { logout(); navigate("/login", { replace: true }); };
 
   const SideLinks = () => (
     <nav className="flex flex-col gap-1">
@@ -58,7 +59,10 @@ export function DashboardLayout({ nav, children, title }) {
 
         {/* Content */}
         <main className="min-w-0 flex-1">
-          {title && <h1 className="mb-6 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
+          <div className="mb-6 flex items-start justify-between gap-4">
+            {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
+            {user?.role === "customer" && <NotificationBell />}
+          </div>
           {children}
         </main>
       </div>

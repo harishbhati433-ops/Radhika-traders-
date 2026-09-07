@@ -3,7 +3,18 @@ import { Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { CampaignCard } from "../components/CampaignCard";
 import api from "../lib/api";
-import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee } from "lucide-react";
+import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee, Megaphone, MousePointerClick, Target, Link2, ClipboardList, BarChart3, Handshake } from "lucide-react";
+
+const AGENCY_SERVICES = [
+  [Megaphone, "Digital Advertising", "Paid ads across Google, Meta & YouTube for finance brands."],
+  [MousePointerClick, "Digital Marketing", "Social, content & funnel marketing that converts."],
+  [Target, "Performance Marketing", "CPA / CPL campaigns — you pay only for results."],
+  [Link2, "Affiliate Marketing", "Publisher network promoting Demat, cards, loans & insurance."],
+  [ClipboardList, "Campaign Management", "End-to-end setup, creatives, payouts & compliance."],
+  [BarChart3, "Campaign Tracking & Reporting", "Click, lead & conversion tracking with live reports."],
+  [Handshake, "Publisher / Partner Management", "Onboarding, KYC, wallets & payouts for every partner."],
+  [Wallet, "Manual, Verified Payouts", "UPI / bank transfers with proof emailed on every payment."],
+];
 
 const ticker = [
   "Rahul earned ₹1,200 on HDFC Credit Card campaign",
@@ -34,41 +45,51 @@ export default function Home() {
       </div>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-white">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-2 lg:py-24">
+      <section className="relative overflow-hidden bg-[#0B0F17] text-white" data-testid="home-hero">
+        <div className="pointer-events-none absolute -left-32 top-0 h-96 w-96 rounded-full bg-red-700/30 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-amber-500/20 blur-3xl" />
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-2 lg:py-24">
           <div className="rt-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/50 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-700">
-              <BadgeCheck className="h-3.5 w-3.5" /> Trusted Partner since 2023
-            </span>
-            <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white" data-testid="hero-zero-investment-badge">
-              <IndianRupee className="h-3.5 w-3.5" /> ₹0 Investment · 100% Free to Join
-            </span>
-            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Earn with <span className="text-emerald-600">zero investment</span> — India's top <span className="text-red-600">financial</span> affiliate campaigns
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">
+                <BadgeCheck className="h-3.5 w-3.5" /> Advertising & Digital Marketing Agency
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white" data-testid="hero-zero-investment-badge">
+                <IndianRupee className="h-3.5 w-3.5" /> ₹0 Investment for Partners
+              </span>
+            </div>
+            <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+              Performance-driven <span className="text-red-500">Digital</span> & <span className="text-amber-400">Affiliate</span> Marketing that pays
             </h1>
-            <p className="mt-5 max-w-lg text-base text-slate-600 sm:text-lg">
-              <strong className="text-slate-900">No investment. No fees. No hidden charges.</strong> Just share Demat, Credit Card, Savings & Insurance campaigns with your network and earn a payout on every conversion — paid directly to your UPI or bank account.
+            <p className="mt-5 max-w-xl text-base text-slate-300 sm:text-lg" data-testid="hero-agency-line">
+              <strong className="text-white">Radhika Traders</strong> is an Advertising & Digital Marketing Agency working in <strong className="text-white">Digital Marketing, Performance Marketing and Affiliate Marketing</strong> — running campaigns for India's leading brokers, banks and insurers, and paying publishers on every conversion.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/signup" data-testid="hero-get-started" className="rt-gradient-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold">
-                Start Earning <ArrowRight className="h-4 w-4" />
+              <Link to="/services" data-testid="hero-explore-services" className="rt-gradient-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold">
+                Explore Services <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/campaigns" data-testid="hero-view-campaigns" className="inline-flex items-center gap-2 rounded-full border-2 border-slate-200 px-6 py-3 text-sm font-bold text-slate-800 hover:border-red-300 hover:bg-red-50">
-                Browse Campaigns
+              <Link to="/partners" data-testid="hero-partner-with-us" className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 hover:brightness-110">
+                Partner With Us
+              </Link>
+              <Link to="/campaigns" data-testid="hero-view-campaigns" className="inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-sm font-bold text-white hover:bg-white/10">
+                Live Campaigns
               </Link>
             </div>
-            <div className="mt-10 flex gap-8">
-              {[["₹0", "Investment Needed"], ["₹2,200", "Max Payout"], ["100%", "Free & Secure"]].map(([v, l]) => (
+            <div className="mt-8 text-sm text-slate-400" data-testid="hero-brand-line">
+              <span className="font-display font-bold text-white">Radhika Traders</span> <span className="text-slate-500">|</span> Harish Bhati <span className="mx-1 text-slate-600">·</span> <span className="text-amber-400">Trusted Partner for Financial Growth</span>
+            </div>
+            <div className="mt-8 flex gap-8">
+              {[["₹0", "Investment Needed"], ["₹2,200", "Max Payout"], ["7+", "Years in Market"]].map(([v, l]) => (
                 <div key={l}>
-                  <div className="font-display text-2xl font-extrabold text-slate-900">{v}</div>
-                  <div className="text-xs font-medium text-slate-500">{l}</div>
+                  <div className="font-display text-2xl font-extrabold text-white">{v}</div>
+                  <div className="text-xs font-medium text-slate-400">{l}</div>
                 </div>
               ))}
             </div>
           </div>
           <div className="relative rt-fade-up" style={{ animationDelay: "120ms" }}>
-            <img src="https://images.unsplash.com/photo-1526948531399-320e7e40f0ca?crop=entropy&cs=srgb&fm=jpg&q=85&w=900"
-              alt="Financial advisory" className="w-full rounded-3xl object-cover shadow-2xl" style={{ maxHeight: 460 }} />
+            <img src="/images/harish-bhati-2.jpeg" alt="Harish Bhati — Founder, Radhika Traders"
+              className="w-full rounded-3xl object-cover object-top shadow-2xl ring-1 ring-white/10" style={{ maxHeight: 520 }} data-testid="hero-founder-photo" />
             <div className="absolute -bottom-5 -left-5 rounded-2xl bg-white p-4 shadow-xl rt-gold-card">
               <div className="flex items-center gap-3">
                 <div className="rounded-xl bg-emerald-100 p-2"><TrendingUp className="h-5 w-5 text-emerald-600" /></div>
@@ -78,7 +99,28 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            <div className="absolute -top-4 right-4 rounded-full bg-[#0B0F17]/80 px-4 py-2 text-xs font-bold text-amber-300 ring-1 ring-amber-400/40 backdrop-blur">Owner & Founder · Harish Bhati</div>
           </div>
+        </div>
+      </section>
+
+      {/* Agency services */}
+      <section className="mx-auto max-w-7xl px-6 py-16" data-testid="home-services">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-red-600">What we do</span>
+            <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Full-stack advertising & affiliate services</h2>
+          </div>
+          <Link to="/services" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">All services <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {AGENCY_SERVICES.map(([Icon, t, d], i) => (
+            <Link to="/services" key={t} className="rt-fade-up group rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:rt-gold-card" style={{ animationDelay: `${i * 50}ms` }} data-testid={`service-tile-${i}`}>
+              <div className="mb-3 inline-flex rounded-xl bg-[#0B0F17] p-2.5 text-amber-400 group-hover:bg-red-600 group-hover:text-white"><Icon className="h-5 w-5" /></div>
+              <div className="font-display font-bold text-slate-900">{t}</div>
+              <p className="mt-1 text-xs text-slate-500">{d}</p>
+            </Link>
+          ))}
         </div>
       </section>
 
@@ -130,7 +172,7 @@ export default function Home() {
       </section>
 
       {/* Team */}
-      <section className="mx-auto max-w-7xl px-6 py-16" data-testid="team-section">
+      <section id="team" className="mx-auto max-w-7xl px-6 py-16" data-testid="team-section">
         <div className="mb-8">
           <span className="text-xs font-bold uppercase tracking-wider text-red-600">Our People</span>
           <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Radhika Traders Team</h2>

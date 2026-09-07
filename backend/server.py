@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Query, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Query, Header, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -23,7 +23,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp,
     generate_referral_code, get_current_user_from_db,
 )
-from email_service import send_otp_email, send_payment_email
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email
 from storage_service import init_storage, put_object, get_object, APP_NAME
 
 mongo_url = os.environ["MONGO_URL"]
@@ -209,6 +209,33 @@ class CampaignIn(BaseModel):
     status: str = "live"
     offer_enabled: bool = True
     affiliate_links: List[AffiliateLink] = []
+    lead_fields: List[dict] = []
+
+
+LEAD_FIELDS = [
+    ("name", "Full Name"), ("mobile", "Mobile Number"), ("email", "Gmail / Email ID"), ("pan", "PAN Number"),
+    ("dob", "Date of Birth"), ("aadhaar", "Aadhaar Number"), ("bank_account", "Bank Account Number"),
+    ("ifsc", "IFSC Code"), ("upi", "UPI ID"), ("address", "Address"),
+]
+
+
+def normalize_lead_fields(fields: list) -> list:
+    given = {f.get("key"): f for f in (fields or []) if isinstance(f, dict)}
+    return [{"key": k, "label": given.get(k, {}).get("label") or label,
+             "enabled": bool(given.get(k, {}).get("enabled", False)),
+             "required": bool(given.get(k, {}).get("required", False)) and bool(given.get(k, {}).get("enabled", False))}
+            for k, label in LEAD_FIELDS]
+
+
+class LeadIn(BaseModel):
+    ref: Optional[str] = ""
+    data: dict = {}
+
+
+class LeadStatusIn(BaseModel):
+    status: Optional[str] = None            # pending | approved | rejected
+    account_status: Optional[str] = None    # pending | account_opened | rejected
+    reject_reason: Optional[str] = ""
 
 
 class CreditIn(BaseModel):
@@ -328,12 +355,12 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
 
 @api.get("/my-referrals")
 async def my_referrals(user: dict = Depends(get_current_user)):
-    joined = await db.users.find({"referred_by_user_id": user["id"]}, {"name": 1, "created_at": 1}).sort("created_at", -1).to_list(500)
+    joined = await db.users.find({"referred_by_user_id": user["id"]}, {"name": 1, "created_at": 1, "email_verified": 1, "kyc.status": 1}).sort("created_at", -1).to_list(500)
     earned = await db.transactions.aggregate([
         {"$match": {"user_id": user["id"], "type": "credit", "ref_id": {"$regex": "^REF-"}}},
         {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
     return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0,
-            "recent": [{"name": _mask_name(j.get("name")), "joined_at": j.get("created_at")} for j in joined[:5]]}
+            "recent": [{"name": j.get("name"), "joined_at": j.get("created_at"), "kyc": j.get("kyc", {}).get("status", "not_submitted")} for j in joined[:50]]}
 
 
 @api.post("/auth/resend-otp")
@@ -472,8 +499,8 @@ async def list_campaigns(
     q = {"is_deleted": False}
     if not admin_view:
         q["offer_enabled"] = True
-        q["status"] = {"$ne": "closed"}
-    if status:
+        q["status"] = "live"
+    if status and admin_view:
         q["status"] = status
     if category:
         q["category"] = category
@@ -515,8 +542,9 @@ async def go_affiliate(slug: str, request: Request, ref: Optional[str] = None):
     c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
     origin = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
     if not c:
-        return RedirectResponse(url=f"{origin}/campaigns", status_code=302)
-    target = _primary_link(c) if c.get("status") == "live" and c.get("offer_enabled", True) else None
+        return RedirectResponse(url=f"{origin}/offer-ended", status_code=302)
+    is_live = c.get("status") == "live" and c.get("offer_enabled", True)
+    target = _primary_link(c) if is_live else None
     partner = await db.users.find_one({"referral_code": ref}) if ref else None
     await db.clicks.insert_one({
         "campaign_id": str(c["_id"]), "slug": slug, "ref_code": ref or "",
@@ -524,7 +552,123 @@ async def go_affiliate(slug: str, request: Request, ref: Optional[str] = None):
         "redirected_to": target or "", "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
         "user_agent": request.headers.get("user-agent", "")[:300], "created_at": now_iso(),
     })
+    if not is_live:
+        return RedirectResponse(url=f"{origin}/offer-ended?c={slug}&s={c.get('status', 'closed')}", status_code=302)
+    if any(f.get("enabled") for f in c.get("lead_fields", [])):
+        return RedirectResponse(url=f"{origin}/join/{slug}" + (f"?ref={ref}" if ref else ""), status_code=302)
     return RedirectResponse(url=target or f"{origin}/campaign/{slug}", status_code=302)
+
+
+def lead_out(l: dict) -> dict:
+    return {**{k: v for k, v in l.items() if k != "_id"}, "id": str(l["_id"])}
+
+
+@api.get("/join/{slug}")
+async def join_info(slug: str, ref: Optional[str] = None):
+    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+    if not c or c.get("status") != "live" or not c.get("offer_enabled", True):
+        raise HTTPException(status_code=404, detail="Offer not available")
+    partner = await db.users.find_one({"referral_code": (ref or "").upper(), "role": "customer"}) if ref else None
+    return {"campaign": {"id": str(c["_id"]), "offer_name": c["offer_name"], "company": c.get("company", ""), "logo_url": c.get("logo_url", ""),
+                         "payout_amount": c.get("payout_amount", 0), "customer_benefit": c.get("customer_benefit", ""), "slug": slug},
+            "fields": [f for f in c.get("lead_fields", []) if f.get("enabled")],
+            "referred_by": _mask_name(partner.get("name")) if partner else None, "ref": (ref or "").upper()}
+
+
+@api.post("/leads/{slug}")
+async def create_lead(slug: str, body: LeadIn, request: Request):
+    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+    if not c or c.get("status") != "live" or not c.get("offer_enabled", True):
+        raise HTTPException(status_code=400, detail="Offer is not active")
+    fields = [f for f in c.get("lead_fields", []) if f.get("enabled")]
+    data = {f["key"]: str(body.data.get(f["key"], "")).strip() for f in fields}
+    missing = [f["label"] for f in fields if f.get("required") and not data.get(f["key"])]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Required: {', '.join(missing)}")
+    if data.get("mobile") and not re.fullmatch(r"\d{10}", data["mobile"]):
+        raise HTTPException(status_code=400, detail="Mobile number must be 10 digits")
+    if data.get("pan") and not re.fullmatch(r"[A-Za-z]{5}\d{4}[A-Za-z]", data["pan"]):
+        raise HTTPException(status_code=400, detail="Invalid PAN format")
+    ref = (body.ref or "").upper()
+    partner = await db.users.find_one({"referral_code": ref, "role": "customer"}) if ref else None
+    doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
+           "campaign_link": _primary_link(c) or "", "ref_code": ref, "partner_id": str(partner["_id"]) if partner else None,
+           "partner_name": partner.get("name") if partner else "", "data": data, "customer_name": data.get("name", ""),
+           "mobile": data.get("mobile", ""), "email": data.get("email", ""), "status": "pending", "account_status": "pending",
+           "reject_reason": "", "ip": request.headers.get("x-forwarded-for", ""), "created_at": now_iso(), "updated_at": now_iso()}
+    res = await db.leads.insert_one(doc)
+    if partner:
+        await db.notifications.insert_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}",
+                                           "body": f"{data.get('name') or 'A customer'} submitted details via your link.", "link": "/my-leads",
+                                           "type": "lead", "read": False, "created_at": now_iso()})
+    return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}"}
+
+
+@api.get("/my-leads")
+async def my_leads(user: dict = Depends(get_current_user)):
+    items = await db.leads.find({"partner_id": user["id"]}).sort("created_at", -1).to_list(2000)
+    out = []
+    for l in items:
+        o = lead_out(l)
+        o["data"] = {k: v for k, v in (l.get("data") or {}).items() if k in ("name", "mobile", "email")}
+        out.append(o)
+    return out
+
+
+@api.get("/admin/leads/summary")
+async def admin_leads_summary(admin: dict = Depends(require_admin)):
+    rows = await db.leads.aggregate([{"$group": {"_id": {"s": "$status", "a": "$account_status"}, "n": {"$sum": 1}}}]).to_list(50)
+    total = sum(r["n"] for r in rows)
+    by = lambda key, val: sum(r["n"] for r in rows if r["_id"][key] == val)
+    return {"total": total, "approved": by("s", "approved"), "pending": by("s", "pending"), "rejected": by("s", "rejected"),
+            "account_opened": by("a", "account_opened")}
+
+
+@api.get("/admin/leads")
+async def admin_leads(campaign_id: Optional[str] = None, status: Optional[str] = None, account_status: Optional[str] = None,
+                      ref: Optional[str] = None, search: Optional[str] = None, date_from: Optional[str] = None,
+                      date_to: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {}
+    if campaign_id:
+        q["campaign_id"] = campaign_id
+    if status:
+        q["status"] = status
+    if account_status:
+        q["account_status"] = account_status
+    if ref:
+        q["$or"] = [{"ref_code": ref.upper()}, {"partner_name": {"$regex": re.escape(ref), "$options": "i"}}]
+    if date_from or date_to:
+        q["created_at"] = {**({"$gte": date_from} if date_from else {}), **({"$lte": date_to + "T23:59:59"} if date_to else {})}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}]}]
+    items = await db.leads.find(q).sort("created_at", -1).to_list(5000)
+    return [lead_out(l) for l in items]
+
+
+@api.patch("/admin/leads/{lid}")
+async def admin_update_lead(lid: str, body: LeadStatusIn, admin: dict = Depends(require_admin)):
+    l = await db.leads.find_one({"_id": ObjectId(lid)})
+    if not l:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    upd = {"updated_at": now_iso(), "reviewed_by": admin["email"]}
+    if body.status:
+        if body.status not in ("pending", "approved", "rejected"):
+            raise HTTPException(status_code=400, detail="Invalid status")
+        upd["status"] = body.status
+    if body.account_status:
+        if body.account_status not in ("pending", "account_opened", "rejected"):
+            raise HTTPException(status_code=400, detail="Invalid account status")
+        upd["account_status"] = body.account_status
+    if body.reject_reason is not None:
+        upd["reject_reason"] = body.reject_reason
+    await db.leads.update_one({"_id": l["_id"]}, {"$set": upd})
+    if l.get("partner_id") and (body.status or body.account_status):
+        label = (body.account_status or body.status).replace("_", " ")
+        await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
+                                           "body": f"{l.get('customer_name') or 'Customer'} · {l['campaign_name']}" + (f" · {body.reject_reason}" if body.reject_reason else ""),
+                                           "link": "/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
+    return lead_out(await db.leads.find_one({"_id": l["_id"]}))
 
 
 @api.get("/my-clicks")
@@ -558,6 +702,7 @@ async def get_campaign(cid: str):
 async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
+    doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
     doc["slug"] = await unique_slug(body.offer_name)
     doc["is_deleted"] = False
     doc["created_at"] = now_iso()
@@ -571,6 +716,7 @@ async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)
 async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
+    doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
     doc["updated_at"] = now_iso()
     current = await db.campaigns.find_one({"_id": ObjectId(cid)})
     if current and current.get("offer_name") != body.offer_name:
@@ -581,11 +727,38 @@ async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(requ
 
 
 @api.patch("/campaigns/{cid}/status")
-async def update_campaign_status(cid: str, status: str = Query(...), admin: dict = Depends(require_admin)):
+async def update_campaign_status(cid: str, request: Request, background: BackgroundTasks, status: str = Query(...), admin: dict = Depends(require_admin)):
     if status not in ("live", "paused", "closed"):
         raise HTTPException(status_code=400, detail="Invalid status")
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    if not c:
+        raise HTTPException(status_code=404, detail="Campaign not found")
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
+    if status == "live" and c.get("status") != "live":
+        background.add_task(announce_campaign_live, c, _origin(request))
     return {"message": "Status updated"}
+
+
+def _origin(request: Request) -> str:
+    return f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
+
+
+async def announce_campaign_live(c: dict, origin: str):
+    customers = await db.users.find({"role": "customer", "email_verified": True}, {"email": 1, "name": 1}).to_list(10000)
+    title = f"New Campaign LIVE: {c['offer_name']}"
+    body = f"Payout Rs.{c.get('payout_amount', 0):g} · {c.get('company', '')}. Grab it and complete maximum eligible conversions!"
+    link = f"/campaign/{c['slug']}"
+    if customers:
+        await db.notifications.insert_many([{
+            "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live",
+            "campaign_id": str(c["_id"]), "read": False, "created_at": now_iso()} for u in customers])
+    sent = failed = 0
+    for u in customers:
+        ok = await send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, f"{origin}{link}")
+        sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
+    await db.broadcasts.insert_one({"kind": "campaign_live", "campaign_id": str(c["_id"]), "subject": title, "message": body,
+                                    "audience": "all", "recipients": len(customers), "sent": sent, "failed": failed,
+                                    "channels": ["email", "in_app"], "created_at": now_iso()})
 
 
 @api.patch("/campaigns/{cid}/toggle-offer")
@@ -670,8 +843,8 @@ async def leaderboard(user: dict = Depends(get_current_user)):
 @api.post("/withdrawals")
 async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_user)):
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
-    if full.get("kyc", {}).get("status") not in ("pending", "verified"):
-        raise HTTPException(status_code=400, detail="Please complete your KYC before withdrawal")
+    if full.get("kyc", {}).get("status") != "verified":
+        raise HTTPException(status_code=400, detail="Your KYC must be verified by Radhika Traders before withdrawal")
     if body.amount < MIN_WITHDRAWAL:
         raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(MIN_WITHDRAWAL)}")
     wallet = await compute_wallet(user["id"])
@@ -769,6 +942,135 @@ async def update_banner(bid: str, body: BannerIn, admin: dict = Depends(require_
 async def delete_banner(bid: str, admin: dict = Depends(require_admin)):
     await db.banners.delete_one({"_id": ObjectId(bid)})
     return {"message": "Banner deleted"}
+
+
+# ----------------------------- Notifications, KYC mgmt, Broadcast -----------------------------
+class KycStatusIn(BaseModel):
+    status: str
+    note: Optional[str] = ""
+
+
+class BroadcastIn(BaseModel):
+    subject: str
+    message: str
+    audience: str = "all"          # all | selected
+    user_ids: List[str] = []
+    campaign_id: Optional[str] = ""
+    channels: List[str] = ["email", "in_app"]
+
+
+class AdminNotifyIn(BaseModel):
+    title: str
+    body: str = ""
+    link: str = ""
+
+
+def notif_out(n: dict) -> dict:
+    return {**{k: v for k, v in n.items() if k != "_id"}, "id": str(n["_id"])}
+
+
+@api.get("/notifications")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    items = await db.notifications.find({"user_id": user["id"]}).sort("created_at", -1).to_list(50)
+    unread = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    return {"unread": unread, "items": [notif_out(n) for n in items]}
+
+
+@api.post("/notifications/read")
+async def mark_notifications_read(ids: List[str] = [], user: dict = Depends(get_current_user)):
+    q = {"user_id": user["id"]}
+    if ids:
+        q["_id"] = {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}
+    await db.notifications.update_many(q, {"$set": {"read": True}})
+    return {"message": "ok"}
+
+
+@api.get("/admin/kyc")
+async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {"role": "customer"}
+    if status:
+        q["kyc.status"] = status
+    else:
+        q["kyc.status"] = {"$ne": "not_submitted"}
+    users = await db.users.find(q).sort("kyc.submitted_at", -1).to_list(5000)
+    out = []
+    for u in users:
+        pu = public_user(u)
+        pu["kyc"] = {**u.get("kyc", {}), "status": u.get("kyc", {}).get("status", "not_submitted")}
+        pu["bank"] = u.get("bank", {})
+        out.append(pu)
+    return out
+
+
+@api.patch("/admin/kyc/{uid}")
+async def admin_update_kyc(uid: str, body: KycStatusIn, admin: dict = Depends(require_admin)):
+    if body.status not in ("pending", "verified", "rejected", "deactivated"):
+        raise HTTPException(status_code=400, detail="Invalid KYC status")
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"})
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"kyc.status": body.status, "kyc.admin_note": body.note or "",
+                                                            "kyc.reviewed_at": now_iso(), "kyc.reviewed_by": admin["email"]}})
+    msg = {"verified": "Your KYC has been verified. Withdrawals are now enabled.",
+           "rejected": f"Your KYC was rejected. {body.note or 'Please re-submit correct details.'}",
+           "deactivated": f"Your KYC has been deactivated. {body.note or 'Contact support.'}",
+           "pending": "Your KYC is under review."}[body.status]
+    await db.notifications.insert_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/profile",
+                                       "type": "kyc", "read": False, "created_at": now_iso()})
+    return {"message": "KYC updated", "status": body.status}
+
+
+@api.post("/admin/broadcast")
+async def admin_broadcast(body: BroadcastIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
+    if not body.subject.strip() or not body.message.strip():
+        raise HTTPException(status_code=400, detail="Subject and message are required")
+    q = {"role": "customer", "email_verified": True}
+    if body.audience == "selected":
+        if not body.user_ids:
+            raise HTTPException(status_code=400, detail="Select at least one customer")
+        q["_id"] = {"$in": [ObjectId(i) for i in body.user_ids if ObjectId.is_valid(i)]}
+    users = await db.users.find(q, {"email": 1, "name": 1}).to_list(10000)
+    c = await db.campaigns.find_one({"_id": ObjectId(body.campaign_id)}) if body.campaign_id and ObjectId.is_valid(body.campaign_id) else None
+    link = f"/campaign/{c['slug']}" if c else ""
+    res = await db.broadcasts.insert_one({"kind": "manual", "subject": body.subject, "message": body.message, "audience": body.audience,
+                                          "campaign_id": body.campaign_id or "", "channels": body.channels, "recipients": len(users),
+                                          "sent": 0, "failed": 0, "status": "sending", "created_by": admin["email"], "created_at": now_iso()})
+    background.add_task(run_broadcast, res.inserted_id, users, body, c, link, _origin(request))
+    return {"message": f"Sending to {len(users)} customers", "id": str(res.inserted_id), "recipients": len(users)}
+
+
+async def run_broadcast(bid, users: list, body: BroadcastIn, c: dict | None, link: str, origin: str):
+    if "in_app" in body.channels and users:
+        await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": body.subject, "body": body.message[:300], "link": link,
+                                             "type": "broadcast", "read": False, "created_at": now_iso()} for u in users])
+    sent = failed = 0
+    if "email" in body.channels:
+        for u in users:
+            ok = await send_broadcast_email(u.get("email", ""), u.get("name", ""), body.subject, body.message, c, f"{origin}{link}" if link else "")
+            sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
+    await db.broadcasts.update_one({"_id": bid}, {"$set": {"sent": sent, "failed": failed, "status": "done", "finished_at": now_iso()}})
+
+
+@api.get("/admin/broadcasts")
+async def admin_broadcasts(admin: dict = Depends(require_admin)):
+    items = await db.broadcasts.find().sort("created_at", -1).to_list(200)
+    return [notif_out(b) for b in items]
+
+
+@api.get("/admin/notifications")
+async def admin_notifications(admin: dict = Depends(require_admin)):
+    pipeline = [{"$group": {"_id": {"title": "$title", "created_at": {"$substr": ["$created_at", 0, 16]}, "type": "$type", "link": "$link"},
+                            "count": {"$sum": 1}, "read": {"$sum": {"$cond": ["$read", 1, 0]}}}},
+                {"$sort": {"_id.created_at": -1}}, {"$limit": 100}]
+    rows = await db.notifications.aggregate(pipeline).to_list(100)
+    return [{"title": r["_id"]["title"], "type": r["_id"]["type"], "link": r["_id"].get("link", ""), "created_at": r["_id"]["created_at"],
+             "recipients": r["count"], "read": r["read"]} for r in rows]
+
+
+@api.delete("/admin/notifications")
+async def admin_delete_notifications(title: str = Query(...), created_at: str = Query(...), admin: dict = Depends(require_admin)):
+    r = await db.notifications.delete_many({"title": title, "created_at": {"$regex": f"^{re.escape(created_at)}"}})
+    return {"deleted": r.deleted_count}
 
 
 # ----------------------------- Admin: customers & credit -----------------------------

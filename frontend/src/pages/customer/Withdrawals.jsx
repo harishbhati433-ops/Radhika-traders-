@@ -31,7 +31,8 @@ export default function Withdrawals() {
   };
   useEffect(load, []);
 
-  const kycDone = user?.kyc?.status === "pending" || user?.kyc?.status === "verified";
+  const kycDone = user?.kyc?.status === "verified";
+  const kycState = user?.kyc?.status;
   const bank = user?.bank || {};
   const saved = method === "UPI" ? bank.upi : bank.bank_account;
   useEffect(() => { setDetails(saved || ""); }, [method, saved]);
@@ -58,7 +59,10 @@ export default function Withdrawals() {
 
           {!kycDone ? (
             <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800" data-testid="withdraw-kyc-warning">
-              Complete your <Link to="/profile" className="font-bold underline">KYC</Link> to enable withdrawals.
+              {kycState === "pending" ? "Your KYC is under review by Radhika Traders. Withdrawals will be enabled once verified."
+                : kycState === "rejected" ? <>Your KYC was rejected. Please <Link to="/profile" className="font-bold underline">re-submit your KYC</Link>.</>
+                : kycState === "deactivated" ? "Your KYC has been deactivated. Please contact support."
+                : <>Complete your <Link to="/profile" className="font-bold underline">KYC</Link> to enable withdrawals.</>}
             </div>
           ) : (
             <form onSubmit={submit} className="mt-4 space-y-4">

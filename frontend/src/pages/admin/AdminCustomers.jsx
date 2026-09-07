@@ -6,6 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { toast } from "sonner";
+import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { Search, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2 } from "lucide-react";
 
 export default function AdminCustomers() {
@@ -48,8 +49,8 @@ export default function AdminCustomers() {
           <tbody className="divide-y divide-slate-100">
             {filtered.map((c) => (
               <tr key={c.id} data-testid={`customer-row-${c.id}`}>
-                <td className="p-4"><div className="font-semibold text-slate-800">{c.name}</div><div className="text-xs text-slate-400">{c.email}</div><div className="font-mono text-[10px] text-slate-400">{c.referral_code}</div></td>
-                <td className="p-4 text-slate-600">{c.mobile}</td>
+                <td className="p-4"><div className="font-semibold text-slate-800">{c.name}</div><div className="mt-1"><EmailLink value={c.email} testId={`customer-email-${c.id}`} /></div><div className="mt-1 font-mono text-[10px] text-slate-400">{c.referral_code}</div></td>
+                <td className="p-4"><PhoneLink value={c.mobile} testId={`customer-phone-${c.id}`} /></td>
                 <td className="p-4"><span className="inline-flex items-center gap-1 text-xs font-semibold capitalize">{kycIcon(c.kyc?.status)} {c.kyc?.status?.replace("_", " ")}</span></td>
                 <td className="p-4 font-mono font-bold text-emerald-600">₹{c.wallet?.balance}</td>
                 <td className="p-4 font-mono text-slate-700">₹{c.wallet?.total_earnings}</td>

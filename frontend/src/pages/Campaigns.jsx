@@ -6,7 +6,7 @@ import api from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
 
-const TYPES = ["First Trade", "Non-Trade", "SIP", "Account Opening"];
+const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);

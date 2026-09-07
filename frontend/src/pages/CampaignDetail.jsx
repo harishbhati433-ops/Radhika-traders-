@@ -75,6 +75,11 @@ export default function CampaignDetail() {
               <StatusBadge status={c.status} />
             </div>
             <p className="mt-1 text-sm font-medium text-slate-500">{c.company} · {c.category}</p>
+            {c.status !== "live" && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700" data-testid="campaign-inactive-notice">
+                {c.status === "paused" ? "Offer Currently Inactive — this campaign is temporarily paused. Referral links will not redirect until it is live again." : "Offer Ended — this campaign is closed. Referral links no longer work."}
+              </div>
+            )}
 
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-xl bg-emerald-50 p-4 border border-emerald-100">

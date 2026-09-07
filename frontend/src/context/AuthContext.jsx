@@ -30,8 +30,15 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem("rt_token");
+    sessionStorage.clear();
     setUser(null);
   };
+
+  useEffect(() => {
+    const onLogout = () => { setUser(null); setLoading(false); };
+    window.addEventListener("rt:logout", onLogout);
+    return () => window.removeEventListener("rt:logout", onLogout);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, setUser, loading, loginWithToken, logout, refresh }}>

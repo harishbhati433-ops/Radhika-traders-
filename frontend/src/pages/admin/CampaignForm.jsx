@@ -14,9 +14,10 @@ const EMPTY = {
   description: "", requirements: "", important_notes: "", min_requirement: "", max_payout: "",
   special_bonus: "", payment_timeline: "", validity: "", important_conditions: "",
   start_date: "", end_date: "", budget: "", report_frequency: "", payment_terms: "",
-  logo_url: "", banner_url: "", status: "live", offer_enabled: true, affiliate_links: [],
+  logo_url: "", banner_url: "", status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [],
 };
-const TYPES = ["First Trade", "Non-Trade", "SIP", "Account Opening"];
+const LEAD_FIELDS = [["name", "Full Name"], ["mobile", "Mobile Number"], ["email", "Gmail / Email ID"], ["pan", "PAN Number"], ["dob", "Date of Birth"], ["aadhaar", "Aadhaar Number"], ["bank_account", "Bank Account Number"], ["ifsc", "IFSC Code"], ["upi", "UPI ID"], ["address", "Address"]];
+const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
 
 function Row({ children, cols = 2 }) {
   return <div className={`grid gap-3 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{children}</div>;
@@ -37,6 +38,13 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
   const updLink = (i, k, v) => { const a = [...f.affiliate_links]; a[i] = { ...a[i], [k]: v }; setF({ ...f, affiliate_links: a }); };
   const setPrimary = (i) => setF({ ...f, affiliate_links: f.affiliate_links.map((l, j) => ({ ...l, is_primary: j === i })) });
   const rmLink = (i) => setF({ ...f, affiliate_links: f.affiliate_links.filter((_, j) => j !== i) });
+  const leadField = (key) => (f.lead_fields || []).find((x) => x.key === key) || { key, enabled: false, required: false };
+  const setLead = (key, patch) => {
+    const others = (f.lead_fields || []).filter((x) => x.key !== key);
+    const cur = { ...leadField(key), ...patch };
+    if (!cur.enabled) cur.required = false;
+    setF({ ...f, lead_fields: [...others, cur] });
+  };
 
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
@@ -108,6 +116,19 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
             <ImageUpload label="Logo" value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} testId="cf-upload-logo" />
             <ImageUpload label="Banner" value={f.banner_url} onChange={(v) => setF({ ...f, banner_url: v })} testId="cf-upload-banner" />
           </Row>
+
+          <div className="rounded-xl border border-slate-200 p-4" data-testid="cf-lead-fields">
+            <Label>Customer Details Form (Lead capture)</Label>
+            <p className="mb-3 mt-1 text-xs text-slate-500">Turn ON the fields customers must fill before being redirected to the affiliate link. Tick "Required" to make a field mandatory. If nothing is ON, the link redirects directly.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {LEAD_FIELDS.map(([key, label]) => { const lf = leadField(key); return (
+                <div key={key} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${lf.enabled ? "border-red-200 bg-red-50/50" : "border-slate-200"}`}>
+                  <label className="flex items-center gap-2 font-medium text-slate-800"><input type="checkbox" data-testid={`cf-lead-enabled-${key}`} checked={lf.enabled} onChange={(e) => setLead(key, { enabled: e.target.checked })} /> {label}</label>
+                  <label className={`flex items-center gap-1 text-xs font-bold ${lf.enabled ? "text-red-700" : "text-slate-300"}`}><input type="checkbox" data-testid={`cf-lead-required-${key}`} disabled={!lf.enabled} checked={lf.required} onChange={(e) => setLead(key, { required: e.target.checked })} /> Required</label>
+                </div>
+              ); })}
+            </div>
+          </div>
 
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="mb-2 flex items-center justify-between">

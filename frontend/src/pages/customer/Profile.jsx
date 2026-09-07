@@ -24,6 +24,8 @@ export default function Profile() {
   const statusMap = {
     verified: [ShieldCheck, "text-emerald-600 bg-emerald-50", "Verified"],
     pending: [ShieldQuestion, "text-amber-600 bg-amber-50", "Under Review"],
+    rejected: [ShieldAlert, "text-rose-600 bg-rose-50", "Rejected"],
+    deactivated: [ShieldAlert, "text-slate-600 bg-slate-100", "Deactivated"],
     not_submitted: [ShieldAlert, "text-rose-600 bg-rose-50", "Not Submitted"],
   };
   const [SIcon, scls, slabel] = statusMap[status] || statusMap.not_submitted;
