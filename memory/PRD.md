@@ -106,3 +106,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Campaign highlight chip
 - components/CampaignChip.jsx: colored pill (color hashed from campaign name, consistent per campaign) with megaphone icon. Used in customer MyLeads (my-lead-campaign-{id}), admin AdminLeads table (lead-campaign-{id}) and lead detail modal.
+
+## 2026-06 — Lead search
+- Customer MyLeads: client-side search (name/mobile/email/lead id/campaign/any form field; whitespace-insensitive) + campaign & status dropdowns + result count + no-match state. testids: my-leads-search, my-leads-filter-campaign, my-leads-filter-status, my-leads-result-count, my-leads-no-match.
+- Admin /admin/leads search now also matches ref_code and data.pan.

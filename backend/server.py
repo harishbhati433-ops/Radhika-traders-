@@ -693,7 +693,7 @@ async def admin_leads(campaign_id: Optional[str] = None, status: Optional[str] =
         q["created_at"] = {**({"$gte": date_from} if date_from else {}), **({"$lte": date_to + "T23:59:59"} if date_to else {})}
     if search:
         rx = {"$regex": re.escape(search), "$options": "i"}
-        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}]}]
+        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
     items = await db.leads.find(q).sort("created_at", -1).to_list(5000)
     return [lead_out(l) for l in items]
 
