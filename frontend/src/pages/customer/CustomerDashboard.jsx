@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { Leaderboard } from "../../components/Leaderboard";
 import { OfferBanners } from "../../components/OfferBanners";
+import { WelcomeModal } from "../../components/WelcomeModal";
 import { ReferEarnCard } from "../../components/ReferEarnCard";
 import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
@@ -38,6 +39,7 @@ export default function CustomerDashboard() {
 
   return (
     <DashboardLayout nav={customerNav} title={`Hi ${user?.name?.split(" ")[0] || ""} 👋`}>
+      <WelcomeModal />
       {!kycDone && (
         <Link to="/profile" data-testid="kyc-alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm font-medium text-amber-800 hover:bg-amber-100">
           <ShieldAlert className="h-5 w-5 shrink-0" /> Complete your KYC to enable withdrawals. <ArrowRight className="ml-auto h-4 w-4" />

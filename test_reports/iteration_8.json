@@ -1,0 +1,27 @@
+{
+  "summary": "Verified two features end-to-end: (1) KYC 'Confirm Account Number' field — backend blocks mismatch with 400 'Account numbers do not match', frontend shows red mismatch indicator + toast and does not call API on submit; green match indicator appears when values match. (2) Welcome modal — appears once on /dashboard when sessionStorage.rt_just_signed_up matches user.id and rt_welcome_seen_<id> is absent, shows correct greeting (Welcome, Anita!), Partner ID equal to referral_code (RTUIAEE5), 3 steps, and all 3 buttons (kyc/letter/close); modal disappears on close, does NOT reappear on reload, and does NOT appear on a normal login without the flag. All 3 backend pytest tests pass. All 17 frontend assertions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "WelcomeModal (Radix Dialog)", "issues": ["Console a11y warnings: DialogContent is missing DialogTitle and aria-describedby. Not user-visible, but should add VisuallyHidden DialogTitle+Description for screen-reader accessibility."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_kyc_confirm.py", "/app/test_reports/pytest/kyc_confirm_results.xml"],
+  "action_items": ["(Optional / low priority) Add VisuallyHidden DialogTitle + DialogDescription inside WelcomeModal DialogContent to remove Radix a11y console warnings."],
+  "critical_code_review_comments": [
+    "Profile.jsx acctMatch treats empty confirm as no-match but saveKyc allows submit only when acctMatch is true — correct behaviour. Confirm field has onPaste prevented (good UX).",
+    "Backend KycIn.bank_account_confirm is Optional; server only enforces match when it is provided. This preserves backward compat but means older/other clients could bypass the check. Consider making it required for role=customer submissions.",
+    "server.py is 1742 lines — should be split into modules (auth, kyc, campaigns, wallet, admin).",
+    "Both throwaway users must be created with lowercase email since login lowercases before lookup; documenting this here so future testers don't get stuck (see credentials note)."
+  ],
+  "updated_files": ["/app/backend/tests/test_kyc_confirm.py"],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% (17/17 assertions)"},
+  "test_credentials": "testcust@example.com / Test@1234 (untouched — KYC not submitted). Throwaway users created via pymongo with lowercase emails ('test_kyc_*', 'test_ui_*') and testcust password_hash; all deleted after tests.",
+  "seed_data_creation": "Ephemeral: throwaway customers inserted directly via pymongo (email_verified=true, password_hash copied from testcust). All cleaned up post-test including login_attempts.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both features work as specified. Reusable pytest at /app/backend/tests/test_kyc_confirm.py covers mismatch/match/omitted-confirm on /api/profile/kyc. IMPORTANT: when inserting throwaway users via pymongo, use LOWERCASE emails — server's /auth/login lowercases the email before find_one, so mixed-case DB emails will fail login with '4 attempts left before lock' 401. Full real /signup OTP flow was NOT tested (rate-limit risk per instructions); the sessionStorage-simulated post-signup path is verified.",
+  "rca of the issue": "N/A — no functional bugs found. Setup gotcha: initial test failed because throwaway user email had uppercase 'TEST_' prefix; server lowercases email at login lookup, so no match. Fixed by using lowercase prefix in fixture."
+}

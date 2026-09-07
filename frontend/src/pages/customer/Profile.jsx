@@ -21,6 +21,9 @@ export default function Profile() {
   });
   const [savingP, setSavingP] = useState(false);
   const [savingK, setSavingK] = useState(false);
+  const [confirmAcct, setConfirmAcct] = useState(user?.bank?.bank_account || "");
+  const norm = (s) => String(s || "").replace(/\s/g, "");
+  const acctMatch = norm(kyc.bank_account) !== "" && norm(kyc.bank_account) === norm(confirmAcct);
 
   const status = user?.kyc?.status || "not_submitted";
   const statusMap = {
@@ -40,8 +43,10 @@ export default function Profile() {
   };
 
   const saveKyc = async (e) => {
-    e.preventDefault(); setSavingK(true);
-    try { const { data } = await api.put("/profile/kyc", kyc); setUser(data); toast.success("KYC verified successfully ✓ Withdrawals enabled"); }
+    e.preventDefault();
+    if (!acctMatch) return toast.error("Account numbers do not match. Please re-enter.");
+    setSavingK(true);
+    try { const { data } = await api.put("/profile/kyc", { ...kyc, bank_account_confirm: confirmAcct }); setUser(data); toast.success("KYC verified successfully ✓ Withdrawals enabled"); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
     finally { setSavingK(false); }
   };
@@ -88,7 +93,14 @@ export default function Profile() {
               <div><Label>PAN</Label><Input data-testid="kyc-pan" required value={kyc.pan} onChange={setK("pan")} className="mt-1.5" placeholder="ABCDE1234F" /></div>
               <div><Label>Aadhaar</Label><Input data-testid="kyc-aadhaar" value={kyc.aadhaar} onChange={setK("aadhaar")} className="mt-1.5" placeholder="Optional" /></div>
             </div>
-            <div><Label>Bank Account Number</Label><Input data-testid="kyc-account" required value={kyc.bank_account} onChange={setK("bank_account")} className="mt-1.5" /></div>
+            <div><Label>Bank Account Number</Label><Input data-testid="kyc-account" required value={kyc.bank_account} onChange={setK("bank_account")} className="mt-1.5" autoComplete="off" onCopy={(e) => e.preventDefault()} /></div>
+            <div>
+              <Label>Confirm Account Number</Label>
+              <Input data-testid="kyc-account-confirm" required value={confirmAcct} onChange={(e) => setConfirmAcct(e.target.value)} onPaste={(e) => e.preventDefault()} autoComplete="off"
+                className={`mt-1.5 ${confirmAcct && !acctMatch ? "border-rose-400 focus-visible:ring-rose-400" : confirmAcct && acctMatch ? "border-emerald-400" : ""}`} />
+              {confirmAcct && !acctMatch && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-account-mismatch">Account numbers do not match</div>}
+              {confirmAcct && acctMatch && <div className="mt-1 text-xs font-semibold text-emerald-600" data-testid="kyc-account-match">Account numbers match ✓</div>}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>IFSC</Label><Input data-testid="kyc-ifsc" required value={kyc.ifsc} onChange={setK("ifsc")} className="mt-1.5" /></div>
               <div><Label>UPI ID</Label><Input data-testid="kyc-upi" value={kyc.upi} onChange={setK("upi")} className="mt-1.5" placeholder="name@upi" /></div>

@@ -41,8 +41,8 @@ export default function Signup() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/verify-otp", { email: form.email, code: otp });
+      sessionStorage.setItem("rt_just_signed_up", data.user.id);
       loginWithToken(data.token, data.user);
-      toast.success("Account verified! Welcome 🎉");
       nav("/dashboard");
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Verification failed");

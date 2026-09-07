@@ -208,8 +208,7 @@ class KycIn(BaseModel):
     account_holder: str
     upi: Optional[str] = ""
     upi_qr_url: Optional[str] = ""
-
-
+    bank_account_confirm: Optional[str] = None
 class CategoryIn(BaseModel):
     name: str
     enabled: bool = True
@@ -638,6 +637,8 @@ async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
     pan = body.pan.strip().upper()
     ifsc = body.ifsc.strip().upper()
     acct = re.sub(r"\s", "", body.bank_account)
+    if body.bank_account_confirm is not None and re.sub(r"\s", "", body.bank_account_confirm) != acct:
+        raise HTTPException(status_code=400, detail="Account numbers do not match. Please re-enter.")
     if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", pan):
         raise HTTPException(status_code=400, detail="Invalid PAN format (e.g. ABCDE1234F)")
     if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
