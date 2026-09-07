@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { AuthShell } from "../../components/AuthShell";
 import { Input } from "../../components/ui/input";
@@ -6,13 +6,15 @@ import { Label } from "../../components/ui/label";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, Gift } from "lucide-react";
 
 export default function Signup() {
   const [step, setStep] = useState(1);
   const [params] = useSearchParams();
   const referredBy = (params.get("ref") || localStorage.getItem("rt_ref") || "").toUpperCase();
   if (params.get("ref")) localStorage.setItem("rt_ref", params.get("ref").toUpperCase());
+  const [signupBonus, setSignupBonus] = useState(0);
+  useEffect(() => { api.get("/settings/public").then(({ data }) => setSignupBonus(data.signup_bonus)).catch(() => {}); }, []);
   const [form, setForm] = useState({ name: "", email: "", mobile: "", password: "", address: "" });
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,6 +58,15 @@ export default function Signup() {
       subtitle={step === 1 ? (referredBy ? `Invited by partner ${referredBy} · Zero investment, free to join` : "Start earning with Radhika Traders — zero investment") : `Enter the 6-digit code sent to ${form.email}`}>
       {step === 1 ? (
         <form onSubmit={requestOtp} className="space-y-3.5">
+          {referredBy && signupBonus > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3" data-testid="signup-bonus-banner">
+              <div className="rounded-lg bg-violet-500 p-2 text-white"><Gift className="h-4 w-4" /></div>
+              <div className="text-sm">
+                <div className="font-bold text-violet-900">You get ₹{signupBonus} signup bonus! 🎁</div>
+                <div className="text-xs text-violet-700">Added to your Bonus Wallet on signup · moves to your main wallet (withdrawable) after your first approved lead.</div>
+              </div>
+            </div>
+          )}
           <div><Label>Full Name</Label><Input data-testid="signup-name" required value={form.name} onChange={set("name")} className="mt-1.5" placeholder="Your name" /></div>
           <div><Label>Email</Label><Input data-testid="signup-email" type="email" required value={form.email} onChange={set("email")} className="mt-1.5" placeholder="you@example.com" /></div>
           <div><Label>Mobile</Label><Input data-testid="signup-mobile" required value={form.mobile} onChange={set("mobile")} className="mt-1.5" placeholder="10-digit mobile" /></div>

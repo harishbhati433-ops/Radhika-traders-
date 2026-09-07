@@ -6,16 +6,20 @@ import { toast } from "sonner";
 
 export function ReferEarnCard({ code }) {
   const [bonus, setBonus] = useState(0);
+  const [signupBonus, setSignupBonus] = useState(0);
   const [stats, setStats] = useState(null);
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    api.get("/settings/public").then(({ data }) => setBonus(data.referral_bonus)).catch(() => {});
+    api.get("/settings/public").then(({ data }) => { setBonus(data.referral_bonus); setSignupBonus(data.signup_bonus); }).catch(() => {});
     api.get("/my-referrals").then(({ data }) => setStats(data)).catch(() => {});
   }, []);
 
   const link = `${window.location.origin}/signup?ref=${code}`;
   const copy = () => { navigator.clipboard.writeText(link); toast.success("Invite link copied!"); };
+  const shareMsg = signupBonus > 0
+    ? `🎁 Join Radhika Traders with ZERO investment & earn on every referral! Sign up with my link and get ₹${signupBonus} signup bonus:`
+    : `Join Radhika Traders — earn with zero investment. Sign up with my link:`;
 
   return (
     <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6" data-testid="refer-earn-card">
@@ -28,6 +32,7 @@ export function ReferEarnCard({ code }) {
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
               {bonus > 0 ? `Share your invite link. When a friend signs up and verifies their email, ₹${bonus} is added to your wallet instantly.` : "Share your invite link and grow the Radhika Traders partner network."}
+              {signupBonus > 0 && <span className="mt-1 block font-semibold text-violet-700" data-testid="refer-signup-bonus-note">🎁 Your friend also gets ₹{signupBonus} signup bonus (unlocked after their first approved lead).</span>}
             </p>
           </div>
         </div>
@@ -43,7 +48,7 @@ export function ReferEarnCard({ code }) {
         <input readOnly value={link} data-testid="refer-link-input" className="flex-1 bg-transparent px-1 text-xs text-slate-600 outline-none" />
         <button onClick={copy} data-testid="refer-copy" className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
       </div>
-      <div className="mt-3"><ShareButtons link={link} message={bonus > 0 ? `Join Radhika Traders with zero investment and start earning! Sign up with my link:` : `Join Radhika Traders — earn with zero investment. Sign up with my link:`} testPrefix="refer-share" /></div>
+      <div className="mt-3"><ShareButtons link={link} message={shareMsg} testPrefix="refer-share" /></div>
       {stats?.recent?.length > 0 && (
         <div className="mt-5 rounded-xl border border-slate-200 bg-white" data-testid="refer-joined-list">
           <button type="button" onClick={() => setOpen(!open)} data-testid="refer-joined-toggle" className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-bold text-slate-800">

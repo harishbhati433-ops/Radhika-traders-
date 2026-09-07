@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api from "../../lib/api";
-import { Wallet as WalletIcon, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Wallet as WalletIcon, ArrowUpRight, ArrowDownRight, Lock } from "lucide-react";
 
 export default function Wallet() {
   const [wallet, setWallet] = useState(null);
@@ -23,9 +23,17 @@ export default function Wallet() {
 
   return (
     <DashboardLayout nav={customerNav} title="My Wallet">
-      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] p-6 text-white">
-        <div className="flex items-center gap-2 text-red-100"><WalletIcon className="h-5 w-5" /> Available Balance</div>
-        <div className="mt-2 font-mono text-4xl font-bold" data-testid="wallet-balance">₹{wallet?.balance ?? "…"}</div>
+      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+        <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] p-6 text-white lg:col-span-2">
+          <div className="flex items-center gap-2 text-red-100"><WalletIcon className="h-5 w-5" /> Main Wallet · Available Balance</div>
+          <div className="mt-2 font-mono text-4xl font-bold" data-testid="wallet-balance">₹{wallet?.balance ?? "…"}</div>
+          <div className="mt-1 text-xs text-red-200">Withdrawable amount</div>
+        </div>
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-6" data-testid="bonus-wallet-card">
+          <div className="flex items-center gap-2 text-violet-800"><Lock className="h-4 w-4" /> <span className="text-sm font-bold">Bonus Wallet</span></div>
+          <div className="mt-2 font-mono text-3xl font-bold text-violet-900" data-testid="wallet-bonus-locked">₹{wallet?.bonus_locked ?? "…"}</div>
+          <div className="mt-1 text-xs text-violet-700">{(wallet?.bonus_locked ?? 0) > 0 ? "Locked · moves to Main Wallet when your first lead is approved." : "Signup bonus appears here until your first lead is approved."}</div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -45,15 +53,15 @@ export default function Wallet() {
           <div className="divide-y divide-slate-100">
             {txns.map((t) => (
               <div key={t.id} className="flex items-center gap-3 p-4" data-testid={`txn-${t.id}`}>
-                <div className={`rounded-full p-2 ${t.type === "credit" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
-                  {t.type === "credit" ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                <div className={`rounded-full p-2 ${t.type === "credit" ? "bg-emerald-50 text-emerald-600" : t.type === "bonus" ? "bg-violet-50 text-violet-600" : "bg-rose-50 text-rose-600"}`}>
+                  {t.type === "bonus" ? <Lock className="h-4 w-4" /> : t.type === "credit" ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-slate-800">{t.description}</div>
+                  <div className="truncate text-sm font-semibold text-slate-800">{t.description} {t.type === "bonus" && <span className="ml-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">LOCKED</span>}</div>
                   <div className="text-xs text-slate-400">{(t.created_at || "").slice(0, 10)} · {t.ref_id}</div>
                 </div>
-                <div className={`font-mono font-bold ${t.type === "credit" ? "text-emerald-600" : "text-rose-600"}`}>
-                  {t.type === "credit" ? "+" : "−"}₹{t.amount}
+                <div className={`font-mono font-bold ${t.type === "credit" ? "text-emerald-600" : t.type === "bonus" ? "text-violet-600" : "text-rose-600"}`}>
+                  {t.type === "debit" ? "−" : "+"}₹{t.amount}
                 </div>
               </div>
             ))}

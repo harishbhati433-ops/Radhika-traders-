@@ -123,3 +123,10 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Admin-controlled minimum withdrawal
 - settings.app.min_withdrawal (fallback env MIN_WITHDRAWAL=100). GET /settings/public returns it; PUT /admin/settings accepts partial {min_withdrawal} or {referral_bonus} (>=1 validation). POST /withdrawals enforces dynamic minimum.
 - Admin Dashboard: MinWithdrawalSetting.jsx (presets 100-500 + custom; testids min-withdrawal-preset-{n}, min-withdrawal-custom, min-withdrawal-save, min-withdrawal-current). Customer Withdrawals shows live min (withdraw-min) and input min.
+
+## 2026-06 — Signup bonus with locked Bonus Wallet
+- settings.signup_bonus (default 50; admin PUT /admin/settings {signup_bonus}, 0 = OFF; AdminDashboard SignupBonusSetting presets 0/10/20/50/100/200 + custom).
+- On verified signup via referral (pay_referral_bonus): txn {type:"bonus", status:"locked"} for NEW user + notification. compute_wallet returns bonus_locked (excluded from balance). Referrer bonus unchanged.
+- unlock_signup_bonus(partner_id) called in PATCH /admin/leads when status=approved or account_status=account_opened -> bonus txns become type credit/completed + notification.
+- UI: Signup page banner (signup-bonus-banner) when ref present; ReferEarnCard share message mentions signup bonus (refer-signup-bonus-note); Wallet page Bonus Wallet card (bonus-wallet-card, wallet-bonus-locked) + LOCKED tag on txns; Dashboard strip (dash-bonus-locked).
+- Verified e2e via API: set 75 -> signup -> bonus_locked 75 -> lead approved -> balance 75.
