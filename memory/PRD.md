@@ -116,3 +116,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - OfferBanners.jsx: slides every 2000ms with translateX transition, pause on hover, dot nav. Campaign banners link to /api/go/{slug}?ref={referral_code} (new tab) -> lead form -> partner site. testids: offer-banner-link/title/image.
 - AdminBanners: campaign dropdown (banner-campaign); custom link disabled when campaign chosen.
 - Preview test banners created (Choice Trade -> choice-trade-test, All Campaigns -> /campaigns).
+
+## 2026-06 — Install prompt UX
+- Compact single-row bar; mobile bottom (inset-x-2 bottom-2), desktop bottom-LEFT (no overlap with WhatsApp float). Adds body padding-bottom 96px while visible so nothing is hidden behind it. Auto-hides after 20s (no dismiss stored); X = 7-day dismiss. Deferred prompt stored on window.__rtInstallPrompt; "Install App" button in DashboardLayout sidebar (sidebar-install-app) when available and not standalone.

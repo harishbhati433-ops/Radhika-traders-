@@ -1,9 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, Download } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { triggerInstall, isStandalone } from "./InstallPrompt";
+
+function InstallButton() {
+  const [avail, setAvail] = useState(!!window.__rtInstallPrompt && !isStandalone());
+  useEffect(() => {
+    const f = () => setAvail(!!window.__rtInstallPrompt && !isStandalone());
+    window.addEventListener("rt-install-changed", f);
+    return () => window.removeEventListener("rt-install-changed", f);
+  }, []);
+  if (!avail) return null;
+  return (
+    <button onClick={triggerInstall} data-testid="sidebar-install-app" className="mt-2 flex w-full items-center gap-3 rounded-xl border border-dashed border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
+      <Download style={{ width: 18, height: 18 }} /> Install App
+    </button>
+  );
+}
 
 export function DashboardLayout({ nav, children, title }) {
   const { user, logout } = useAuth();
@@ -54,6 +70,7 @@ export function DashboardLayout({ nav, children, title }) {
             <button onClick={doLogout} data-testid="dash-logout" className="mt-2 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">
               <LogOut style={{ width: 18, height: 18 }} /> Logout
             </button>
+            <InstallButton />
           </div>
         </aside>
 
