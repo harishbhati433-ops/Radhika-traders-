@@ -103,3 +103,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - public/manifest.json (standalone, theme #B91C1C, shortcuts), public/sw.js (network-first navigation, cache-first hashed static/images, skips /api), icons in public/icons/ (192/512/maskable/apple-touch) generated from logo-mark.jpeg.
 - index.html: manifest link + apple meta tags. index.js registers /sw.js. InstallPrompt.jsx (global in App.js): beforeinstallprompt banner (Android/Chrome), iOS Share->Add to Home Screen hint, dismiss remembered 7 days, hidden when already standalone.
 - Verified: SW registered+controlling, manifest served, banner renders (data-testid pwa-install-banner).
+
+## 2026-06 — Campaign highlight chip
+- components/CampaignChip.jsx: colored pill (color hashed from campaign name, consistent per campaign) with megaphone icon. Used in customer MyLeads (my-lead-campaign-{id}), admin AdminLeads table (lead-campaign-{id}) and lead detail modal.

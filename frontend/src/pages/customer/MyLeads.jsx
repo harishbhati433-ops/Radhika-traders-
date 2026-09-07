@@ -3,6 +3,7 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api from "../../lib/api";
 import { ClipboardList } from "lucide-react";
+import { CampaignChip } from "../../components/CampaignChip";
 
 const TONE = { pending: "bg-amber-50 text-amber-700", approved: "bg-emerald-50 text-emerald-700", rejected: "bg-rose-50 text-rose-700", account_opened: "bg-sky-50 text-sky-700" };
 
@@ -24,7 +25,7 @@ export default function MyLeads() {
         {leads.map((l) => (
           <div key={l.id} data-testid={`my-lead-${l.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><div className="font-semibold text-slate-900">{l.customer_name || "Customer"} <span className="ml-1 font-mono text-[10px] text-slate-400">{l.lead_id}</span></div><div className="text-xs text-slate-500">{l.campaign_name} · {(l.created_at || "").slice(0, 10)}</div>{l.reject_reason && <div className="text-xs text-rose-600">Reason: {l.reject_reason}</div>}</div>
+              <div><div className="font-semibold text-slate-900">{l.customer_name || "Customer"} <span className="ml-1 font-mono text-[10px] text-slate-400">{l.lead_id}</span></div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500"><CampaignChip name={l.campaign_name} testId={`my-lead-campaign-${l.id}`} /><span>{(l.created_at || "").slice(0, 10)}</span></div>{l.reject_reason && <div className="text-xs text-rose-600">Reason: {l.reject_reason}</div>}</div>
               <div className="flex gap-1.5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${TONE[l.status]}`}>{l.status}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${TONE[l.account_status]}`}>{l.account_status.replace("_", " ")}</span></div>
             </div>
             {l.details?.length > 0 && (

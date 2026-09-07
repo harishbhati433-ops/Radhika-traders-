@@ -3,6 +3,7 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
+import { CampaignChip } from "../../components/CampaignChip";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
 import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2 } from "lucide-react";
@@ -58,7 +59,7 @@ export default function AdminLeads() {
               <tr key={l.id} data-testid={`lead-row-${l.id}`}>
                 <td className="p-3 font-mono text-xs font-bold text-slate-700">{l.lead_id}</td>
                 <td className="p-3"><div className="font-semibold text-slate-900">{l.customer_name || "—"}</div><div className="mt-1 flex flex-wrap gap-1"><PhoneLink value={l.mobile} /><EmailLink value={l.email} /></div></td>
-                <td className="p-3 text-slate-700">{l.campaign_name}</td>
+                <td className="p-3"><CampaignChip name={l.campaign_name} testId={`lead-campaign-${l.id}`} /></td>
                 <td className="p-3"><div className="font-medium text-slate-800">{l.partner_name || "Direct"}</div><div className="font-mono text-[10px] text-slate-400">{l.ref_code}</div></td>
                 <td className="p-3"><div className="flex flex-col gap-1"><Badge s={l.status} testId={`lead-status-${l.id}`} /><Badge s={l.account_status} /></div></td>
                 <td className="p-3 text-xs text-slate-500">{(l.created_at || "").slice(0, 10)}<br /><span className="text-slate-400">upd {(l.updated_at || "").slice(0, 10)}</span></td>
@@ -79,7 +80,7 @@ export default function AdminLeads() {
                 <dl className="mt-2 space-y-1.5 text-sm">{Object.entries(view.data || {}).filter(([, v]) => v).map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-slate-500">{LABELS[k] || k}</dt><dd className="font-semibold text-slate-900 text-right break-all">{v}</dd></div>)}</dl>
                 <div className="mt-2 flex flex-wrap gap-1"><PhoneLink value={view.mobile} /><EmailLink value={view.email} /></div></div>
               <div className="space-y-4">
-                <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Campaign</div><div className="mt-1 font-semibold">{view.campaign_name}</div><div className="font-mono text-[10px] text-slate-400">ID {view.campaign_id}</div>{view.campaign_link && <a href={view.campaign_link} target="_blank" rel="noreferrer" className="block truncate text-xs text-sky-700 underline">{view.campaign_link}</a>}</div>
+                <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Campaign</div><div className="mt-1"><CampaignChip name={view.campaign_name} /></div><div className="font-mono text-[10px] text-slate-400">ID {view.campaign_id}</div>{view.campaign_link && <a href={view.campaign_link} target="_blank" rel="noreferrer" className="block truncate text-xs text-sky-700 underline">{view.campaign_link}</a>}</div>
                 <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Referral</div><div className="mt-1 font-semibold">{view.partner_name || "Direct (no referral)"}</div><div className="font-mono text-xs text-slate-500">{view.ref_code || "—"}</div></div>
               </div>
             </div>
