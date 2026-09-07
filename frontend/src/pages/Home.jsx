@@ -88,8 +88,19 @@ export default function Home() {
             </div>
           </div>
           <div className="relative rt-fade-up" style={{ animationDelay: "120ms" }}>
-            <img src="/images/harish-bhati-2.jpeg" alt="Harish Bhati — Founder, Radhika Traders"
-              className="w-full rounded-3xl object-cover object-top shadow-2xl ring-1 ring-white/10" style={{ maxHeight: 520 }} data-testid="hero-founder-photo" />
+            <div className="grid grid-cols-3 gap-3">
+              <img src="/images/hero-team.jpg" alt="Radhika Traders style team working together on laptops"
+                className="col-span-2 h-[420px] w-full rounded-3xl object-cover shadow-2xl ring-1 ring-white/10" data-testid="hero-visual-main" />
+              <div className="flex flex-col gap-3">
+                <img src="/images/hero-wfh.jpg" alt="Partner working from home on laptop"
+                  className="h-[200px] w-full rounded-3xl object-cover shadow-2xl ring-1 ring-white/10" data-testid="hero-visual-2" />
+                <div className="flex flex-1 flex-col justify-center rounded-3xl bg-gradient-to-br from-red-600 to-red-800 p-4 text-white shadow-2xl">
+                  <div className="font-display text-3xl font-extrabold text-amber-300">₹300+</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider">Per Demat A/C</div>
+                  <div className="mt-2 text-[11px] text-red-100">Demat · Cards · Loans · Insurance · SIP</div>
+                </div>
+              </div>
+            </div>
             <div className="absolute -bottom-5 -left-5 rounded-2xl bg-white p-4 shadow-xl rt-gold-card">
               <div className="flex items-center gap-3">
                 <div className="rounded-xl bg-emerald-100 p-2"><TrendingUp className="h-5 w-5 text-emerald-600" /></div>
@@ -99,7 +110,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="absolute -top-4 right-4 rounded-full bg-[#0B0F17]/80 px-4 py-2 text-xs font-bold text-amber-300 ring-1 ring-amber-400/40 backdrop-blur">Owner & Founder · Harish Bhati</div>
+            <div className="absolute -top-4 right-4 rounded-full bg-[#0B0F17]/80 px-4 py-2 text-xs font-bold text-amber-300 ring-1 ring-amber-400/40 backdrop-blur">Performance · Affiliate · Digital Marketing</div>
           </div>
         </div>
       </section>

@@ -8,10 +8,11 @@ import { Label } from "../../components/ui/label";
 import { ImageUpload } from "../../components/ImageUpload";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
+import { SecuritySettings } from "../../components/SecuritySettings";
 
 export default function Profile() {
   const { user, setUser, refresh } = useAuth();
-  const [p, setP] = useState({ name: user?.name || "", mobile: user?.mobile || "", address: user?.address || "" });
+  const [p, setP] = useState({ name: user?.name || "", mobile: user?.mobile || "", address: user?.address || "", dob: user?.dob || "" });
   const [kyc, setKyc] = useState({
     account_holder: user?.bank?.account_holder || user?.name || "", pan: user?.kyc?.pan || "",
     aadhaar: user?.kyc?.aadhaar || "", bank_account: user?.bank?.bank_account || "",
@@ -39,7 +40,7 @@ export default function Profile() {
 
   const saveKyc = async (e) => {
     e.preventDefault(); setSavingK(true);
-    try { const { data } = await api.put("/profile/kyc", kyc); setUser(data); toast.success("KYC submitted for review"); }
+    try { const { data } = await api.put("/profile/kyc", kyc); setUser(data); toast.success("KYC verified successfully ✓ Withdrawals enabled"); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
     finally { setSavingK(false); }
   };
@@ -56,6 +57,7 @@ export default function Profile() {
             <div><Label>Email</Label><Input value={user?.email} disabled className="mt-1.5 bg-slate-50" /></div>
             <div><Label>Mobile</Label><Input data-testid="profile-mobile" value={p.mobile} onChange={(e) => setP({ ...p, mobile: e.target.value })} className="mt-1.5" /></div>
             <div><Label>Address</Label><Input data-testid="profile-address" value={p.address} onChange={(e) => setP({ ...p, address: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Date of Birth <span className="text-xs text-slate-400">(used for account recovery)</span></Label><Input data-testid="profile-dob" type="date" value={p.dob} onChange={(e) => setP({ ...p, dob: e.target.value })} className="mt-1.5" /></div>
             <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Referral Code: <span className="font-mono font-bold text-slate-800">{user?.referral_code}</span></div>
             <button type="submit" data-testid="profile-save" disabled={savingP} className="rt-gradient-btn flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-sm font-bold disabled:opacity-60">
               {savingP && <Loader2 className="h-4 w-4 animate-spin" />} Save Profile
@@ -86,6 +88,10 @@ export default function Profile() {
             </button>
           </div>
         </form>
+      </div>
+      <div className="mt-8">
+        <h2 className="mb-4 font-display text-xl font-bold text-slate-900">Security</h2>
+        <SecuritySettings />
       </div>
     </DashboardLayout>
   );

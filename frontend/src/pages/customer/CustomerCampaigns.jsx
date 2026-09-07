@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useLivePoll } from "../../lib/useLivePoll";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import { CampaignCard } from "../../components/CampaignCard";
@@ -13,16 +14,12 @@ export default function CustomerCampaigns() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
 
-  useEffect(() => { api.get("/campaigns").then(({ data }) => setAll(data)); }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const params = {};
-      if (search) params.search = search;
-      if (category) params.category = category;
-      api.get("/campaigns", { params }).then(({ data }) => setCampaigns(data));
-    }, 250);
-    return () => clearTimeout(t);
+  useLivePoll(() => {
+    api.get("/campaigns").then(({ data }) => setAll(data));
+    const params = {};
+    if (search) params.search = search;
+    if (category) params.category = category;
+    api.get("/campaigns", { params }).then(({ data }) => setCampaigns(data));
   }, [search, category]);
 
   const counts = all.reduce((m, c) => ({ ...m, [c.category]: (m[c.category] || 0) + 1 }), {});

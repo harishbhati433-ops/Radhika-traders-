@@ -37,6 +37,7 @@ import Partners from "./pages/Partners";
 import LeadForm from "./pages/LeadForm";
 import AdminLeads from "./pages/admin/AdminLeads";
 import MyLeads from "./pages/customer/MyLeads";
+import ForgotEmail from "./pages/auth/ForgotEmail";
 
 function App() {
   return (
@@ -74,6 +75,7 @@ function App() {
           <Route path="/offer-ended" element={<OfferEnded />} />
           <Route path="/partners" element={<Partners />} />
           <Route path="/join/:slug" element={<LeadForm />} />
+          <Route path="/forgot-email" element={<ForgotEmail />} />
           <Route path="/my-leads" element={<ProtectedRoute role="customer"><MyLeads /></ProtectedRoute>} />
           <Route path="/admin/leads" element={<ProtectedRoute role="admin"><AdminLeads /></ProtectedRoute>} />
         </Routes>

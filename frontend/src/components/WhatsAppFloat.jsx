@@ -2,7 +2,7 @@ import { useLocation } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
 
 const WA_URL = "https://wa.me/916376541191?text=Hello%20Radhika%20Traders%2C%20I%20want%20to%20know%20more%20about%20your%20campaigns.";
-const HIDE_ON = ["/login", "/signup", "/admin/login", "/forgot-password"];
+const HIDE_ON = ["/login", "/signup", "/admin/login", "/forgot-password", "/forgot-email"];
 
 export function WhatsAppFloat() {
   const { pathname } = useLocation();

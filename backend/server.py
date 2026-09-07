@@ -74,6 +74,7 @@ def public_user(u: dict) -> dict:
         "email": u.get("email"),
         "mobile": u.get("mobile"),
         "address": u.get("address"),
+        "dob": u.get("dob", ""),
         "role": u.get("role"),
         "email_verified": u.get("email_verified", False),
         "referral_code": u.get("referral_code"),
@@ -149,6 +150,7 @@ class ProfileIn(BaseModel):
     name: Optional[str] = None
     mobile: Optional[str] = None
     address: Optional[str] = None
+    dob: Optional[str] = None
 
 
 class KycIn(BaseModel):
@@ -250,6 +252,7 @@ class WithdrawIn(BaseModel):
     amount: float
     method: str
     details: str = ""
+    transaction_password: str = ""
 
 
 class WithdrawStatusIn(BaseModel):
@@ -445,12 +448,29 @@ async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)
 
 @api.put("/profile/kyc")
 async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
-    kyc = body.model_dump()
-    kyc["status"] = "pending"
-    kyc["submitted_at"] = now_iso()
-    bank = {"account_holder": body.account_holder, "bank_account": body.bank_account,
-            "ifsc": body.ifsc, "upi": body.upi, "upi_qr_url": body.upi_qr_url or ""}
+    pan = body.pan.strip().upper()
+    ifsc = body.ifsc.strip().upper()
+    acct = re.sub(r"\s", "", body.bank_account)
+    if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", pan):
+        raise HTTPException(status_code=400, detail="Invalid PAN format (e.g. ABCDE1234F)")
+    if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
+        raise HTTPException(status_code=400, detail="Invalid IFSC code (e.g. HDFC0001234)")
+    if not re.fullmatch(r"\d{9,18}", acct):
+        raise HTTPException(status_code=400, detail="Bank account number must be 9–18 digits")
+    if body.aadhaar and not re.fullmatch(r"\d{12}", re.sub(r"\s", "", body.aadhaar)):
+        raise HTTPException(status_code=400, detail="Aadhaar must be 12 digits")
+    if body.upi and not re.fullmatch(r"[\w.\-]{2,}@[A-Za-z]{2,}", body.upi.strip()):
+        raise HTTPException(status_code=400, detail="Invalid UPI ID (e.g. name@upi)")
+    dup = await db.users.find_one({"kyc.pan": pan, "_id": {"$ne": ObjectId(user["id"])}})
+    if dup:
+        raise HTTPException(status_code=400, detail="This PAN is already registered with another account")
+    kyc = {**body.model_dump(), "pan": pan, "ifsc": ifsc, "bank_account": acct, "status": "verified",
+           "verified_mode": "auto", "submitted_at": now_iso(), "reviewed_at": now_iso(), "admin_note": ""}
+    bank = {"account_holder": body.account_holder.strip(), "bank_account": acct, "ifsc": ifsc,
+            "upi": (body.upi or "").strip(), "upi_qr_url": body.upi_qr_url or ""}
     await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"kyc": kyc, "bank": bank}})
+    await db.notifications.insert_one({"user_id": user["id"], "title": "KYC Verified ✓", "body": "Your KYC details were verified successfully. Withdrawals are enabled.",
+                                       "link": "/withdrawals", "type": "kyc", "read": False, "created_at": now_iso()})
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     return public_user(full)
 
@@ -841,10 +861,11 @@ async def leaderboard(user: dict = Depends(get_current_user)):
 
 # ----------------------------- Withdrawals -----------------------------
 @api.post("/withdrawals")
-async def request_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_user)):
+async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = Depends(get_current_user)):
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     if full.get("kyc", {}).get("status") != "verified":
         raise HTTPException(status_code=400, detail="Your KYC must be verified by Radhika Traders before withdrawal")
+    await require_txn_password(user["id"], body.transaction_password, request)
     if body.amount < MIN_WITHDRAWAL:
         raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(MIN_WITHDRAWAL)}")
     wallet = await compute_wallet(user["id"])
@@ -942,6 +963,142 @@ async def update_banner(bid: str, body: BannerIn, admin: dict = Depends(require_
 async def delete_banner(bid: str, admin: dict = Depends(require_admin)):
     await db.banners.delete_one({"_id": ObjectId(bid)})
     return {"message": "Banner deleted"}
+
+
+# ----------------------------- Security: transaction password, change password, recover email -----------------------------
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class TxnPasswordIn(BaseModel):
+    login_password: Optional[str] = ""
+    otp: Optional[str] = ""
+    new_password: str
+
+
+class RecoverEmailIn(BaseModel):
+    mobile: str
+    pan: Optional[str] = ""
+    dob: Optional[str] = ""
+
+
+async def _log_security(user_id: Optional[str], event: str, request: Request, detail: str = ""):
+    await db.security_logs.insert_one({"user_id": user_id, "event": event, "detail": detail,
+                                       "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
+                                       "created_at": now_iso()})
+
+
+async def _issue_otp(email: str, name: str, purpose: str):
+    code = generate_otp()
+    await db.otp_codes.delete_many({"email": email, "purpose": purpose})
+    await db.otp_codes.insert_one({"email": email, "code": code, "purpose": purpose, "attempts": 0,
+                                   "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+                                   "used": False, "created_at": now_iso()})
+    logger.info(f"[OTP {purpose}] {email} -> {code}")
+    await send_otp_email(email, name, code, "reset")
+
+
+async def _consume_otp(email: str, purpose: str, code: str):
+    rec = await db.otp_codes.find_one({"email": email, "purpose": purpose, "used": False})
+    if not rec or rec.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP. Please request a new one.")
+    if rec["code"] != code:
+        await db.otp_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if rec["expires_at"] < now_iso():
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+
+
+@api.post("/security/change-password")
+async def change_password(body: ChangePasswordIn, request: Request, user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if not verify_password(body.current_password, full.get("password_hash", "")):
+        await _log_security(user["id"], "login_password_change_failed", request)
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    await db.users.update_one({"_id": full["_id"]}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    await _log_security(user["id"], "login_password_changed", request)
+    return {"message": "Login password changed"}
+
+
+@api.post("/security/transaction-password/otp")
+async def txn_password_otp(request: Request, user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    await _issue_otp(full["email"], full.get("name", ""), "txn")
+    return {"message": "OTP sent to your registered email"}
+
+
+@api.post("/security/transaction-password")
+async def set_txn_password(body: TxnPasswordIn, request: Request, user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if not re.fullmatch(r"\d{4,6}", body.new_password):
+        raise HTTPException(status_code=400, detail="Transaction password must be a 4–6 digit PIN")
+    if verify_password(body.new_password, full.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Transaction password must be different from login password")
+    if full.get("txn_password_hash"):
+        if not body.otp:
+            raise HTTPException(status_code=400, detail="OTP is required to reset transaction password")
+        await _consume_otp(full["email"], "txn", body.otp)
+        event = "transaction_password_reset"
+    else:
+        if not body.login_password or not verify_password(body.login_password, full.get("password_hash", "")):
+            raise HTTPException(status_code=400, detail="Login password is incorrect")
+        event = "transaction_password_set"
+    await db.users.update_one({"_id": full["_id"]}, {"$set": {"txn_password_hash": hash_password(body.new_password), "txn_failed": 0}})
+    await _log_security(user["id"], event, request)
+    return {"message": "Transaction password saved", "has_txn_password": True}
+
+
+async def require_txn_password(user_id: str, pin: str, request: Request):
+    full = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not full.get("txn_password_hash"):
+        raise HTTPException(status_code=400, detail="Please set your Transaction Password in Profile → Security first")
+    if full.get("txn_failed", 0) >= 5 and (full.get("txn_locked_until") or "") > now_iso():
+        raise HTTPException(status_code=429, detail="Too many wrong attempts. Try again after 30 minutes.")
+    if not pin or not verify_password(pin, full["txn_password_hash"]):
+        upd = {"$inc": {"txn_failed": 1}}
+        if full.get("txn_failed", 0) + 1 >= 5:
+            upd["$set"] = {"txn_locked_until": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()}
+        await db.users.update_one({"_id": full["_id"]}, upd)
+        await _log_security(user_id, "transaction_password_failed", request)
+        raise HTTPException(status_code=400, detail="Incorrect transaction password")
+    await db.users.update_one({"_id": full["_id"]}, {"$set": {"txn_failed": 0}})
+
+
+@api.post("/auth/recover-email")
+async def recover_email(body: RecoverEmailIn, request: Request):
+    mobile = re.sub(r"\D", "", body.mobile)[-10:]
+    if len(mobile) != 10:
+        raise HTTPException(status_code=400, detail="Enter a valid 10-digit mobile number")
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    tries = await db.security_logs.count_documents({"event": "email_recovery_attempt", "detail": mobile, "created_at": {"$gte": hour_ago}})
+    if tries >= 5:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please try again after 1 hour.")
+    await _log_security(None, "email_recovery_attempt", request, mobile)
+    user = await db.users.find_one({"mobile": {"$regex": f"{mobile}$"}, "role": "customer"})
+    ok = False
+    if user:
+        pan_ok = body.pan and user.get("kyc", {}).get("pan", "").upper() == body.pan.strip().upper()
+        dob_ok = body.dob and user.get("dob") and user["dob"] == body.dob
+        ok = bool(pan_ok or dob_ok)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Details do not match our records")
+    em = user["email"]
+    local, domain = em.split("@", 1)
+    masked = local[0] + "*" * max(3, len(local) - 2) + local[-1] + "@" + domain if len(local) > 2 else local[0] + "***@" + domain
+    await _log_security(str(user["_id"]), "email_recovered", request, mobile)
+    return {"masked_email": masked}
+
+
+@api.get("/security/status")
+async def security_status(user: dict = Depends(get_current_user)):
+    full = await db.users.find_one({"_id": ObjectId(user["id"])})
+    logs = await db.security_logs.find({"user_id": user["id"]}).sort("created_at", -1).to_list(10)
+    return {"has_txn_password": bool(full.get("txn_password_hash")),
+            "logs": [{"event": l["event"], "created_at": l["created_at"]} for l in logs]}
 
 
 # ----------------------------- Notifications, KYC mgmt, Broadcast -----------------------------

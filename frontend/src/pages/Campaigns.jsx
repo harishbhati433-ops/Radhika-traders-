@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PublicLayout } from "../components/PublicLayout";
 import { CampaignCard } from "../components/CampaignCard";
 import { CategoryTiles } from "../components/CategoryTiles";
+import { useLivePoll } from "../lib/useLivePoll";
 import api from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
@@ -29,6 +30,7 @@ export default function Campaigns() {
 
   useEffect(() => { api.get("/categories").then(({ data }) => setCats(data)); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+  useLivePoll(() => load(), [load]);
 
   return (
     <PublicLayout>

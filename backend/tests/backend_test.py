@@ -18,6 +18,16 @@ ADMIN_EMAIL = "bhatiharish276@gmail.com"
 ADMIN_PASSWORD = "Radhika@2023"
 
 
+def _rand_pan() -> str:
+    """Generate a unique valid PAN: 5 letters + 4 digits + 1 letter."""
+    # Use uuid to ensure cross-run + cross-worker uniqueness. Map hex→letters.
+    hx = uuid.uuid4().hex
+    letters = "".join(chr(ord("A") + (int(hx[i], 16) + i * 3) % 26) for i in range(5))
+    digits = f"{(int(hx[5:9], 16) % 9000) + 1000}"
+    tail = chr(ord("A") + int(hx[9], 16) % 26)
+    return f"{letters}{digits}{tail}"
+
+
 # ---------- helpers ----------
 def _grep_otp(email: str, purpose: str = "signup", wait: float = 3.0) -> str | None:
     """Grep backend supervisor logs for [OTP <purpose>] <email> -> <code>"""
@@ -251,27 +261,96 @@ class TestWalletAndWithdrawals:
         assert r.status_code == 400
         assert "KYC" in r.json().get("detail", "")
 
-    def test_submit_kyc(self, cust_headers, admin_headers, customer):
+    def test_submit_kyc(self, cust_headers, customer):
+        # Use unique PAN so re-runs don't collide
+        pan = _rand_pan()
+        customer["pan"] = pan
         r = requests.put(f"{API}/profile/kyc", json={
-            "pan": "ABCDE1234F", "aadhaar": "111122223333",
+            "pan": pan, "aadhaar": "111122223333",
             "bank_account": "1234567890", "ifsc": "HDFC0000123",
             "account_holder": "Test User", "upi": "test@upi"
         }, headers=cust_headers)
-        assert r.status_code == 200
-        assert r.json()["kyc"]["status"] == "pending"
-        # Admin verifies KYC so subsequent withdrawal tests pass
-        v = requests.patch(f"{API}/admin/kyc/{customer['id']}",
-                           json={"status": "verified", "note": "auto-test"},
-                           headers=admin_headers)
-        assert v.status_code == 200 and v.json()["status"] == "verified"
+        assert r.status_code == 200, r.text
+        # Phase 3: KYC auto-verifies on submit
+        assert r.json()["kyc"]["status"] == "verified"
+        assert r.json()["kyc"].get("verified_mode") == "auto"
+        # Set transaction PIN for subsequent withdrawal tests
+        sp = requests.post(f"{API}/security/transaction-password",
+                           json={"login_password": customer["password"], "new_password": "9182"},
+                           headers=cust_headers)
+        assert sp.status_code == 200, sp.text
+        customer["pin"] = "9182"
 
-    def test_withdraw_below_min_rejected(self, cust_headers):
-        r = requests.post(f"{API}/withdrawals", json={"amount": 50, "method": "UPI", "details": "x@upi"}, headers=cust_headers)
+    def test_kyc_invalid_pan_400(self, admin_headers):
+        # Fresh customer just to test validation without polluting main one
+        email = f"test_kycval_{uuid.uuid4().hex[:8]}@example.com"
+        requests.post(f"{API}/auth/register", json={
+            "name": "V", "email": email, "mobile": "9111000222", "password": "Passw0rd!"})
+        code = _grep_otp(email, "signup", wait=5)
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        h = {"Authorization": f"Bearer {v.json()['token']}"}
+        r = requests.put(f"{API}/profile/kyc", json={
+            "pan": "BADPAN", "bank_account": "1234567890", "ifsc": "HDFC0000123",
+            "account_holder": "V"}, headers=h)
+        assert r.status_code == 400 and "PAN" in r.json()["detail"]
+        r = requests.put(f"{API}/profile/kyc", json={
+            "pan": "ABCDE1234F", "bank_account": "1234567890", "ifsc": "BADIFSC",
+            "account_holder": "V"}, headers=h)
+        assert r.status_code == 400 and "IFSC" in r.json()["detail"]
+
+    def test_kyc_duplicate_pan_rejected(self, admin_headers, customer):
+        # customer already has a unique PAN set by test_submit_kyc → try duplicating it
+        dup_pan = customer.get("pan", "ABCDE1234F")
+        email = f"test_kycdup_{uuid.uuid4().hex[:8]}@example.com"
+        requests.post(f"{API}/auth/register", json={
+            "name": "D", "email": email, "mobile": "9111000333", "password": "Passw0rd!"})
+        code = _grep_otp(email, "signup", wait=5)
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        h = {"Authorization": f"Bearer {v.json()['token']}"}
+        r = requests.put(f"{API}/profile/kyc", json={
+            "pan": dup_pan, "bank_account": "1234567890", "ifsc": "HDFC0000123",
+            "account_holder": "D"}, headers=h)
+        assert r.status_code == 400 and "already registered" in r.json()["detail"].lower()
+
+    def test_withdraw_below_min_rejected(self, cust_headers, customer):
+        r = requests.post(f"{API}/withdrawals",
+                          json={"amount": 50, "method": "UPI", "details": "x@upi",
+                                "transaction_password": customer.get("pin", "9182")},
+                          headers=cust_headers)
         assert r.status_code == 400
+
+    def test_withdraw_without_pin_rejected(self, admin_headers):
+        # Fresh KYC-verified customer with NO pin should be blocked at withdrawal
+        email = f"test_nopin_{uuid.uuid4().hex[:8]}@example.com"
+        requests.post(f"{API}/auth/register", json={
+            "name": "NP", "email": email, "mobile": "9101010101", "password": "Passw0rd!"})
+        code = _grep_otp(email, "signup", wait=5)
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        tok = v.json()["token"]; uid = v.json()["user"]["id"]
+        h = {"Authorization": f"Bearer {tok}"}
+        requests.put(f"{API}/profile/kyc", json={
+            "pan": _rand_pan(), "bank_account": "1234567890", "ifsc": "HDFC0000123",
+            "account_holder": "NP", "upi": "np@ybl"}, headers=h)
+        requests.post(f"{API}/admin/credit",
+                      json={"user_id": uid, "amount": 500, "description": "t"}, headers=admin_headers)
+        r = requests.post(f"{API}/withdrawals",
+                          json={"amount": 200, "method": "UPI", "details": "np@ybl"}, headers=h)
+        assert r.status_code == 400
+        assert "Transaction Password" in r.json()["detail"]
+        # Wrong PIN after setting one
+        requests.post(f"{API}/security/transaction-password",
+                      json={"login_password": "Passw0rd!", "new_password": "4321"}, headers=h)
+        r2 = requests.post(f"{API}/withdrawals",
+                           json={"amount": 200, "method": "UPI", "details": "np@ybl",
+                                 "transaction_password": "0000"}, headers=h)
+        assert r2.status_code == 400 and "Incorrect" in r2.json()["detail"]
 
     def test_withdraw_success_and_admin_flow(self, cust_headers, admin_headers, customer):
         w0 = requests.get(f"{API}/wallet", headers=cust_headers).json()
-        r = requests.post(f"{API}/withdrawals", json={"amount": 200, "method": "UPI", "details": "x@upi"}, headers=cust_headers)
+        r = requests.post(f"{API}/withdrawals",
+                          json={"amount": 200, "method": "UPI", "details": "x@upi",
+                                "transaction_password": customer.get("pin", "9182")},
+                          headers=cust_headers)
         assert r.status_code == 200, r.text
         wid = r.json()["id"]
         assert "_id" not in r.json()
@@ -290,8 +369,11 @@ class TestWalletAndWithdrawals:
         assert w2["pending_withdrawal"] == w0["pending_withdrawal"]
         assert w2["balance"] == w0["balance"] - 200
 
-    def test_withdraw_over_balance(self, cust_headers):
-        r = requests.post(f"{API}/withdrawals", json={"amount": 999999, "method": "UPI", "details": "x@upi"}, headers=cust_headers)
+    def test_withdraw_over_balance(self, cust_headers, customer):
+        r = requests.post(f"{API}/withdrawals",
+                          json={"amount": 999999, "method": "UPI", "details": "x@upi",
+                                "transaction_password": customer.get("pin", "9182")},
+                          headers=cust_headers)
         assert r.status_code == 400
 
 
@@ -402,21 +484,24 @@ class TestWithdrawalPayout:
         tok = v.json()["token"]
         uid = v.json()["user"]["id"]
         h = {"Authorization": f"Bearer {tok}"}
-        # KYC with bank UPI
+        # KYC auto-verifies on submit (Phase 3)
+        pan = _rand_pan()
         requests.put(f"{API}/profile/kyc", json={
-            "pan": "AAAPZ1234K", "aadhaar": "111122223333",
+            "pan": pan, "aadhaar": "111122223333",
             "bank_account": "50100123456789", "ifsc": "HDFC0000123",
             "account_holder": "WPayout Test", "upi": "wpayout@ybl"
         }, headers=h)
-        # Admin verify KYC (mandatory for withdrawal)
-        requests.patch(f"{API}/admin/kyc/{uid}", json={"status": "verified"}, headers=admin_headers)
+        # Set transaction PIN (required Phase 3)
+        requests.post(f"{API}/security/transaction-password",
+                      json={"login_password": pw, "new_password": "1122"}, headers=h)
         # credit
         requests.post(f"{API}/admin/credit",
                       json={"user_id": uid, "amount": 500, "description": "test"},
                       headers=admin_headers)
         # withdraw empty details
         r = requests.post(f"{API}/withdrawals",
-                          json={"amount": 150, "method": "UPI", "details": ""},
+                          json={"amount": 150, "method": "UPI", "details": "",
+                                "transaction_password": "1122"},
                           headers=h)
         assert r.status_code == 200, r.text
         data = r.json()
@@ -427,7 +512,7 @@ class TestWithdrawalPayout:
             assert k in pi, f"payout_info missing {k}"
         assert pi["upi"] == "wpayout@ybl"
         assert pi["bank_account"] == "50100123456789"
-        assert pi["pan"] == "AAAPZ1234K"
+        assert pi["pan"] == pan
 
 
 # ---------- Mark paid with proof + UTR ----------
@@ -442,14 +527,16 @@ class TestMarkPaidWithProof:
         tok = v.json()["token"]; uid = v.json()["user"]["id"]
         h = {"Authorization": f"Bearer {tok}"}
         requests.put(f"{API}/profile/kyc", json={
-            "pan": "ABCPZ1234K", "bank_account": "50100999", "ifsc": "HDFC0000123",
+            "pan": _rand_pan(), "bank_account": "501009991", "ifsc": "HDFC0000123",
             "account_holder": "Paid User", "upi": "paid@ybl"}, headers=h)
-        requests.patch(f"{API}/admin/kyc/{uid}", json={"status": "verified"}, headers=admin_headers)
+        requests.post(f"{API}/security/transaction-password",
+                      json={"login_password": pw, "new_password": "3344"}, headers=h)
         requests.post(f"{API}/admin/credit",
                       json={"user_id": uid, "amount": 500, "description": "test"},
                       headers=admin_headers)
         wr = requests.post(f"{API}/withdrawals",
-                           json={"amount": 200, "method": "UPI", "details": "paid@ybl"},
+                           json={"amount": 200, "method": "UPI", "details": "paid@ybl",
+                                 "transaction_password": "3344"},
                            headers=h)
         wid = wr.json()["id"]
         # upload proof (admin)
@@ -628,7 +715,7 @@ class TestUpiQrUpload:
 
         # Step 2: submit KYC with upi_qr_url
         r = requests.put(f"{API}/profile/kyc", json={
-            "pan": "QQQPZ1234K", "aadhaar": "111122223333",
+            "pan": _rand_pan(), "aadhaar": "111122223333",
             "bank_account": "50100987654321", "ifsc": "HDFC0000123",
             "account_holder": "QR User", "upi": "qr@ybl", "upi_qr_url": qr_url
         }, headers=h)
@@ -637,15 +724,17 @@ class TestUpiQrUpload:
         me = requests.get(f"{API}/auth/me", headers=h).json()
         assert me.get("bank", {}).get("upi_qr_url") == qr_url
 
-        # Admin verify KYC (mandatory for withdrawal)
-        requests.patch(f"{API}/admin/kyc/{uid}", json={"status": "verified"}, headers=admin_headers)
+        # Set txn PIN (required Phase 3)
+        requests.post(f"{API}/security/transaction-password",
+                      json={"login_password": pw, "new_password": "5566"}, headers=h)
 
         # Step 3: admin credits and customer requests withdrawal
         requests.post(f"{API}/admin/credit",
                       json={"user_id": uid, "amount": 500, "description": "qr test"},
                       headers=admin_headers)
         wr = requests.post(f"{API}/withdrawals",
-                           json={"amount": 150, "method": "UPI", "details": "qr@ybl"},
+                           json={"amount": 150, "method": "UPI", "details": "qr@ybl",
+                                 "transaction_password": "5566"},
                            headers=h)
         assert wr.status_code == 200, wr.text
         data = wr.json()
@@ -728,15 +817,20 @@ class TestCampaignLiveAnnouncement:
             r = requests.patch(f"{API}/campaigns/{cid}/status",
                                params={"status": "live"}, headers=admin_headers)
             assert r.status_code == 200
-            time.sleep(2.5)  # background task
+            # Poll up to ~20s for the broadcast row (fan-out is serial across all customers)
+            row_found = False
+            for _ in range(20):
+                time.sleep(1)
+                bs = requests.get(f"{API}/admin/broadcasts", headers=admin_headers).json()
+                if any(b.get("kind") == "campaign_live" and b.get("campaign_id") == cid for b in bs):
+                    row_found = True
+                    break
+            assert row_found, "campaign_live broadcast row not inserted after 20s"
             n = requests.get(f"{API}/notifications", headers=h).json()
             assert "unread" in n and "items" in n
             live_items = [x for x in n["items"] if x.get("type") == "campaign_live"
                           and x.get("campaign_id") == cid]
             assert live_items, f"campaign_live notif not fanned out: {n['items'][:3]}"
-            # broadcasts row exists with kind=campaign_live
-            bs = requests.get(f"{API}/admin/broadcasts", headers=admin_headers).json()
-            assert any(b.get("kind") == "campaign_live" and b.get("campaign_id") == cid for b in bs)
         finally:
             requests.delete(f"{API}/campaigns/{cid}", headers=admin_headers)
 
@@ -768,16 +862,18 @@ class TestAdminKyc:
         tok = v.json()["token"]; uid = v.json()["user"]["id"]
         h = {"Authorization": f"Bearer {tok}"}
         requests.put(f"{API}/profile/kyc", json={
-            "pan": "KKKPZ1234K", "aadhaar": "999988887777",
-            "bank_account": "5555", "ifsc": "HDFC0000123",
+            "pan": _rand_pan(), "aadhaar": "999988887777",
+            "bank_account": "5555555555", "ifsc": "HDFC0000123",
             "account_holder": "KYC User", "upi": "kyc@ybl"}, headers=h)
-        # appears in pending list
-        pending = requests.get(f"{API}/admin/kyc", params={"status": "pending"}, headers=admin_headers).json()
-        assert any(u["id"] == uid for u in pending)
+        # Phase 3: auto-verified on submit → appears in verified list
+        verified = requests.get(f"{API}/admin/kyc", params={"status": "verified"}, headers=admin_headers).json()
+        assert any(u["id"] == uid for u in verified)
+        me0 = requests.get(f"{API}/auth/me", headers=h).json()
+        assert me0["kyc"]["status"] == "verified"
         # unknown status rejected
         bad = requests.patch(f"{API}/admin/kyc/{uid}", json={"status": "bogus"}, headers=admin_headers)
         assert bad.status_code == 400
-        # verify
+        # verify → still ok (idempotent)
         v1 = requests.patch(f"{API}/admin/kyc/{uid}", json={"status": "verified", "note": "ok"}, headers=admin_headers)
         assert v1.status_code == 200 and v1.json()["status"] == "verified"
         # confirm via /auth/me
@@ -984,3 +1080,139 @@ class TestInvalidToken:
     def test_invalid_token_401(self):
         r = requests.get(f"{API}/auth/me", headers={"Authorization": "Bearer notavalidtoken"})
         assert r.status_code in (401, 403)
+
+
+
+# =====================================================================
+# PHASE 3: Security (login password change, transaction PIN, forgot email)
+# =====================================================================
+def _mk_verified_customer(pw="Passw0rd!", mobile="9997776655", dob=None):
+    email = f"test_sec_{uuid.uuid4().hex[:8]}@example.com"
+    requests.post(f"{API}/auth/register", json={
+        "name": "Sec User", "email": email, "mobile": mobile, "password": pw})
+    code = _grep_otp(email, "signup", wait=5)
+    assert code, f"OTP for {email} not found"
+    v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+    tok = v.json()["token"]; uid = v.json()["user"]["id"]
+    h = {"Authorization": f"Bearer {tok}"}
+    if dob is not None:
+        requests.put(f"{API}/profile", json={"dob": dob}, headers=h)
+    return {"email": email, "password": pw, "id": uid, "mobile": mobile, "h": h}
+
+
+class TestSecurityChangePassword:
+    def test_change_password_wrong_current_400(self):
+        u = _mk_verified_customer()
+        r = requests.post(f"{API}/security/change-password",
+                          json={"current_password": "wrong", "new_password": "NewPass!23"},
+                          headers=u["h"])
+        assert r.status_code == 400
+        assert "incorrect" in r.json()["detail"].lower()
+
+    def test_change_password_success_then_login(self):
+        u = _mk_verified_customer()
+        r = requests.post(f"{API}/security/change-password",
+                          json={"current_password": u["password"], "new_password": "NewPass!23"},
+                          headers=u["h"])
+        assert r.status_code == 200
+        # old password no longer works
+        old = requests.post(f"{API}/auth/login",
+                            json={"email": u["email"], "password": u["password"], "portal": "customer"})
+        assert old.status_code == 401
+        # new works
+        new = requests.post(f"{API}/auth/login",
+                            json={"email": u["email"], "password": "NewPass!23", "portal": "customer"})
+        assert new.status_code == 200
+
+
+class TestTransactionPassword:
+    def test_status_and_set_and_reset_via_otp(self):
+        u = _mk_verified_customer()
+        h = u["h"]
+        # status: no pin yet
+        s = requests.get(f"{API}/security/status", headers=h).json()
+        assert s["has_txn_password"] is False
+        assert "logs" in s
+        # bad PIN format
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"login_password": u["password"], "new_password": "12"}, headers=h)
+        assert r.status_code == 400 and "4" in r.json()["detail"]
+        # PIN cannot equal login password
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"login_password": u["password"], "new_password": u["password"]}, headers=h)
+        assert r.status_code == 400
+        # wrong login password
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"login_password": "wrong", "new_password": "4321"}, headers=h)
+        assert r.status_code == 400 and "Login password" in r.json()["detail"]
+        # success set
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"login_password": u["password"], "new_password": "4321"}, headers=h)
+        assert r.status_code == 200 and r.json()["has_txn_password"] is True
+        # status shows set + logs contain event
+        s2 = requests.get(f"{API}/security/status", headers=h).json()
+        assert s2["has_txn_password"] is True
+        assert any(l["event"] == "transaction_password_set" for l in s2["logs"])
+        # Reset requires OTP now
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"new_password": "9999"}, headers=h)
+        assert r.status_code == 400 and "OTP" in r.json()["detail"]
+        # request OTP
+        o = requests.post(f"{API}/security/transaction-password/otp", headers=h)
+        assert o.status_code == 200
+        code = _grep_otp(u["email"], "txn", wait=5)
+        assert code, "txn OTP not logged"
+        # wrong OTP
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"otp": "000000", "new_password": "9999"}, headers=h)
+        assert r.status_code == 400
+        # correct OTP resets
+        r = requests.post(f"{API}/security/transaction-password",
+                          json={"otp": code, "new_password": "9999"}, headers=h)
+        assert r.status_code == 200
+
+
+class TestForgotEmail:
+    def test_recover_email_by_pan(self, admin_headers):
+        # Create verified customer with unique mobile + KYC (PAN in kyc)
+        pw = "Passw0rd!"
+        mobile = f"90{uuid.uuid4().int % 100000000:08d}"
+        email = f"test_fe_{uuid.uuid4().hex[:8]}@example.com"
+        requests.post(f"{API}/auth/register", json={
+            "name": "FE User", "email": email, "mobile": mobile, "password": pw})
+        code = _grep_otp(email, "signup", wait=5)
+        v = requests.post(f"{API}/auth/verify-otp", json={"email": email, "code": code})
+        h = {"Authorization": f"Bearer {v.json()['token']}"}
+        pan = f"FE{uuid.uuid4().hex[:3].upper()}1234K"
+        # Ensure PAN matches format ^[A-Z]{5}\d{4}[A-Z]$
+        pan = re.sub(r"[^A-Z]", "X", pan[:5]) + "1234K"
+        requests.put(f"{API}/profile/kyc", json={
+            "pan": pan, "bank_account": "1234567890", "ifsc": "HDFC0000123",
+            "account_holder": "FE User", "upi": "fe@ybl"}, headers=h)
+        requests.put(f"{API}/profile", json={"dob": "1990-01-15"}, headers=h)
+
+        # Correct PAN → masked email returned
+        r = requests.post(f"{API}/auth/recover-email",
+                          json={"mobile": mobile, "pan": pan})
+        assert r.status_code == 200, r.text
+        masked = r.json().get("masked_email", "")
+        assert "@example.com" in masked and "*" in masked
+        # Correct DOB → also works
+        r2 = requests.post(f"{API}/auth/recover-email",
+                           json={"mobile": mobile, "dob": "1990-01-15"})
+        assert r2.status_code == 200
+        # Wrong PAN → 400
+        r3 = requests.post(f"{API}/auth/recover-email",
+                           json={"mobile": mobile, "pan": "ZZZZZ9999Z"})
+        assert r3.status_code == 400 and "match" in r3.json()["detail"].lower()
+        # Bad mobile format
+        r4 = requests.post(f"{API}/auth/recover-email",
+                           json={"mobile": "123", "pan": pan})
+        assert r4.status_code == 400
+
+    def test_recover_email_requires_pan_or_dob(self):
+        # neither PAN nor DOB → 400 "Details do not match" (use unique mobile to avoid 429 lockout)
+        mobile = f"98{uuid.uuid4().int % 100000000:08d}"
+        r = requests.post(f"{API}/auth/recover-email",
+                          json={"mobile": mobile})
+        assert r.status_code == 400

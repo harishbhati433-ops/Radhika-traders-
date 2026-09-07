@@ -12,7 +12,7 @@ export function NotificationBell() {
   const nav = useNavigate();
 
   const load = () => api.get("/notifications").then(({ data }) => setData(data)).catch(() => {});
-  useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, []);
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, []);
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", close);

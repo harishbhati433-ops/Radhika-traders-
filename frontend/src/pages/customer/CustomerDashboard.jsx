@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useLivePoll } from "../../lib/useLivePoll";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { Leaderboard } from "../../components/Leaderboard";
@@ -26,7 +27,7 @@ export default function CustomerDashboard() {
   const [wallet, setWallet] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
 
-  useEffect(() => {
+  useLivePoll(() => {
     api.get("/wallet").then(({ data }) => setWallet(data));
     api.get("/campaigns").then(({ data }) => setCampaigns(data.slice(0, 4)));
   }, []);

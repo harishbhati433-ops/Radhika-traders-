@@ -4,6 +4,7 @@ import { PublicLayout } from "../components/PublicLayout";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShareButtons } from "../components/ShareButtons";
 import api, { fileUrl } from "../lib/api";
+import { useLivePoll } from "../lib/useLivePoll";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Copy, ArrowLeft, TrendingUp, Wallet, FileText, ListChecks, AlertTriangle, Calendar, MousePointerClick } from "lucide-react";
@@ -26,7 +27,7 @@ export default function CampaignDetail() {
   const [notFound, setNotFound] = useState(false);
   const [clicks, setClicks] = useState(null);
 
-  useEffect(() => {
+  useLivePoll(() => {
     api.get(`/campaigns/slug/${slug}`).then(({ data }) => setC(data)).catch(() => setNotFound(true));
   }, [slug]);
 
