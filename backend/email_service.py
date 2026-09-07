@@ -110,34 +110,25 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
 
 def _wrap(title: str, inner: str) -> str:
     return (
-        '<table role="presentation" width="100%" style="background:#f8fafc;padding:24px 0">'
-        '<tr><td align="center">'
-        '<table role="presentation" width="480" style="background:#ffffff;border-radius:12px;'
-        'border:1px solid #e2e8f0;font-family:Arial,Helvetica,sans-serif;overflow:hidden">'
-        '<tr><td style="background:#991B1B;padding:20px 28px">'
-        '<span style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.5px">RADHIKA TRADERS</span>'
-        '<div style="color:#F59E0B;font-size:11px;letter-spacing:1px;margin-top:2px">TRUSTED PARTNER FOR FINANCIAL GROWTH</div>'
-        '</td></tr>'
-        f'<tr><td style="padding:28px">{inner}</td></tr>'
-        '<tr><td style="padding:16px 28px;background:#0B0F17;color:#94a3b8;font-size:11px">'
-        'Sent by Radhika Traders. We never ask for your password or card details by email.'
-        '</td></tr>'
-        '</table></td></tr></table>'
+        '<div style="max-width:560px;margin:0 auto;padding:24px 20px;font-family:Arial,Helvetica,sans-serif;color:#0B0F17">'
+        '<div style="font-size:16px;font-weight:bold;color:#991B1B;margin-bottom:18px">Radhika Traders</div>'
+        f'{inner}'
+        '<p style="margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">'
+        'Radhika Traders, Agar, Madhya Pradesh. We never ask for your password, OTP or card details by email.</p>'
+        '</div>'
     )
 
 
 async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | None:
     reason = "verify your account" if purpose == "signup" else "reset your password"
-    subject = f"Your Radhika Traders verification code: {code}"
+    subject = f"{code} is your Radhika Traders verification code"
     inner = (
         f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "there")},</p>'
-        f'<p style="font-size:14px;color:#334155">Use the code below to {reason}. '
-        f'It is valid for 10 minutes.</p>'
-        f'<div style="margin:24px 0;text-align:center">'
-        f'<span style="display:inline-block;background:#fef2f2;border:1px dashed #991B1B;'
-        f'border-radius:10px;padding:16px 28px;font-size:32px;font-weight:bold;letter-spacing:8px;'
-        f'color:#991B1B">{escape(code)}</span></div>'
-        f'<p style="font-size:12px;color:#94a3b8">If you did not request this, you can safely ignore this email.</p>'
+        f'<p style="font-size:14px;color:#334155">You requested to {reason}. Your one-time code is:</p>'
+        f'<div style="margin:20px 0"><span style="font-size:30px;font-weight:bold;letter-spacing:6px;color:#0B0F17">{escape(code)}</span></div>'
+        f'<p style="font-size:14px;color:#334155">This code is valid for 10 minutes. Please do not share it with anyone.</p>'
+        f'<p style="font-size:12px;color:#94a3b8">If you did not request this, you can ignore this email.</p>'
+        f'<p style="font-size:13px;color:#334155;margin-top:20px">Regards,<br>Harish Bhati<br>Radhika Traders</p>'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
@@ -147,66 +138,52 @@ async def send_payment_email(to: str, name: str, amount: float, method: str, det
         return None
     amt = f"₹{amount:g}"
     date = datetime.now(timezone.utc).strftime("%d %b %Y")
-    subject = f"🎉 Payment Successful – Your {amt} Payout Has Been Processed"
-    rows = [("💰 Payout Amount", amt), ("💳 Payment Method", method), ("✅ Status", "Paid Successfully"), ("📅 Payment Date", date), ("Paid to", details)]
+    subject = f"Payment of {amt} sent to your {method} account"
+    rows = [("Amount", amt), ("Payment method", method), ("Status", "Paid"), ("Date", date), ("Paid to", details)]
     if utr:
-        rows.append(("UTR / Ref No.", utr))
+        rows.append(("UTR / Reference No.", utr))
     table = "".join(
         f'<tr><td style="padding:8px 0;color:#64748b;font-size:13px">{escape(k)}</td>'
         f'<td style="padding:8px 0;text-align:right;font-weight:bold;color:#0B0F17;font-size:13px">{escape(str(v))}</td></tr>'
         for k, v in rows)
-    proof = (f'<p style="margin:20px 0 0;text-align:center"><a href="{escape(proof_link)}" '
-             f'style="display:inline-block;background:#991B1B;color:#fff;padding:12px 26px;border-radius:999px;'
-             f'text-decoration:none;font-weight:bold;font-size:13px">View Payment Proof</a></p>') if proof_link else ""
+    proof = (f'<p style="margin:18px 0 0"><a href="{escape(proof_link)}" style="color:#991B1B;font-weight:bold;font-size:13px">View payment proof</a></p>') if proof_link else ""
     inner = (
-        f'<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:22px;text-align:center">'
-        f'<div style="font-size:26px;font-weight:800;color:#047857">💚 {amt} PAID SUCCESSFULLY ✓</div>'
-        f'<div style="font-size:13px;color:#065f46;margin-top:4px;font-weight:bold">Payment Successful</div></div>'
-        f'<p style="font-size:15px;color:#0B0F17;margin-top:22px">Hi {escape(name or "Partner")}, 👋</p>'
-        f'<p style="font-size:14px;color:#334155">🎉 Good News! Your payout has been successfully processed. '
-        f'Payment has been sent successfully to your registered {escape(method)} account.</p>'
-        f'<div style="font-size:12px;font-weight:bold;color:#991B1B;letter-spacing:1px;margin-top:18px">PAYMENT DETAILS</div>'
-        f'<table width="100%" style="border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;margin:8px 0">{table}</table>'
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")},</p>'
+        f'<p style="font-size:14px;color:#334155">Your withdrawal of <b>{amt}</b> has been paid to your registered {escape(method)} account. Details below:</p>'
+        f'<table width="100%" style="border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;margin:12px 0">{table}</table>'
         f'{proof}'
-        f'<p style="font-size:12px;color:#64748b;margin-top:18px">Please allow a few minutes for the amount to reflect in your account.</p>'
-        f'<div style="margin-top:24px;padding-top:16px;border-top:1px dashed #e2e8f0;text-align:center">'
-        f'<div style="font-size:14px;font-weight:bold;color:#047857">💚 Thank You for Partnering With Us</div>'
-        f'<div style="font-size:12px;color:#64748b;margin-top:4px">We appreciate your continued trust and support.</div>'
-        f'<div style="font-size:13px;font-weight:bold;color:#0B0F17;margin-top:14px">Radhika Traders</div>'
-        f'<div style="font-size:11px;color:#F59E0B;letter-spacing:1px">TRUSTED PARTNER FOR FINANCIAL GROWTH</div>'
-        f'<div style="font-size:12px;color:#334155;margin-top:8px">Harish Bhati<br><span style="color:#94a3b8">Founder | Radhika Traders</span></div></div>'
+        f'<p style="font-size:13px;color:#64748b;margin-top:16px">It may take a few minutes to reflect in your account. Reply to this email if anything looks incorrect.</p>'
+        f'<p style="font-size:13px;color:#334155;margin-top:20px">Thank you for partnering with us.<br>Harish Bhati<br>Founder, Radhika Traders</p>'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
 def _campaign_block(c: dict, link: str) -> str:
-    rows = [("💰 Payout", f"₹{c.get('payout_amount', 0):g} ({c.get('payout_type', '')})"), ("🏢 Company", c.get("company", "")),
-            ("📂 Category", c.get("category", ""))]
+    rows = [("Payout", f"₹{c.get('payout_amount', 0):g} ({c.get('payout_type', '')})"), ("Company", c.get("company", "")),
+            ("Category", c.get("category", ""))]
     if c.get("fund_add"):
-        rows.append(("💳 Fund Add", str(c["fund_add"])))
+        rows.append(("Fund add", str(c["fund_add"])))
     if c.get("requirements"):
-        rows.append(("📈 Requirement", str(c["requirements"])[:200]))
+        rows.append(("Requirement", str(c["requirements"])[:200]))
     table = "".join(f'<tr><td style="padding:6px 0;color:#64748b;font-size:13px">{escape(k)}</td>'
                     f'<td style="padding:6px 0;text-align:right;font-weight:bold;color:#0B0F17;font-size:13px">{escape(str(v))}</td></tr>' for k, v in rows if v)
-    return (f'<div style="border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:16px;margin-top:16px">'
-            f'<div style="font-size:18px;font-weight:800;color:#0B0F17">{escape(c.get("offer_name", ""))}</div>'
+    return (f'<div style="border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-top:16px">'
+            f'<div style="font-size:17px;font-weight:bold;color:#0B0F17">{escape(c.get("offer_name", ""))}</div>'
             f'<table width="100%" style="margin-top:8px">{table}</table>'
-            f'<p style="margin:16px 0 0;text-align:center"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#fff;'
-            f'padding:12px 26px;border-radius:999px;text-decoration:none;font-weight:bold;font-size:13px">👉 View Campaign</a></p></div>')
+            f'<p style="margin:14px 0 0"><a href="{escape(link)}" style="color:#991B1B;font-weight:bold;font-size:13px">Open campaign and get your referral link</a></p></div>')
 
 
 def _signature() -> str:
-    return ('<div style="margin-top:22px;font-size:12px;color:#334155"><b>Radhika Traders | Harish Bhati</b><br>'
-            '<span style="color:#F59E0B">Trusted Partner for Financial Growth</span></div>')
+    return ('<p style="margin-top:22px;font-size:13px;color:#334155">Regards,<br>Harish Bhati<br>Radhika Traders</p>')
 
 
 async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
     if not to:
         return None
-    subject = "🎉 Good News! New Campaign is LIVE – Grab the Opportunity"
-    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")}, 👋</p>'
-             f'<p style="font-size:14px;color:#334155">🎉 <b>Good News! New Campaign is LIVE!</b><br>'
-             f'<b>{escape(c.get("offer_name", ""))}</b> is now LIVE. 🔥 Grab the campaign and complete maximum eligible account openings.</p>'
+    subject = f"{c.get('offer_name', 'New campaign')} is now live for you"
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")},</p>'
+             f'<p style="font-size:14px;color:#334155">A new campaign, <b>{escape(c.get("offer_name", ""))}</b>, is now live on your dashboard. '
+             f'You can start sharing your referral link for it today.</p>'
              f'{_campaign_block(c, link)}{_signature()}')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
@@ -215,7 +192,7 @@ async def send_broadcast_email(to: str, name: str, subject: str, message: str, c
     if not to:
         return None
     body = "".join(f'<p style="font-size:14px;color:#334155;margin:0 0 10px">{escape(p)}</p>' for p in message.split("\n") if p.strip())
-    inner = f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")}, 👋</p>{body}'
+    inner = f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "Partner")},</p>{body}'
     if c:
         inner += _campaign_block(c, link)
     inner += _signature()

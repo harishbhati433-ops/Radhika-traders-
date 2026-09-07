@@ -138,3 +138,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Referral limits + Withdrawal schedule
 - settings.referral_daily_limit (2) / referral_monthly_limit (10), 0=unlimited. Enforced in POST /auth/register (counts verified users with referred_by_code in IST day/month window; invalid code -> 400). GET /my-referrals returns today/month/limits. Admin ReferralLimitSetting.jsx (referral-daily-*, referral-monthly-*). ReferEarnCard shows usage chips (refer-limits).
 - settings.withdrawal_days [0-6, 0=Sun] / withdrawal_dates [1-31]; empty = no restriction. withdrawals_open(s) -> (open, reason) using IST; /settings/public + PUT /admin/settings return withdrawals_open & withdrawals_closed_reason; POST /withdrawals 403 with reason. WithdrawalToggleSetting.jsx: master switch + weekday/date chips + Save schedule (withdrawal-day-{i}, withdrawal-date-{d}, withdrawal-schedule-save). Customer page uses withdrawals_open.
+
+## 2026-06 — Email deliverability (Primary tab)
+- email_service.py: removed promo signals (emoji subjects, "Good News/Grab", colored hero blocks, big buttons). Plain personal layout, personal sign-off (Harish Bhati), OTP subject "<code> is your Radhika Traders verification code". EMAIL_FROM_NAME="Harish Bhati - Radhika Traders". Test send -> 202.
