@@ -42,6 +42,7 @@ export default function CampaignDetail() {
   const refCode = user?.referral_code;
   const primaryLink = (c.affiliate_links || []).find((l) => l.is_primary && l.is_active) || (c.affiliate_links || []).find((l) => l.is_active);
   const referralLink = refCode ? `${origin}/api/go/${c.slug}?ref=${refCode}` : `${origin}/campaign/${c.slug}`;
+  const applyLink = `${origin}/api/go/${c.slug}${refCode ? `?ref=${refCode}` : ""}`;
   const myClicks = clicks?.by_campaign?.[c.id] || 0;
 
   const copyRef = () => { navigator.clipboard.writeText(referralLink); toast.success("Referral link copied!"); };
@@ -143,11 +144,17 @@ export default function CampaignDetail() {
                 </div>
               )}
 
-              {primaryLink && (
-                <a href={primaryLink.url} target="_blank" rel="noreferrer" data-testid="campaign-apply-btn"
+              {primaryLink && c.status === "live" && (
+                <a href={applyLink} target="_blank" rel="noreferrer" data-testid="campaign-apply-btn"
                   className="rt-gradient-btn mt-5 flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-bold">
                   Join / Apply Now
                 </a>
+              )}
+              {primaryLink && c.status !== "live" && (
+                <button disabled data-testid="campaign-apply-disabled"
+                  className="mt-5 flex w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-5 py-3 text-sm font-bold text-slate-500">
+                  {c.status === "paused" ? "Offer Currently Inactive" : "Offer Ended"}
+                </button>
               )}
             </div>
           </div>

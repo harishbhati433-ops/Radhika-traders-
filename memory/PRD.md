@@ -88,3 +88,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Login brute-force lockout
 - POST /api/auth/login: per ip:email counter in db.login_attempts (unique index on identifier). 5 failed -> 429, locked 30 min. Correct password rejected while locked. Counter cleared on success / after lock expiry. security_logs event "login_locked". Verified via curl (401x4 with attempts-left msg -> 429 -> unlock -> 200).
+
+## 2026-06 — Join/Apply fix + My Leads details
+- CampaignDetail "Join / Apply Now" now routes via /api/go/{slug}?ref= (was direct partner URL, bypassing lead form + offer-stop check). Disabled grey button when paused/closed.
+- GET /my-leads returns `details` [{key,label,value}] with all form fields (labels from campaign lead_fields); MyLeads.jsx shows them per lead, mobile is tel: link.
+- Verified: paused -> /api/go 302 to /offer-ended, /api/join 404; live -> /join form. UI screenshot OK.

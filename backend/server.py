@@ -655,10 +655,14 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
 @api.get("/my-leads")
 async def my_leads(user: dict = Depends(get_current_user)):
     items = await db.leads.find({"partner_id": user["id"]}).sort("created_at", -1).to_list(2000)
+    cids = list({l["campaign_id"] for l in items if l.get("campaign_id")})
+    camps = await db.campaigns.find({"_id": {"$in": [ObjectId(i) for i in cids if ObjectId.is_valid(i)]}}, {"lead_fields": 1}).to_list(len(cids) or 1)
+    labels = {str(c["_id"]): {f["key"]: f.get("label", f["key"]) for f in c.get("lead_fields", [])} for c in camps}
     out = []
     for l in items:
         o = lead_out(l)
-        o["data"] = {k: v for k, v in (l.get("data") or {}).items() if k in ("name", "mobile", "email")}
+        lm = labels.get(l.get("campaign_id"), {})
+        o["details"] = [{"key": k, "label": lm.get(k, k.replace("_", " ").title()), "value": v} for k, v in (l.get("data") or {}).items() if v]
         out.append(o)
     return out
 
