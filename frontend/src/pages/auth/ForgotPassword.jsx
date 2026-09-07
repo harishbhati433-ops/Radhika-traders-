@@ -6,6 +6,7 @@ import { Label } from "../../components/ui/label";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export default function ForgotPassword() {
   const [step, setStep] = useState(1);
@@ -51,7 +52,7 @@ export default function ForgotPassword() {
       ) : (
         <form onSubmit={reset} className="space-y-4">
           <div><Label>OTP Code</Label><Input data-testid="reset-otp" required value={code} onChange={(e) => setCode(e.target.value)} maxLength={6} className="mt-1.5 text-center text-xl font-bold tracking-[0.4em]" placeholder="______" /></div>
-          <div><Label>New Password</Label><Input data-testid="reset-password" type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1.5" placeholder="New password" /></div>
+          <div><Label>New Password</Label><PasswordInput data-testid="reset-password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1.5" placeholder="New password" /></div>
           <button type="submit" data-testid="reset-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} Reset Password
           </button>

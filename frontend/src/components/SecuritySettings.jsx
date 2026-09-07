@@ -4,6 +4,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
 import { KeyRound, Lock, Loader2, ShieldCheck } from "lucide-react";
+import { PasswordInput } from "./PasswordInput";
 
 export function SecuritySettings({ showTxn = true }) {
   const [st, setSt] = useState({ has_txn_password: false, logs: [] });
@@ -36,8 +37,8 @@ export function SecuritySettings({ showTxn = true }) {
       <form onSubmit={changeLogin} className="rounded-2xl border border-slate-200 bg-white p-6">
         <div className="flex items-center gap-2 font-display text-lg font-bold text-slate-900"><Lock className="h-5 w-5 text-red-600" /> Change Login Password</div>
         <div className="mt-4 space-y-3">
-          <div><Label>Current password</Label><Input data-testid="sec-current-password" type="password" required value={lp.current_password} onChange={(e) => setLp({ ...lp, current_password: e.target.value })} className="mt-1.5" /></div>
-          <div><Label>New password (min 8 chars)</Label><Input data-testid="sec-new-password" type="password" required minLength={8} value={lp.new_password} onChange={(e) => setLp({ ...lp, new_password: e.target.value })} className="mt-1.5" /></div>
+          <div><Label>Current password</Label><PasswordInput data-testid="sec-current-password" required value={lp.current_password} onChange={(e) => setLp({ ...lp, current_password: e.target.value })} className="mt-1.5" /></div>
+          <div><Label>New password (min 8 chars)</Label><PasswordInput data-testid="sec-new-password" required minLength={8} value={lp.new_password} onChange={(e) => setLp({ ...lp, new_password: e.target.value })} className="mt-1.5" /></div>
         </div>
         <button type="submit" disabled={busy === "lp"} data-testid="sec-change-password" className="rt-gradient-btn mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold disabled:opacity-60">{busy === "lp" && <Loader2 className="h-4 w-4 animate-spin" />} Update Password</button>
       </form>
@@ -55,9 +56,9 @@ export function SecuritySettings({ showTxn = true }) {
               <button type="button" onClick={sendOtp} disabled={busy === "otp"} data-testid="sec-txn-send-otp" className="mt-6 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700">{otpSent ? "Resend OTP" : "Send OTP"}</button>
             </div>
           ) : (
-            <div><Label>Login password</Label><Input data-testid="sec-txn-login-password" type="password" required value={tp.login_password} onChange={(e) => setTp({ ...tp, login_password: e.target.value })} className="mt-1.5" /></div>
+            <div><Label>Login password</Label><PasswordInput data-testid="sec-txn-login-password" required value={tp.login_password} onChange={(e) => setTp({ ...tp, login_password: e.target.value })} className="mt-1.5" /></div>
           )}
-          <div><Label>New transaction PIN (4–6 digits)</Label><Input data-testid="sec-txn-new" type="password" inputMode="numeric" pattern="\d{4,6}" required value={tp.new_password} onChange={(e) => setTp({ ...tp, new_password: e.target.value.replace(/\D/g, "").slice(0, 6) })} className="mt-1.5 font-mono tracking-widest" /></div>
+          <div><Label>New transaction PIN (4–6 digits)</Label><PasswordInput data-testid="sec-txn-new" inputMode="numeric" pattern="\d{4,6}" required value={tp.new_password} onChange={(e) => setTp({ ...tp, new_password: e.target.value.replace(/\D/g, "").slice(0, 6) })} className="mt-1.5 font-mono tracking-widest" /></div>
         </div>
         <button type="submit" disabled={busy === "tp"} data-testid="sec-txn-save" className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-bold text-slate-950 disabled:opacity-60">{busy === "tp" && <Loader2 className="h-4 w-4 animate-spin" />} {st.has_txn_password ? "Reset Transaction Password" : "Set Transaction Password"}</button>
       </form>}

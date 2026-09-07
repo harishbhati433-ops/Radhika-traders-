@@ -8,6 +8,10 @@ from fastapi import HTTPException, Request
 from bson import ObjectId
 
 JWT_ALGORITHM = "HS256"
+ACCOUNT_STATUS_MESSAGES = {
+    "deactivated": "Your account is temporarily deactivated by Radhika Traders. Please contact support on WhatsApp +91 63765 41191.",
+    "disabled": "Your account has been disabled due to a policy violation. Please contact Radhika Traders support.",
+}
 
 
 def get_jwt_secret() -> str:
@@ -68,6 +72,11 @@ async def get_current_user_from_db(request: Request, db) -> dict:
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        st = user.get("account_status", "active")
+        if st == "deleted":
+            raise HTTPException(status_code=401, detail="User not found")
+        if st in ("deactivated", "disabled"):
+            raise HTTPException(status_code=403, detail=ACCOUNT_STATUS_MESSAGES[st])
         user["id"] = str(user["_id"])
         user.pop("_id", None)
         user.pop("password_hash", None)

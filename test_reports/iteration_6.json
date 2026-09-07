@@ -1,0 +1,50 @@
+{
+  "summary": "Tested Phase 4 (signup OTP + duplicate reg block + admin account controls + disabled-partner referral attribution) on backend + frontend. Backend: 5/11 new pytest cases pass. The core account-status feature is UNIMPLEMENTED on backend — the PATCH /api/admin/customers/{uid}/status endpoint does not exist (returns 404), breaking Pause / Disable / Delete / Delete Permanently / Activate end-to-end. Frontend UI (AccountStatusControl + AdminCustomers + PasswordInput) is fully wired with correct data-testids and its client-side 'reason required' validation works — but every action's API call fails with 404. Signup OTP flow, duplicate-registration blocking, gmail-alias delivery, unverified-user hiding, and all 3 password toggles are working correctly.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/admin/customers/{uid}/status", "issue": "Route is NOT DEFINED in /app/backend/server.py. Direct curl returns 404. Frontend AccountStatusControl.jsx line 33 calls it for every Pause/Disable/Delete/Purge/Activate action → all fail. There is also no purge (permanent delete) endpoint, no logic to set account_status/account_status_reason on the user doc, no cascade-purge of wallet/withdrawals for status='purge'. public_user() already exposes account_status + account_status_reason, so seeing them is fine, but nothing writes them.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/auth/register", "issue": "When Emergent email provider returns 429 (Too Many Requests) on ~2-3rd retry, backend returns 502 to the client (from `if not sent` branch line ~383). Not a bug per se, but parallel/rapid signups will fail. Consider queuing or throttling, or return 200 with a 'delayed' state and re-request via /auth/resend-otp."},
+      {"endpoint": "POST /api/auth/register (mobile dup check)", "issue": "Duplicate-mobile check uses regex suffix match on stored mobile field — works, but a stored mobile like '99999999999' (11 digits from a broken older row) would false-positive against '9999999999'. Consider normalising all stored mobiles to 10 digits and using equality."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminCustomers action row", "issue": "All Pause/Disable/Delete/Activate/Purge buttons render correctly with correct data-testids, and 'Please write a reason' toast fires client-side when reason is empty, BUT confirming with a reason bubbles up backend 404 'Not Found' from missing endpoint (see backend critical). No UI defect — pure backend gap.", "selector": "[data-testid^='acct-']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Admin Customers → Pause/Disable/Delete/Purge/Activate → confirm", "issue": "PATCH /api/admin/customers/{uid}/status returns 404; toast shows the backend 404 error. Cannot verify any customer status transitions end-to-end from UI until backend endpoint is implemented.", "affected_selectors": ["acct-deactivated-{id}", "acct-disabled-{id}", "acct-deleted-{id}", "acct-active-{id}", "acct-purge-{id}", "acct-confirm"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_account_controls.py",
+    "/app/test_reports/pytest/phase4_results.xml"
+  ],
+  "action_items": [
+    "IMPLEMENT PATCH /api/admin/customers/{uid}/status in /app/backend/server.py (admin only). Body: {status, reason}. status ∈ {'active','deactivated','disabled','deleted','purge'}. Rules: (a) reason required for any status != 'active' → 400 'Please write a reason' if empty/whitespace, (b) 'purge' must db.users.delete_one + delete related transactions/withdrawals/notifications/leads.partner_id references, (c) other statuses set users.account_status + users.account_status_reason + users.account_status_updated_at, (d) return {message: '<status> applied'}.",
+    "Ensure /admin/customers already handles include_deleted=true (it does — line 1462-1465) and that deleted users are hidden by default (they are).",
+    "auth_utils.get_current_user_from_db already blocks deactivated/disabled with 403 and deleted with 401 → these will start working automatically once the write endpoint exists.",
+    "Verify /api/auth/login already respects account_status (it does — server.py 568-572) once the field is actually set by the new endpoint.",
+    "Referral attribution on /api/leads/{slug} for disabled/deleted partners already correctly returns partner=None (server.py 800) → no code change needed; retest once the disable action works."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1707 lines — split into routers (auth, admin_users, admin_customers, leads, campaigns, wallet, security) urgently.",
+    "auth_utils.ACCOUNT_STATUS_MESSAGES is missing an entry for status='deleted' — token check returns 401 'User not found' which is fine, but keeping a symmetric map would be cleaner.",
+    "public_user() returns account_status_reason unconditionally — expose only to admins? Currently a customer's own /auth/me will leak the admin-set reason to the customer (e.g. 'suspected fraud'). Consider stripping account_status_reason from the customer's own view.",
+    "Frontend AccountStatusControl 'purge' uses window.confirm — fine for MVP but not accessible. Consider a typed-confirm modal like GitHub delete-repo.",
+    "AccountStatusControl.jsx line 48: available buttons for status=='disabled' or 'deactivated' include Delete but not the disabled option again — consider showing all 3 alternate options so admin can flip Pause → Disable without going via Activate.",
+    "server.py line 337 duplicate-mobile check regex `{mobile}$` is not anchored at start and doesn't `$options: i` — with the current 10-digit normaliser it's OK, but brittle if mobile normaliser ever changes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_controls.py (new — 11 pytest cases; 5 pass, 6 blocked by missing backend endpoint)"
+  ],
+  "success_rate": {"backend": "45% (5/11 new tests, remaining 6 blocked by 1 missing endpoint)", "frontend": "100% on password toggles + reason-required client validation + testid coverage; end-to-end status transitions blocked by backend"},
+  "test_credentials": "Admin: bhatiharish276@gmail.com / Radhika@2023. Customer: testcust@example.com / Test@1234 (kept intact).",
+  "seed_data_creation": "5 new verified customers (harishbhati4581+qa<hex>@gmail.com) created during test runs. All are visible in /admin/customers. Recommend cleanup: mongosh --eval 'db.users.deleteMany({email:/harishbhati4581\\+qa/})'. Also 3 unverified rows with the same email prefix from the 429/502 retries — safe to leave (they never verify).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The 5 passing tests in test_account_controls.py cover: OTP sending + verify with gmail alias (TestSignupOtp), duplicate email/mobile blocking incl. +91-space formats (TestDuplicateRegistration.test_same_email_blocked, test_same_mobile_blocked_various_formats, test_invalid_mobile_lt_10_digits), unverified users NOT appearing in /admin/customers (TestUnverifiedHidden). The 6 failing tests will all pass once the PATCH /api/admin/customers/{uid}/status endpoint is added with purge cascade — no test changes needed. Emergent email provider rate-limits at ~1 req/sec — insert time.sleep(1.0-1.5) between _register_and_verify() calls if you see 502s. Frontend password-toggle testids confirmed working: login-password-toggle, admin-password-toggle, signup-password-toggle. AdminCustomers page renders 105 customers with per-row customer-status-<id> badge + acct-deactivated/acct-disabled/acct-deleted/acct-active/acct-purge buttons + credit-btn + acct-status-modal + acct-reason + acct-confirm + customer-show-deleted checkbox.",
+  "rca of the issue": "ROOT CAUSE: Backend endpoint PATCH /api/admin/customers/{uid}/status is not implemented in /app/backend/server.py despite the frontend AccountStatusControl.jsx (line 33) calling it. Grep confirms no route matches 'customers/{'. Reproduction: `curl -X PATCH https://.../api/admin/customers/xxx/status -H 'Authorization: Bearer <admin>' -d '{...}'` → 404. Mitigation: Main agent must add the endpoint (see action_items #1). Once added, users' account_status will be respected by existing login (server.py:568-572) and by get_current_user_from_db (auth_utils.py:75-79) and by /admin/customers hide/show logic (server.py:1462-1465), and referral attribution for disabled/deleted partners is already correct at server.py:800."
+}

@@ -7,6 +7,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -43,7 +44,7 @@ export default function Login() {
             <Link to="/forgot-password" className="text-xs font-semibold text-red-600 hover:underline" data-testid="login-forgot-link">Forgot Password?</Link>
             <Link to="/forgot-email" className="ml-2 text-xs font-semibold text-slate-500 hover:underline" data-testid="login-forgot-email-link">Forgot Email?</Link>
           </div>
-          <Input id="password" data-testid="login-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="••••••••" />
+          <PasswordInput id="password" data-testid="login-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="••••••••" />
         </div>
         <button type="submit" data-testid="login-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />} Login

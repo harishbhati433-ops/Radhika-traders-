@@ -21,7 +21,7 @@ from bson import ObjectId
 
 from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp,
-    generate_referral_code, get_current_user_from_db,
+    generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs
 from storage_service import init_storage, put_object, get_object, APP_NAME
@@ -78,6 +78,8 @@ def public_user(u: dict) -> dict:
         "role": u.get("role"),
         "email_verified": u.get("email_verified", False),
         "referral_code": u.get("referral_code"),
+        "account_status": u.get("account_status", "active"),
+        "account_status_reason": u.get("account_status_reason", ""),
         "kyc": u.get("kyc", {"status": "not_submitted"}),
         "bank": u.get("bank", {}),
         "created_at": u.get("created_at"),
@@ -318,12 +320,23 @@ class BannerIn(BaseModel):
 
 
 # ----------------------------- Auth -----------------------------
+def _norm_mobile(m: str) -> str:
+    d = re.sub(r"\D", "", m or "")
+    return d[-10:] if len(d) >= 10 else d
+
+
 @api.post("/auth/register")
 async def register(body: RegisterIn):
     email = body.email.lower()
+    mobile = _norm_mobile(body.mobile)
+    if len(mobile) != 10:
+        raise HTTPException(status_code=400, detail="Please enter a valid 10-digit mobile number.")
     existing = await db.users.find_one({"email": email})
-    if existing and existing.get("email_verified"):
-        raise HTTPException(status_code=400, detail="Email already registered. Please login.")
+    if existing and (existing.get("email_verified") or existing.get("account_status") == "deleted"):
+        raise HTTPException(status_code=400, detail="This email is already registered. Please login or use Forgot Password.")
+    mob_owner = await db.users.find_one({"mobile": {"$regex": f"{mobile}$"}, "email": {"$ne": email}, "$or": [{"email_verified": True}, {"account_status": "deleted"}]})
+    if mob_owner:
+        raise HTTPException(status_code=400, detail="This mobile number is already registered with another account. Please login with that account.")
     ref_code = (body.referred_by or "").strip().upper()
     if ref_code:
         referrer = await db.users.find_one({"referral_code": ref_code, "role": "customer"})
@@ -338,7 +351,7 @@ async def register(body: RegisterIn):
     doc = {
         "name": body.name,
         "email": email,
-        "mobile": body.mobile,
+        "mobile": mobile,
         "address": body.address or "",
         "password_hash": hash_password(body.password),
         "role": "customer",
@@ -361,8 +374,13 @@ async def register(body: RegisterIn):
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "used": False, "created_at": now_iso(),
     })
-    await send_otp_email(email, body.name, code, "signup")
-    logger.info(f"[OTP signup] {email} -> {code}")
+    sent = await send_otp_email(email, body.name, code, "signup")
+    logger.info(f"[OTP signup] {email} -> {code} (sent={bool(sent)})")
+    if not sent:
+        if not existing:
+            await db.users.delete_one({"email": email, "email_verified": False})
+        await db.otp_codes.delete_many({"email": email, "purpose": "signup"})
+        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please check the address is correct and try again in a minute.")
     return {"message": "OTP sent to your email", "email": email}
 
 
@@ -506,8 +524,10 @@ async def resend_otp(body: ResendOtpIn):
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "used": False, "created_at": now_iso(),
     })
-    await send_otp_email(email, user.get("name", ""), code, body.purpose)
-    logger.info(f"[OTP {body.purpose}] {email} -> {code}")
+    sent = await send_otp_email(email, user.get("name", ""), code, body.purpose)
+    logger.info(f"[OTP {body.purpose}] {email} -> {code} (sent={bool(sent)})")
+    if not sent:
+        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please try again in a minute.")
     return {"message": "OTP resent"}
 
 
@@ -545,6 +565,11 @@ async def login(body: LoginIn, request: Request):
             raise HTTPException(status_code=429, detail=f"Too many failed login attempts. Account locked for {LOGIN_LOCK_MINUTES} minutes.")
         raise HTTPException(status_code=401, detail=f"Invalid email or password. {left} attempt{'s' if left != 1 else ''} left before lock.")
     await db.login_attempts.delete_one({"identifier": identifier})
+    st = user.get("account_status", "active")
+    if st == "deleted":
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if st in ACCOUNT_STATUS_MESSAGES:
+        raise HTTPException(status_code=403, detail=ACCOUNT_STATUS_MESSAGES[st])
     if body.portal == "admin" and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="This login is for admin only. Please use the customer login.")
     if body.portal != "admin" and user["role"] == "admin":
@@ -595,6 +620,13 @@ async def me(user: dict = Depends(get_current_user)):
 @api.put("/profile")
 async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)):
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "mobile" in upd:
+        upd["mobile"] = _norm_mobile(upd["mobile"])
+        if len(upd["mobile"]) != 10:
+            raise HTTPException(status_code=400, detail="Please enter a valid 10-digit mobile number.")
+        clash = await db.users.find_one({"mobile": {"$regex": f"{upd['mobile']}$"}, "_id": {"$ne": ObjectId(user["id"])}, "email_verified": True})
+        if clash:
+            raise HTTPException(status_code=400, detail="This mobile number is already registered with another account.")
     if upd:
         await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": upd})
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
@@ -720,7 +752,7 @@ async def go_affiliate(slug: str, request: Request, ref: Optional[str] = None):
         return RedirectResponse(url=f"{origin}/offer-ended", status_code=302)
     is_live = c.get("status") == "live" and c.get("offer_enabled", True)
     target = _primary_link(c) if is_live else None
-    partner = await db.users.find_one({"referral_code": ref}) if ref else None
+    partner = await db.users.find_one({"referral_code": ref, "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     await db.clicks.insert_one({
         "campaign_id": str(c["_id"]), "slug": slug, "ref_code": ref or "",
         "user_id": str(partner["_id"]) if partner else None,
@@ -743,7 +775,7 @@ async def join_info(slug: str, ref: Optional[str] = None):
     c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
     if not c or c.get("status") != "live" or not c.get("offer_enabled", True):
         raise HTTPException(status_code=404, detail="Offer not available")
-    partner = await db.users.find_one({"referral_code": (ref or "").upper(), "role": "customer"}) if ref else None
+    partner = await db.users.find_one({"referral_code": (ref or "").upper(), "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     return {"campaign": {"id": str(c["_id"]), "offer_name": c["offer_name"], "company": c.get("company", ""), "logo_url": c.get("logo_url", ""),
                          "payout_amount": c.get("payout_amount", 0), "customer_benefit": c.get("customer_benefit", ""), "slug": slug},
             "fields": [f for f in c.get("lead_fields", []) if f.get("enabled")],
@@ -765,7 +797,7 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
     if data.get("pan") and not re.fullmatch(r"[A-Za-z]{5}\d{4}[A-Za-z]", data["pan"]):
         raise HTTPException(status_code=400, detail="Invalid PAN format")
     ref = (body.ref or "").upper()
-    partner = await db.users.find_one({"referral_code": ref, "role": "customer"}) if ref else None
+    partner = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
            "campaign_link": _primary_link(c) or "", "ref_code": ref, "partner_id": str(partner["_id"]) if partner else None,
            "partner_name": partner.get("name") if partner else "", "data": data, "customer_name": data.get("name", ""),
@@ -1338,7 +1370,7 @@ async def mark_notifications_read(ids: List[str] = [], user: dict = Depends(get_
 
 @api.get("/admin/kyc")
 async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_admin)):
-    q = {"role": "customer"}
+    q = {"role": "customer", "email_verified": True}
     if status:
         q["kyc.status"] = status
     else:
@@ -1427,8 +1459,11 @@ async def admin_delete_notifications(title: str = Query(...), created_at: str = 
 
 # ----------------------------- Admin: customers & credit -----------------------------
 @api.get("/admin/customers")
-async def list_customers(admin: dict = Depends(require_admin)):
-    users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(5000)
+async def list_customers(include_deleted: bool = False, admin: dict = Depends(require_admin)):
+    q = {"role": "customer", "email_verified": True}
+    if not include_deleted:
+        q["account_status"] = {"$ne": "deleted"}
+    users = await db.users.find(q).sort("created_at", -1).to_list(5000)
     ids = [str(u["_id"]) for u in users]
     agg = {i: {"credit": 0.0, "debit": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
     txn_rows = await db.transactions.aggregate([
@@ -1464,6 +1499,39 @@ async def list_customers(admin: dict = Depends(require_admin)):
     return out
 
 
+class AccountStatusIn(BaseModel):
+    status: str  # active | deactivated | disabled | deleted | purge
+    reason: str = ""
+
+
+@api.patch("/admin/customers/{uid}/status")
+async def admin_set_account_status(uid: str, body: AccountStatusIn, request: Request, admin: dict = Depends(require_admin)):
+    if body.status not in ("active", "deactivated", "disabled", "deleted", "purge"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(status_code=404, detail="Customer not found")
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"})
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    reason = (body.reason or "").strip()[:300]
+    if body.status != "active" and not reason:
+        raise HTTPException(status_code=400, detail="Please write a reason")
+    if body.status == "purge":
+        await db.users.delete_one({"_id": u["_id"]})
+        await db.transactions.delete_many({"user_id": uid})
+        await db.withdrawals.delete_many({"user_id": uid})
+        await db.notifications.delete_many({"user_id": uid})
+        await db.leads.update_many({"partner_id": uid}, {"$set": {"partner_deleted": True}})
+        await _log_security(admin["id"], "customer_purged", request, f"{u.get('email')} — {reason}")
+        return {"message": f"{u.get('name')} permanently deleted"}
+    upd = {"account_status": body.status, "account_status_reason": "" if body.status == "active" else reason,
+           "account_status_at": now_iso(), "account_status_by": admin["id"]}
+    await db.users.update_one({"_id": u["_id"]}, {"$set": upd, "$push": {"account_status_history": {"status": body.status, "reason": reason, "at": now_iso(), "by": admin.get("email")}}})
+    await _log_security(admin["id"], f"customer_{body.status}", request, f"{u.get('email')} — {reason}")
+    return {"message": f"{u.get('name')} is now {'paused' if body.status == 'deactivated' else body.status}", "account_status": body.status}
+
+
+
 @api.post("/admin/credit")
 async def credit_wallet(body: CreditIn, admin: dict = Depends(require_admin)):
     u = await db.users.find_one({"_id": ObjectId(body.user_id)})
@@ -1486,7 +1554,7 @@ async def admin_dashboard(admin: dict = Depends(require_admin)):
     paused = sum(1 for c in campaigns if c.get("status") == "paused")
     closed = sum(1 for c in campaigns if c.get("status") == "closed")
     enabled = sum(1 for c in campaigns if c.get("offer_enabled"))
-    total_customers = await db.users.count_documents({"role": "customer"})
+    total_customers = await db.users.count_documents({"role": "customer", "email_verified": True})
     all_txns = await db.transactions.find({}).to_list(20000)
     total_earnings = sum(t["amount"] for t in all_txns if t["type"] == "credit")
     all_wds = await db.withdrawals.find({}).to_list(20000)

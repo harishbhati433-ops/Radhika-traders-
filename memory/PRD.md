@@ -157,3 +157,11 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Frontend: /welcome-letter page (WelcomeLetter.jsx: branded letter, Partner ID, date, print/save PDF, email copy; testids welcome-letter, welcome-ref-code, welcome-print, welcome-resend). Profile page card link (profile-welcome-letter).
 - Real welcome email sent to harishbhati4581@gmail.com (id d02d0712...).
 - Customer sidebar: added "Welcome Letter" nav item (/welcome-letter) between Statements and Profile.
+
+## 2026-06 — Account controls, duplicate block, password eye, OTP robustness
+- users.account_status: active|deactivated(Paused)|disabled|deleted (+reason, history). PATCH /admin/customers/{uid}/status {status, reason} (reason required unless active; "purge" = hard delete user+txns+withdrawals+notifications). Login + get_current_user block deactivated/disabled (403 message) and deleted (401). Referral links/leads ignore disabled/deleted partners. /admin/customers?include_deleted=true; default hides deleted and unverified. AccountStatusControl.jsx in AdminCustomers (acct-{status}-{id}, acct-reason, acct-confirm, customer-status-{id}, customer-show-deleted).
+- Register: mobile normalized to 10 digits; duplicate verified mobile or email (incl. deleted) -> 400. Profile mobile update also checked.
+- PasswordInput.jsx (eye toggle) replaces all type=password inputs (Login, AdminLogin, Signup, ForgotPassword, SecuritySettings, Withdrawals PIN). testid `${id}-toggle`.
+- OTP: send_email retries on 429/5xx (3x). register/resend-otp return 502 with message if email fails; register removes the unverified doc it just created. Signup resend shows server detail. Admin customers/dashboard/KYC exclude unverified users.
+- Test credentials: bhatiharish276@gmail.com / Radhika@2023 (admin, portal=admin), testcust@example.com / Test@1234 (PIN 5678).
+- iteration_6/7 testing: all pass (signup OTP, dup block, unverified hidden, password toggles, account controls full flow). NOTE: email provider returned 429 during heavy QA sends — likely cause of user-reported live OTP failures; register now surfaces 502 error instead of false "OTP sent".

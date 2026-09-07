@@ -7,6 +7,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, Gift } from "lucide-react";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export default function Signup() {
   const [step, setStep] = useState(1);
@@ -49,8 +50,8 @@ export default function Signup() {
   };
 
   const resend = async () => {
-    try { await api.post("/auth/resend-otp", { email: form.email, purpose: "signup" }); toast.success("OTP resent"); }
-    catch { toast.error("Could not resend"); }
+    try { await api.post("/auth/resend-otp", { email: form.email, purpose: "signup" }); toast.success("A new OTP has been sent to your email"); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Could not resend OTP. Please try again in a minute."); }
   };
 
   return (
@@ -70,7 +71,7 @@ export default function Signup() {
           <div><Label>Full Name</Label><Input data-testid="signup-name" required value={form.name} onChange={set("name")} className="mt-1.5" placeholder="Your name" /></div>
           <div><Label>Email</Label><Input data-testid="signup-email" type="email" required value={form.email} onChange={set("email")} className="mt-1.5" placeholder="you@example.com" /></div>
           <div><Label>Mobile</Label><Input data-testid="signup-mobile" required value={form.mobile} onChange={set("mobile")} className="mt-1.5" placeholder="10-digit mobile" /></div>
-          <div><Label>Password</Label><Input data-testid="signup-password" type="password" required value={form.password} onChange={set("password")} className="mt-1.5" placeholder="Create a password" /></div>
+          <div><Label>Password</Label><PasswordInput data-testid="signup-password" required value={form.password} onChange={set("password")} className="mt-1.5" placeholder="Create a password" /></div>
           <button type="submit" data-testid="signup-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} Send OTP
           </button>

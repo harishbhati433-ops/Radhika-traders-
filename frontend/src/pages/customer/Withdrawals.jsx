@@ -8,6 +8,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Receipt, PauseCircle } from "lucide-react";
+import { PasswordInput } from "../../components/PasswordInput";
 
 const STATUS = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -90,7 +91,7 @@ export default function Withdrawals() {
               </div>
               <div>
                 <Label>Transaction Password (PIN)</Label>
-                <Input data-testid="withdraw-txn-pin" type="password" inputMode="numeric" required maxLength={6} value={txnPin} onChange={(e) => setTxnPin(e.target.value.replace(/\D/g, ""))} className="mt-1.5 font-mono tracking-widest" placeholder="••••" />
+                <PasswordInput data-testid="withdraw-txn-pin" inputMode="numeric" required maxLength={6} value={txnPin} onChange={(e) => setTxnPin(e.target.value.replace(/\D/g, ""))} className="mt-1.5 font-mono tracking-widest" placeholder="••••" />
                 <p className="mt-1 text-xs text-slate-500">Not set yet? Create it in <Link to="/profile" className="font-bold underline">Profile → Security</Link>.</p>
               </div>
               <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Payment is transferred manually by Radhika Traders to the UPI ID / bank account above, usually within 24–48 hours. You will see the status here.</p>

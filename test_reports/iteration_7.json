@@ -1,0 +1,27 @@
+{
+  "summary": "RETEST after PATCH /api/admin/customers/{uid}/status was added. All previously-blocked account-status features now pass end-to-end on both backend (6/6 pytest) and frontend (Pause→Delete→Show-deleted→Purge full flow via Playwright). Test users were created directly via pymongo (bypassing rate-limited email OTP as instructed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_account_status_retest.py",
+    "/app/test_reports/pytest/retest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now 1741 lines — please split into routers (auth, admin_customers, leads, wallet, security). Iteration_6 already flagged this.",
+    "public_user() still returns account_status_reason for /auth/me — a paused/disabled customer will see the admin's private note. Consider stripping account_status_reason from a customer's own view and only exposing to admin.",
+    "AccountStatusControl.jsx purge uses window.confirm — good MVP, but consider a typed-confirmation modal (e.g. type email to confirm) for irreversible purge.",
+    "auth_utils.ACCOUNT_STATUS_MESSAGES has no entry for 'deleted' — token check returns 401 'User not found' which is by design, but a symmetric map would be cleaner.",
+    "admin_set_account_status: for status='purge' the cascade wipes transactions + withdrawals + notifications but only marks leads.partner_deleted=true (does not clear partner_id). This is correct so that pending payouts for approved leads survive, but should be documented in code."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_status_retest.py (new — 6 pytest cases; all pass)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (Pause + reason-required + Delete + Show deleted + Purge all verified E2E)"},
+  "test_credentials": "Admin: bhatiharish276@gmail.com / Radhika@2023. Test users seeded directly via pymongo with password_hash copied from testcust so password is Test@1234.",
+  "seed_data_creation": "New test file inserts users with emails matching /^qa\\+retest_/ and cleans them up in an autouse fixture. Frontend test used qa+ui_1788813660774@example.com which was purged by the test itself. mongo shows 0 residual qa+ users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "PATCH /api/admin/customers/{uid}/status is implemented at server.py:1507. Rules verified: reason required for any non-active status → 400 'Please write a reason'; deactivated/disabled → login 403 with correct message; existing bearer token → 403 via get_current_user_from_db; deleted → hidden from /admin/customers, visible with include_deleted=true, login 401, re-register 400 'already registered'; purge → user + txns + withdrawals removed, leads.partner_deleted set (partner_id retained so approved-lead payouts stay valid). Disabled partner referral: /go still 302, POST /leads creates lead with no partner_id. Frontend AdminCustomers renders the correct 3-way button set: active→[Pause,Disable,Delete]; deactivated/disabled→[Activate,Disable,Delete]; deleted→[Activate,Delete Permanently]. Show-deleted toggle works. Reason-required client validation works. Purge uses window.confirm before the modal dialog confirm. Note: iteration_6 mentioned 105 seeded customers — now 106 in preview (harishbhati4581+qa* rows from OTP tests). Consider cleanup: db.users.deleteMany({email:/harishbhati4581\\+qa/}).",
+  "rca of the issue": "N/A — iteration_6 root cause (missing PATCH endpoint) has been resolved by main agent."
+}

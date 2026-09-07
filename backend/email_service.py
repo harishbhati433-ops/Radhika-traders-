@@ -1,6 +1,7 @@
 """Emergent managed email (Resend) with guardrail gate."""
 import os
 import re
+import asyncio
 import ipaddress
 import logging
 import httpx
@@ -94,18 +95,21 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
     if EMAIL_REPLY_TO:
         payload["contact_email"] = EMAIL_REPLY_TO
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{EMAIL_BASE_URL}/api/v1/email/send",
-                headers={"X-Email-Key": EMAIL_KEY},
-                json=payload,
-            )
-        resp.raise_for_status()
-        return resp.json().get("id")
-    except Exception as e:
-        logger.error(f"Email send error: {str(e)}")
-        return None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send", headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                logger.warning(f"Email send retry {attempt + 1} for {to}: HTTP {resp.status_code}")
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return resp.json().get("id")
+        except Exception as e:
+            logger.error(f"Email send error to {to}: {str(e)}")
+            return None
+    logger.error(f"Email send failed after retries to {to}")
+    return None
 
 
 def _wrap(title: str, inner: str) -> str:
