@@ -85,3 +85,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - deployment_agent: PASS (no blockers). Only perf warnings.
 - Fixed: /api/admin/customers wallet totals now computed via Mongo aggregation ($group/$sum) instead of loading up to 100k txns/withdrawals in memory. Verified values match /api/wallet.
 - Remaining perf backlog (P2): pagination/projection for /admin/leads, /leads, /campaigns list.
+
+## 2026-06 — Login brute-force lockout
+- POST /api/auth/login: per ip:email counter in db.login_attempts (unique index on identifier). 5 failed -> 429, locked 30 min. Correct password rejected while locked. Counter cleared on success / after lock expiry. security_logs event "login_locked". Verified via curl (401x4 with attempts-left msg -> 429 -> unlock -> 200).

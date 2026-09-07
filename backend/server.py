@@ -384,12 +384,40 @@ async def resend_otp(body: ResendOtpIn):
     return {"message": "OTP resent"}
 
 
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCK_MINUTES = 30
+
+
+def _client_ip(request: Request) -> str:
+    return request.headers.get("x-forwarded-for", request.client.host if request.client else "").split(",")[0].strip()
+
+
 @api.post("/auth/login")
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: Request):
     email = body.email.lower()
+    identifier = f"{_client_ip(request)}:{email}"
+    now = now_iso()
+    rec = await db.login_attempts.find_one({"identifier": identifier})
+    if rec and rec.get("count", 0) >= LOGIN_MAX_ATTEMPTS and (rec.get("locked_until") or "") > now:
+        mins = max(1, int((datetime.fromisoformat(rec["locked_until"]) - datetime.now(timezone.utc)).total_seconds() // 60) + 1)
+        raise HTTPException(status_code=429, detail=f"Too many failed login attempts. Account locked. Try again after {mins} minutes.")
+    if rec and (rec.get("locked_until") or "") and rec["locked_until"] <= now:
+        await db.login_attempts.delete_one({"_id": rec["_id"]})
+        rec = None
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        count = (rec.get("count", 0) if rec else 0) + 1
+        upd = {"$set": {"identifier": identifier, "email": email, "count": count, "updated_at": now}}
+        if count >= LOGIN_MAX_ATTEMPTS:
+            upd["$set"]["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
+            if user:
+                await _log_security(str(user["_id"]), "login_locked", request, f"{count} failed attempts")
+        await db.login_attempts.update_one({"identifier": identifier}, upd, upsert=True)
+        left = LOGIN_MAX_ATTEMPTS - count
+        if count >= LOGIN_MAX_ATTEMPTS:
+            raise HTTPException(status_code=429, detail=f"Too many failed login attempts. Account locked for {LOGIN_LOCK_MINUTES} minutes.")
+        raise HTTPException(status_code=401, detail=f"Invalid email or password. {left} attempt{'s' if left != 1 else ''} left before lock.")
+    await db.login_attempts.delete_one({"identifier": identifier})
     if body.portal == "admin" and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="This login is for admin only. Please use the customer login.")
     if body.portal != "admin" and user["role"] == "admin":
@@ -1438,6 +1466,7 @@ async def startup():
     try:
         await db.users.create_index("email", unique=True)
         await db.otp_codes.create_index("email")
+        await db.login_attempts.create_index("identifier", unique=True)
         await db.campaigns.create_index("slug")
     except Exception as e:
         logger.warning(f"Index creation: {e}")
