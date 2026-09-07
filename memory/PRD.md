@@ -145,3 +145,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Professional invite/share messages + promo email deliverability
 - ReferEarnCard: inviteMessage (name, agency intro, zero investment, dynamic signup bonus line from settings, link, tagline); preview box (refer-message-preview) + "Copy message" (refer-copy-message); link-only copy (refer-copy). ShareButtons accepts copyText. CampaignDetail copy/share also sends professional applyMessage.
 - Campaign-live/broadcast emails: plain personal style, first-name subject, per-user personal referral link (/api/go/{slug}?ref=), reply invitation, no boxes/buttons/emoji. Test broadcast -> 202.
+
+## 2026-06 — Light-branded emails
+- _wrap: red-left-border brand header "RADHIKA TRADERS / TRUSTED PARTNER FOR FINANCIAL GROWTH" (text only, no image). _campaign_block: amber-left-border card with payout/company/fund/requirement rows + small red "Open my referral link" button + plain link. _signature: Harish Bhati / Founder + WhatsApp +91 63765 41191 + www.radhikatraders.net. _first() capitalizes. Real test sent to harishbhati4581@gmail.com (202).

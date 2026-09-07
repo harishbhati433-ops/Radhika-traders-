@@ -111,8 +111,12 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
 def _wrap(title: str, inner: str) -> str:
     return (
         '<div style="max-width:560px;margin:0 auto;padding:16px 4px;font-family:Arial,Helvetica,sans-serif;color:#0B0F17">'
+        '<div style="border-left:4px solid #991B1B;padding:6px 12px;margin-bottom:18px">'
+        '<div style="font-size:17px;font-weight:bold;letter-spacing:0.5px;color:#0B0F17">RADHIKA <span style="color:#991B1B">TRADERS</span></div>'
+        '<div style="font-size:10px;letter-spacing:1.5px;color:#B45309;font-weight:bold">TRUSTED PARTNER FOR FINANCIAL GROWTH</div></div>'
         f'{inner}'
-        '<p style="margin-top:24px;font-size:11px;color:#94a3b8">Radhika Traders, Agar, Madhya Pradesh. We never ask for your password, OTP or card details by email.</p>'
+        '<p style="margin-top:24px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">'
+        'Radhika Traders, Agar, Madhya Pradesh. We never ask for your password, OTP or card details by email.</p>'
         '</div>'
     )
 
@@ -157,26 +161,36 @@ async def send_payment_email(to: str, name: str, amount: float, method: str, det
 
 
 def _campaign_block(c: dict, link: str) -> str:
-    lines = [f"Payout: Rs.{c.get('payout_amount', 0):g} {c.get('payout_type', '')}".strip()]
-    if c.get("company"):
-        lines.append(f"Company: {c['company']}")
+    rows = [("Payout", f"Rs.{c.get('payout_amount', 0):g} {c.get('payout_type', '')}".strip()), ("Company", c.get("company", ""))]
     if c.get("fund_add"):
-        lines.append(f"Fund add: {c['fund_add']}")
+        rows.append(("Fund add", str(c["fund_add"])))
     if c.get("requirements"):
-        lines.append(f"Requirement: {str(c['requirements'])[:200]}")
-    body = "<br>".join(escape(x) for x in lines)
-    return (f'<p style="font-size:14px;color:#0B0F17;margin:14px 0"><b>{escape(c.get("offer_name", ""))}</b><br>{body}</p>'
-            f'<p style="font-size:14px;color:#334155;margin:14px 0">Your personal link for this campaign:<br>'
-            f'<a href="{escape(link)}" style="color:#991B1B">{escape(link)}</a></p>')
+        rows.append(("Requirement", str(c["requirements"])[:200]))
+    table = "".join(
+        f'<tr><td style="padding:5px 0;color:#64748b;font-size:13px;width:110px">{escape(k)}</td>'
+        f'<td style="padding:5px 0;color:#0B0F17;font-size:13px;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows if v)
+    return (
+        f'<div style="border:1px solid #e2e8f0;border-left:4px solid #F59E0B;border-radius:8px;padding:14px 16px;margin:16px 0;background:#fffdf7">'
+        f'<div style="font-size:17px;font-weight:bold;color:#0B0F17">{escape(c.get("offer_name", ""))}</div>'
+        f'<table style="margin-top:6px;border-collapse:collapse">{table}</table>'
+        f'<p style="margin:14px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:10px 20px;'
+        f'border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open my referral link</a></p>'
+        f'<div style="font-size:11px;color:#64748b;word-break:break-all">or copy: <a href="{escape(link)}" style="color:#991B1B">{escape(link)}</a></div></div>')
 
 
 def _signature() -> str:
-    return ('<p style="margin-top:20px;font-size:14px;color:#334155">Any question? Just reply to this email, I read every message.</p>'
-            '<p style="font-size:14px;color:#334155">Regards,<br>Harish Bhati<br>Radhika Traders</p>')
+    return ('<p style="margin-top:18px;font-size:14px;color:#334155">Any question? Just reply to this email, I read every message.</p>'
+            '<table style="margin-top:14px;border-collapse:collapse"><tr>'
+            '<td style="padding-right:12px;border-right:3px solid #991B1B;vertical-align:top">'
+            '<div style="font-size:14px;font-weight:bold;color:#0B0F17">Harish Bhati</div>'
+            '<div style="font-size:12px;color:#64748b">Founder, Radhika Traders</div></td>'
+            '<td style="padding-left:12px;font-size:12px;color:#334155;vertical-align:top">'
+            'WhatsApp: +91 63765 41191<br>'
+            '<a href="https://www.radhikatraders.net" style="color:#991B1B">www.radhikatraders.net</a></td></tr></table>')
 
 
 def _first(name: str) -> str:
-    return (name or "Partner").strip().split()[0]
+    return (name or "Partner").strip().split()[0].capitalize()
 
 
 async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
@@ -184,7 +198,7 @@ async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> st
         return None
     subject = f"{_first(name)}, {c.get('offer_name', 'a new campaign')} is live on your dashboard"
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
-             f'<p style="font-size:14px;color:#334155">I have just made <b>{escape(c.get("offer_name", ""))}</b> live for you. '
+             f'<p style="font-size:14px;color:#334155">Good news — I have just made <b>{escape(c.get("offer_name", ""))}</b> live for you. '
              f'Here are the details so you can start sharing today.</p>'
              f'{_campaign_block(c, link)}{_signature()}')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
