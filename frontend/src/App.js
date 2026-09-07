@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
+import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
@@ -82,6 +83,7 @@ function App() {
           <Route path="/admin/security" element={<ProtectedRoute role="admin"><AdminSecurity /></ProtectedRoute>} />
         </Routes>
         <WhatsAppFloat />
+        <InstallPrompt />
       </BrowserRouter>
     </AuthProvider>
   );
