@@ -1,13 +1,13 @@
 import { toast } from "sonner";
 import { MessageCircle, Send, Copy, Instagram, Facebook } from "lucide-react";
 
-export function ShareButtons({ link, message, testPrefix = "share" }) {
+export function ShareButtons({ link, message, copyText, testPrefix = "share" }) {
   const text = message || "Check out this offer on Radhika Traders!";
   const encoded = encodeURIComponent(`${text} ${link}`);
 
   const copy = () => {
-    navigator.clipboard.writeText(link);
-    toast.success("Link copied to clipboard");
+    navigator.clipboard.writeText(copyText || link);
+    toast.success(copyText ? "Message with your link copied — paste it anywhere" : "Link copied to clipboard");
   };
 
   const nativeShare = async () => {

@@ -900,7 +900,7 @@ def _origin(request: Request) -> str:
 
 
 async def announce_campaign_live(c: dict, origin: str):
-    customers = await db.users.find({"role": "customer", "email_verified": True}, {"email": 1, "name": 1}).to_list(10000)
+    customers = await db.users.find({"role": "customer", "email_verified": True}, {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
     title = f"New Campaign LIVE: {c['offer_name']}"
     body = f"Payout Rs.{c.get('payout_amount', 0):g} · {c.get('company', '')}. Grab it and complete maximum eligible conversions!"
     link = f"/campaign/{c['slug']}"
@@ -910,7 +910,8 @@ async def announce_campaign_live(c: dict, origin: str):
             "campaign_id": str(c["_id"]), "read": False, "created_at": now_iso()} for u in customers])
     sent = failed = 0
     for u in customers:
-        ok = await send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, f"{origin}{link}")
+        personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") else f"{origin}{link}"
+        ok = await send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, personal)
         sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
     await db.broadcasts.insert_one({"kind": "campaign_live", "campaign_id": str(c["_id"]), "subject": title, "message": body,
                                     "audience": "all", "recipients": len(customers), "sent": sent, "failed": failed,
@@ -1354,7 +1355,7 @@ async def admin_broadcast(body: BroadcastIn, request: Request, background: Backg
         if not body.user_ids:
             raise HTTPException(status_code=400, detail="Select at least one customer")
         q["_id"] = {"$in": [ObjectId(i) for i in body.user_ids if ObjectId.is_valid(i)]}
-    users = await db.users.find(q, {"email": 1, "name": 1}).to_list(10000)
+    users = await db.users.find(q, {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
     c = await db.campaigns.find_one({"_id": ObjectId(body.campaign_id)}) if body.campaign_id and ObjectId.is_valid(body.campaign_id) else None
     link = f"/campaign/{c['slug']}" if c else ""
     res = await db.broadcasts.insert_one({"kind": "manual", "subject": body.subject, "message": body.message, "audience": body.audience,
@@ -1371,7 +1372,8 @@ async def run_broadcast(bid, users: list, body: BroadcastIn, c: dict | None, lin
     sent = failed = 0
     if "email" in body.channels:
         for u in users:
-            ok = await send_broadcast_email(u.get("email", ""), u.get("name", ""), body.subject, body.message, c, f"{origin}{link}" if link else "")
+            personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if (c and u.get("referral_code")) else (f"{origin}{link}" if link else "")
+            ok = await send_broadcast_email(u.get("email", ""), u.get("name", ""), body.subject, body.message, c, personal)
             sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
     await db.broadcasts.update_one({"_id": bid}, {"$set": {"sent": sent, "failed": failed, "status": "done", "finished_at": now_iso()}})
 

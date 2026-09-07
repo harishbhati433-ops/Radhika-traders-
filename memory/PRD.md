@@ -141,3 +141,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Email deliverability (Primary tab)
 - email_service.py: removed promo signals (emoji subjects, "Good News/Grab", colored hero blocks, big buttons). Plain personal layout, personal sign-off (Harish Bhati), OTP subject "<code> is your Radhika Traders verification code". EMAIL_FROM_NAME="Harish Bhati - Radhika Traders". Test send -> 202.
+
+## 2026-06 — Professional invite/share messages + promo email deliverability
+- ReferEarnCard: inviteMessage (name, agency intro, zero investment, dynamic signup bonus line from settings, link, tagline); preview box (refer-message-preview) + "Copy message" (refer-copy-message); link-only copy (refer-copy). ShareButtons accepts copyText. CampaignDetail copy/share also sends professional applyMessage.
+- Campaign-live/broadcast emails: plain personal style, first-name subject, per-user personal referral link (/api/go/{slug}?ref=), reply invitation, no boxes/buttons/emoji. Test broadcast -> 202.
