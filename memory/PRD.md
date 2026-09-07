@@ -148,3 +148,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Light-branded emails
 - _wrap: red-left-border brand header "RADHIKA TRADERS / TRUSTED PARTNER FOR FINANCIAL GROWTH" (text only, no image). _campaign_block: amber-left-border card with payout/company/fund/requirement rows + small red "Open my referral link" button + plain link. _signature: Harish Bhati / Founder + WhatsApp +91 63765 41191 + www.radhikatraders.net. _first() capitalizes. Real test sent to harishbhati4581@gmail.com (202).
+
+## 2026-06 — Branded email v3 (user confirmed Primary delivery)
+- _wrap: solid red header band (RADHIKA TRADERS + tagline, amber underline), dark footer (address, WhatsApp, site). From name back to "Radhika Traders"; signature "Team Radhika Traders / Harish Bhati, Founder".
