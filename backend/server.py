@@ -117,13 +117,52 @@ class SettingsIn(BaseModel):
     signup_bonus: Optional[float] = None
     withdrawals_enabled: Optional[bool] = None
     withdrawals_paused_message: Optional[str] = None
+    referral_daily_limit: Optional[int] = None
+    referral_monthly_limit: Optional[int] = None
+    withdrawal_days: Optional[List[int]] = None
+    withdrawal_dates: Optional[List[int]] = None
+
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _ist_window_starts() -> tuple:
+    now = datetime.now(IST)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month = day.replace(day=1)
+    return day.astimezone(timezone.utc).isoformat(), month.astimezone(timezone.utc).isoformat()
+
+
+async def referral_usage(code: str) -> dict:
+    day_start, month_start = _ist_window_starts()
+    q = {"referred_by_code": code, "email_verified": True}
+    today = await db.users.count_documents({**q, "created_at": {"$gte": day_start}})
+    month = await db.users.count_documents({**q, "created_at": {"$gte": month_start}})
+    return {"today": today, "month": month}
 
 
 async def get_settings() -> dict:
     s = await db.settings.find_one({"key": "app"}) or {}
     return {"referral_bonus": float(s.get("referral_bonus", 0)), "min_withdrawal": float(s.get("min_withdrawal", MIN_WITHDRAWAL)),
             "signup_bonus": float(s.get("signup_bonus", 50)), "withdrawals_enabled": bool(s.get("withdrawals_enabled", True)),
-            "withdrawals_paused_message": s.get("withdrawals_paused_message") or "Withdrawals are temporarily paused by Radhika Traders. Please check back soon."}
+            "withdrawals_paused_message": s.get("withdrawals_paused_message") or "Withdrawals are temporarily paused by Radhika Traders. Please check back soon.",
+            "referral_daily_limit": int(s.get("referral_daily_limit", 2)), "referral_monthly_limit": int(s.get("referral_monthly_limit", 10)),
+            "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])]}
+
+
+DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+
+def withdrawals_open(s: dict) -> tuple:
+    if not s["withdrawals_enabled"]:
+        return False, s["withdrawals_paused_message"]
+    now = datetime.now(IST)
+    wd = (now.weekday() + 1) % 7  # 0=Sunday
+    if s["withdrawal_days"] and wd not in s["withdrawal_days"]:
+        return False, f"Withdrawals are open only on {', '.join(DAY_NAMES[d] for d in sorted(s['withdrawal_days']))}. Today is {DAY_NAMES[wd]}."
+    if s["withdrawal_dates"] and now.day not in s["withdrawal_dates"]:
+        return False, f"Withdrawals are open only on these dates of the month: {', '.join(str(d) for d in sorted(s['withdrawal_dates']))}. Today is {now.day}."
+    return True, ""
 
 
 class OtpVerifyIn(BaseModel):
@@ -285,6 +324,17 @@ async def register(body: RegisterIn):
     existing = await db.users.find_one({"email": email})
     if existing and existing.get("email_verified"):
         raise HTTPException(status_code=400, detail="Email already registered. Please login.")
+    ref_code = (body.referred_by or "").strip().upper()
+    if ref_code:
+        referrer = await db.users.find_one({"referral_code": ref_code, "role": "customer"})
+        if not referrer:
+            raise HTTPException(status_code=400, detail="Invalid referral code. Please check the link or sign up without it.")
+        s = await get_settings()
+        usage = await referral_usage(ref_code)
+        if s["referral_daily_limit"] and usage["today"] >= s["referral_daily_limit"]:
+            raise HTTPException(status_code=400, detail=f"This referral link has reached today's limit of {s['referral_daily_limit']} signups. Please try again tomorrow.")
+        if s["referral_monthly_limit"] and usage["month"] >= s["referral_monthly_limit"]:
+            raise HTTPException(status_code=400, detail=f"This referral link has reached this month's limit of {s['referral_monthly_limit']} signups. Please try again next month.")
     doc = {
         "name": body.name,
         "email": email,
@@ -296,7 +346,7 @@ async def register(body: RegisterIn):
         "referral_code": generate_referral_code(),
         "kyc": {"status": "not_submitted"},
         "bank": {},
-        "referred_by_code": (body.referred_by or "").strip().upper(),
+        "referred_by_code": ref_code,
         "referral_bonus_paid": False,
         "created_at": now_iso(),
     }
@@ -363,7 +413,9 @@ async def pay_referral_bonus(new_user: dict):
 
 @api.get("/settings/public")
 async def public_settings():
-    return await get_settings()
+    s = await get_settings()
+    is_open, reason = withdrawals_open(s)
+    return {**s, "withdrawals_open": is_open, "withdrawals_closed_reason": reason}
 
 
 @api.put("/admin/settings")
@@ -385,10 +437,22 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
         upd["withdrawals_enabled"] = body.withdrawals_enabled
     if body.withdrawals_paused_message is not None:
         upd["withdrawals_paused_message"] = body.withdrawals_paused_message.strip()[:300]
+    for k in ("referral_daily_limit", "referral_monthly_limit"):
+        v = getattr(body, k)
+        if v is not None:
+            if v < 0:
+                raise HTTPException(status_code=400, detail="Limit cannot be negative (0 = unlimited)")
+            upd[k] = int(v)
+    if body.withdrawal_days is not None:
+        upd["withdrawal_days"] = sorted({int(d) for d in body.withdrawal_days if 0 <= int(d) <= 6})
+    if body.withdrawal_dates is not None:
+        upd["withdrawal_dates"] = sorted({int(d) for d in body.withdrawal_dates if 1 <= int(d) <= 31})
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.settings.update_one({"key": "app"}, {"$set": {**upd, "updated_at": now_iso()}}, upsert=True)
-    return await get_settings()
+    s = await get_settings()
+    is_open, reason = withdrawals_open(s)
+    return {**s, "withdrawals_open": is_open, "withdrawals_closed_reason": reason}
 
 
 @api.get("/my-referrals")
@@ -397,7 +461,10 @@ async def my_referrals(user: dict = Depends(get_current_user)):
     earned = await db.transactions.aggregate([
         {"$match": {"user_id": user["id"], "type": "credit", "ref_id": {"$regex": "^REF-"}}},
         {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
+    usage = await referral_usage(user.get("referral_code", ""))
+    s = await get_settings()
     return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0,
+            "today": usage["today"], "month": usage["month"], "daily_limit": s["referral_daily_limit"], "monthly_limit": s["referral_monthly_limit"],
             "recent": [{"name": j.get("name"), "joined_at": j.get("created_at"), "kyc": j.get("kyc", {}).get("status", "not_submitted")} for j in joined[:50]]}
 
 
@@ -947,8 +1014,9 @@ async def leaderboard(user: dict = Depends(get_current_user)):
 @api.post("/withdrawals")
 async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = Depends(get_current_user)):
     settings = await get_settings()
-    if not settings["withdrawals_enabled"]:
-        raise HTTPException(status_code=403, detail=settings["withdrawals_paused_message"])
+    is_open, reason = withdrawals_open(settings)
+    if not is_open:
+        raise HTTPException(status_code=403, detail=reason)
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     if full.get("kyc", {}).get("status") != "verified":
         raise HTTPException(status_code=400, detail="Your KYC must be verified by Radhika Traders before withdrawal")

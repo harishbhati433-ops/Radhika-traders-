@@ -44,6 +44,13 @@ export function ReferEarnCard({ code }) {
           <span className="text-xs text-slate-500">earned</span>
         </div>
       </div>
+      {stats && (stats.daily_limit > 0 || stats.monthly_limit > 0) && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs" data-testid="refer-limits">
+          {stats.daily_limit > 0 && <span className={`rounded-full px-3 py-1 font-bold ${stats.today >= stats.daily_limit ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>Today: {stats.today}/{stats.daily_limit} referrals</span>}
+          {stats.monthly_limit > 0 && <span className={`rounded-full px-3 py-1 font-bold ${stats.month >= stats.monthly_limit ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>This month: {stats.month}/{stats.monthly_limit} referrals</span>}
+          {(stats.today >= stats.daily_limit && stats.daily_limit > 0) || (stats.month >= stats.monthly_limit && stats.monthly_limit > 0) ? <span className="text-rose-600">Limit reached — new signups via your link are paused until the limit resets.</span> : null}
+        </div>
+      )}
       <div className="mt-4 flex items-center gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-200">
         <input readOnly value={link} data-testid="refer-link-input" className="flex-1 bg-transparent px-1 text-xs text-slate-600 outline-none" />
         <button onClick={copy} data-testid="refer-copy" className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>

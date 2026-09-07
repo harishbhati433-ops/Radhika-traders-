@@ -134,3 +134,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Admin withdrawal ON/OFF switch
 - settings.withdrawals_enabled (default true) + withdrawals_paused_message. PUT /admin/settings partial. POST /withdrawals -> 403 with message when paused (checked before KYC/PIN).
 - AdminDashboard: WithdrawalToggleSetting.jsx (withdrawal-toggle-btn, withdrawal-toggle-current, withdrawal-paused-message[-save]). Customer Withdrawals page hides form and shows withdraw-paused-notice when paused.
+
+## 2026-06 — Referral limits + Withdrawal schedule
+- settings.referral_daily_limit (2) / referral_monthly_limit (10), 0=unlimited. Enforced in POST /auth/register (counts verified users with referred_by_code in IST day/month window; invalid code -> 400). GET /my-referrals returns today/month/limits. Admin ReferralLimitSetting.jsx (referral-daily-*, referral-monthly-*). ReferEarnCard shows usage chips (refer-limits).
+- settings.withdrawal_days [0-6, 0=Sun] / withdrawal_dates [1-31]; empty = no restriction. withdrawals_open(s) -> (open, reason) using IST; /settings/public + PUT /admin/settings return withdrawals_open & withdrawals_closed_reason; POST /withdrawals 403 with reason. WithdrawalToggleSetting.jsx: master switch + weekday/date chips + Save schedule (withdrawal-day-{i}, withdrawal-date-{d}, withdrawal-schedule-save). Customer page uses withdrawals_open.
