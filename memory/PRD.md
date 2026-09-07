@@ -156,3 +156,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - email_service.welcome_letter_paragraphs() + send_welcome_email(). verify-otp (signup) stores user.welcome {issued_at, signup_bonus} and background-sends welcome email (customers only). GET /me/welcome-letter (dynamic, works for old users), POST /me/welcome-letter/resend.
 - Frontend: /welcome-letter page (WelcomeLetter.jsx: branded letter, Partner ID, date, print/save PDF, email copy; testids welcome-letter, welcome-ref-code, welcome-print, welcome-resend). Profile page card link (profile-welcome-letter).
 - Real welcome email sent to harishbhati4581@gmail.com (id d02d0712...).
+- Customer sidebar: added "Welcome Letter" nav item (/welcome-letter) between Statements and Profile.
