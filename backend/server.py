@@ -23,7 +23,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp,
     generate_referral_code, get_current_user_from_db,
 )
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs
 from storage_service import init_storage, put_object, get_object, APP_NAME
 
 mongo_url = os.environ["MONGO_URL"]
@@ -367,7 +367,7 @@ async def register(body: RegisterIn):
 
 
 @api.post("/auth/verify-otp")
-async def verify_otp(body: OtpVerifyIn):
+async def verify_otp(body: OtpVerifyIn, request: Request, background: BackgroundTasks):
     email = body.email.lower()
     rec = await db.otp_codes.find_one({"email": email, "purpose": "signup", "used": False})
     if not rec or rec["code"] != body.code:
@@ -378,8 +378,33 @@ async def verify_otp(body: OtpVerifyIn):
     await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
     user = await db.users.find_one({"email": email})
     await pay_referral_bonus(user)
+    if user["role"] == "customer":
+        s = await get_settings()
+        bonus = s["signup_bonus"] if user.get("referred_by_code") else 0
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"welcome": {"issued_at": now_iso(), "signup_bonus": bonus}}})
+        origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+        background.add_task(send_welcome_email, email, user.get("name", ""), user.get("referral_code", ""), bonus, f"{origin}/dashboard")
     token = create_access_token(str(user["_id"]), email, user["role"])
     return {"token": token, "user": public_user(user)}
+
+
+@api.get("/me/welcome-letter")
+async def my_welcome_letter(user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    w = u.get("welcome") or {}
+    issued = w.get("issued_at") or u.get("created_at") or now_iso()
+    bonus = float(w.get("signup_bonus", 0) or 0)
+    return {"name": u.get("name", ""), "referral_code": u.get("referral_code", ""), "issued_at": issued, "signup_bonus": bonus,
+            "paragraphs": welcome_letter_paragraphs(u.get("name", ""), u.get("referral_code", ""), bonus)}
+
+
+@api.post("/me/welcome-letter/resend")
+async def resend_welcome_letter(request: Request, background: BackgroundTasks, user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    bonus = float((u.get("welcome") or {}).get("signup_bonus", 0) or 0)
+    origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+    background.add_task(send_welcome_email, u["email"], u.get("name", ""), u.get("referral_code", ""), bonus, f"{origin}/dashboard")
+    return {"message": "Welcome letter sent to your email"}
 
 
 async def pay_referral_bonus(new_user: dict):

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -7,7 +8,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { ImageUpload } from "../../components/ImageUpload";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Award, ArrowRight } from "lucide-react";
 import { SecuritySettings } from "../../components/SecuritySettings";
 
 export default function Profile() {
@@ -49,6 +50,16 @@ export default function Profile() {
 
   return (
     <DashboardLayout nav={customerNav} title="Profile & KYC">
+      <Link to="/welcome-letter" data-testid="profile-welcome-letter" className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 hover:border-amber-300">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-[#991B1B] p-2.5 text-white"><Award className="h-5 w-5" /></div>
+          <div>
+            <div className="font-display font-bold text-slate-900">Your Welcome Letter</div>
+            <div className="text-xs text-slate-600">Congratulations letter from Radhika Traders · Partner ID {user?.referral_code} · view, print or email anytime</div>
+          </div>
+        </div>
+        <ArrowRight className="h-5 w-5 text-slate-400" />
+      </Link>
       <div className="grid gap-6 lg:grid-cols-2">
         <form onSubmit={saveProfile} className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-slate-900">Personal Details</h2>

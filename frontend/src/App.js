@@ -22,6 +22,7 @@ import CustomerDashboard from "./pages/customer/CustomerDashboard";
 import Wallet from "./pages/customer/Wallet";
 import Withdrawals from "./pages/customer/Withdrawals";
 import Profile from "./pages/customer/Profile";
+import WelcomeLetter from "./pages/customer/WelcomeLetter";
 import Statements from "./pages/customer/Statements";
 import CustomerCampaigns from "./pages/customer/CustomerCampaigns";
 
@@ -65,6 +66,7 @@ function App() {
           <Route path="/withdrawals" element={<ProtectedRoute role="customer"><Withdrawals /></ProtectedRoute>} />
           <Route path="/statements" element={<ProtectedRoute role="customer"><Statements /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute role="customer"><Profile /></ProtectedRoute>} />
+          <Route path="/welcome-letter" element={<ProtectedRoute role="customer"><WelcomeLetter /></ProtectedRoute>} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/campaigns" element={<ProtectedRoute role="admin"><AdminCampaigns /></ProtectedRoute>} />

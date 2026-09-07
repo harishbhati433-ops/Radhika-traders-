@@ -216,3 +216,42 @@ async def send_broadcast_email(to: str, name: str, subject: str, message: str, c
         inner += _campaign_block(c, link)
     inner += _signature()
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+def welcome_letter_paragraphs(name: str, referral_code: str, signup_bonus: float) -> list[str]:
+    first = _first(name)
+    paras = [
+        f"Dear {escape(name or first)},",
+        "Congratulations and a very warm welcome to the Radhika Traders partner family!",
+        "We are delighted to have you on board. Radhika Traders is an advertising and affiliate marketing agency working with India's leading brokers, "
+        "banks and insurers. As our partner, you can share campaign links with your network and earn a fixed payout on every approved account opening — "
+        "with zero investment.",
+        f"Your Partner ID / Referral Code is <b>{escape(referral_code or '')}</b>. Use it to invite others and grow your own network.",
+    ]
+    if signup_bonus and signup_bonus > 0:
+        paras.append(f"As a welcome gift, Rs.{signup_bonus:g} has been added to your Bonus Wallet. It moves to your main wallet as soon as your first lead is approved.")
+    paras += [
+        "Here is how to get started: 1) Complete your KYC in Profile so your payouts are never delayed. 2) Open Campaigns and copy your referral link. "
+        "3) Share it on WhatsApp, Telegram or social media. 4) Track your leads and earnings live on your dashboard.",
+        "We believe in honest partnerships, on-time payments and long-term growth. Our team is always a message away on WhatsApp if you need any help.",
+        "Wishing you great success with Radhika Traders.",
+    ]
+    return paras
+
+
+async def send_welcome_email(to: str, name: str, referral_code: str, signup_bonus: float, dashboard_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Welcome to Radhika Traders, {_first(name)} — you are now our partner"
+    paras = welcome_letter_paragraphs(name, referral_code, signup_bonus)
+    body = "".join(f'<p style="font-size:14px;color:#334155;line-height:1.6;margin:0 0 12px">{p}</p>' for p in paras)
+    inner = (
+        f'<div style="font-size:11px;letter-spacing:2px;color:#B45309;font-weight:bold">WELCOME LETTER</div>'
+        f'<div style="font-size:22px;font-weight:bold;color:#0B0F17;margin:4px 0 16px">Congratulations, {escape(_first(name))}!</div>'
+        f'{body}'
+        f'<p style="margin:18px 0 6px"><a href="{escape(dashboard_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;'
+        f'border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open my dashboard</a></p>'
+        f'<p style="font-size:11px;color:#64748b">This letter is always available in your Profile.</p>'
+        f'{_signature()}'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
