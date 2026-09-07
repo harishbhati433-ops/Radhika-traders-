@@ -93,3 +93,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - CampaignDetail "Join / Apply Now" now routes via /api/go/{slug}?ref= (was direct partner URL, bypassing lead form + offer-stop check). Disabled grey button when paused/closed.
 - GET /my-leads returns `details` [{key,label,value}] with all form fields (labels from campaign lead_fields); MyLeads.jsx shows them per lead, mobile is tel: link.
 - Verified: paused -> /api/go 302 to /offer-ended, /api/join 404; live -> /join form. UI screenshot OK.
+
+## 2026-06 — Admin Security page
+- New /admin/security (nav: "Security / Password") using SecuritySettings showTxn={false}. Admin can change login password.
+- Startup seed no longer overwrites existing admin password_hash with ADMIN_PASSWORD env (only creates admin if missing; ensures role=admin). Verified: change pw -> restart -> new pw persists.
+- Admin forgot-password works via /admin/login -> Forgot Password (email OTP).

@@ -5,7 +5,7 @@ import { Label } from "./ui/label";
 import { toast } from "sonner";
 import { KeyRound, Lock, Loader2, ShieldCheck } from "lucide-react";
 
-export function SecuritySettings() {
+export function SecuritySettings({ showTxn = true }) {
   const [st, setSt] = useState({ has_txn_password: false, logs: [] });
   const [lp, setLp] = useState({ current_password: "", new_password: "" });
   const [tp, setTp] = useState({ login_password: "", otp: "", new_password: "" });
@@ -42,7 +42,7 @@ export function SecuritySettings() {
         <button type="submit" disabled={busy === "lp"} data-testid="sec-change-password" className="rt-gradient-btn mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold disabled:opacity-60">{busy === "lp" && <Loader2 className="h-4 w-4 animate-spin" />} Update Password</button>
       </form>
 
-      <form onSubmit={saveTxn} className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6">
+      {showTxn && <form onSubmit={saveTxn} className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-display text-lg font-bold text-slate-900"><KeyRound className="h-5 w-5 text-amber-600" /> Transaction Password</div>
           <span data-testid="sec-txn-status" className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${st.has_txn_password ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{st.has_txn_password ? "SET ✓" : "NOT SET"}</span>
@@ -60,7 +60,7 @@ export function SecuritySettings() {
           <div><Label>New transaction PIN (4–6 digits)</Label><Input data-testid="sec-txn-new" type="password" inputMode="numeric" pattern="\d{4,6}" required value={tp.new_password} onChange={(e) => setTp({ ...tp, new_password: e.target.value.replace(/\D/g, "").slice(0, 6) })} className="mt-1.5 font-mono tracking-widest" /></div>
         </div>
         <button type="submit" disabled={busy === "tp"} data-testid="sec-txn-save" className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-bold text-slate-950 disabled:opacity-60">{busy === "tp" && <Loader2 className="h-4 w-4 animate-spin" />} {st.has_txn_password ? "Reset Transaction Password" : "Set Transaction Password"}</button>
-      </form>
+      </form>}
 
       {st.logs.length > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2" data-testid="sec-logs">

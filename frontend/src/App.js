@@ -36,6 +36,7 @@ import OfferEnded from "./pages/OfferEnded";
 import Partners from "./pages/Partners";
 import LeadForm from "./pages/LeadForm";
 import AdminLeads from "./pages/admin/AdminLeads";
+import AdminSecurity from "./pages/admin/AdminSecurity";
 import MyLeads from "./pages/customer/MyLeads";
 import ForgotEmail from "./pages/auth/ForgotEmail";
 
@@ -78,6 +79,7 @@ function App() {
           <Route path="/forgot-email" element={<ForgotEmail />} />
           <Route path="/my-leads" element={<ProtectedRoute role="customer"><MyLeads /></ProtectedRoute>} />
           <Route path="/admin/leads" element={<ProtectedRoute role="admin"><AdminLeads /></ProtectedRoute>} />
+          <Route path="/admin/security" element={<ProtectedRoute role="admin"><AdminSecurity /></ProtectedRoute>} />
         </Routes>
         <WhatsAppFloat />
       </BrowserRouter>

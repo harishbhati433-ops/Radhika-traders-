@@ -1487,8 +1487,8 @@ async def startup():
             "kyc": {"status": "verified"}, "bank": {}, "created_at": now_iso(),
         })
         logger.info("Admin seeded")
-    elif not verify_password(admin_password, existing.get("password_hash", "")):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password), "role": "admin"}})
+    elif existing.get("role") != "admin":
+        await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin"}})
     try:
         init_storage()
         logger.info("Storage initialized")
