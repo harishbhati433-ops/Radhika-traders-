@@ -8,15 +8,16 @@ import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { Plus, Trash2, Power, Loader2 } from "lucide-react";
 
-const empty = { title: "", subtitle: "", image_url: "", link: "", enabled: true, order: 0 };
+const empty = { title: "", subtitle: "", image_url: "", link: "", campaign_id: "", enabled: true, order: 0 };
 
 export default function AdminBanners() {
   const [list, setList] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
 
   const load = () => api.get("/banners", { params: { all: true } }).then(({ data }) => setList(data));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api.get("/campaigns", { params: { admin_view: true } }).then(({ data }) => setCampaigns(data)).catch(() => {}); }, []);
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -39,7 +40,13 @@ export default function AdminBanners() {
         <div className="lg:col-span-2"><ImageUpload label="Banner image (recommended 1200×400)" value={f.image_url} onChange={(v) => setF({ ...f, image_url: v })} testId="banner-upload" /></div>
         <div><Label>Title</Label><Input data-testid="banner-title" value={f.title} onChange={set("title")} placeholder="Choice Trade" className="mt-1.5" /></div>
         <div><Label>Payout / Subtitle</Label><Input data-testid="banner-subtitle" value={f.subtitle} onChange={set("subtitle")} placeholder="₹300 per account opening" className="mt-1.5" /></div>
-        <div><Label>Link (optional)</Label><Input data-testid="banner-link" value={f.link} onChange={set("link")} placeholder="/campaign/choice-trade" className="mt-1.5" /></div>
+        <div><Label>Campaign (banner click → lead form → partner site)</Label>
+          <select data-testid="banner-campaign" value={f.campaign_id} onChange={set("campaign_id")} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <option value="">— No campaign (use custom link) —</option>
+            {campaigns.map((c) => <option key={c.id} value={c.id}>{c.offer_name} ({c.status})</option>)}
+          </select>
+        </div>
+        <div><Label>Custom link (only if no campaign selected)</Label><Input data-testid="banner-link" value={f.link} onChange={set("link")} placeholder="/campaigns" className="mt-1.5" disabled={!!f.campaign_id} /></div>
         <div><Label>Order</Label><Input data-testid="banner-order" type="number" value={f.order} onChange={set("order")} className="mt-1.5" /></div>
         <div className="lg:col-span-2 flex justify-end">
           <button type="submit" data-testid="banner-add" disabled={busy} className="rt-gradient-btn inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold disabled:opacity-60">
@@ -56,7 +63,7 @@ export default function AdminBanners() {
             <div className="flex items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <div className="truncate font-semibold text-slate-900">{b.title || "Untitled"}</div>
-                <div className="truncate text-xs text-slate-500">{b.subtitle} {b.link && `· ${b.link}`}</div>
+                <div className="truncate text-xs text-slate-500">{b.subtitle} {b.campaign_name ? `· → ${b.campaign_name}${b.campaign_live ? "" : " (inactive)"}` : b.link && `· ${b.link}`}</div>
                 <div className={`text-xs font-bold ${b.enabled ? "text-emerald-600" : "text-slate-400"}`}>{b.enabled ? "Visible" : "Hidden"} · order {b.order}</div>
               </div>
               <div className="flex shrink-0 gap-1">

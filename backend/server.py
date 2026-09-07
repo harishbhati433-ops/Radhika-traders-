@@ -267,6 +267,7 @@ class BannerIn(BaseModel):
     subtitle: str = ""
     image_url: str
     link: str = ""
+    campaign_id: str = ""
     enabled: bool = True
     order: int = 0
 
@@ -972,7 +973,19 @@ def banner_out(b: dict) -> dict:
 async def list_banners(all: bool = False, user: dict = Depends(get_current_user)):
     q = {} if (all and user.get("role") == "admin") else {"enabled": True}
     items = await db.banners.find(q).sort([("order", 1), ("created_at", -1)]).to_list(100)
-    return [banner_out(b) for b in items]
+    out = []
+    for b in items:
+        o = banner_out(b)
+        c = None
+        if b.get("campaign_id") and ObjectId.is_valid(b["campaign_id"]):
+            c = await db.campaigns.find_one({"_id": ObjectId(b["campaign_id"]), "is_deleted": False})
+        elif (b.get("link") or "").startswith("/campaign/"):
+            c = await db.campaigns.find_one({"slug": b["link"].split("/campaign/")[1].split("?")[0].strip("/"), "is_deleted": False})
+        o["campaign_slug"] = c["slug"] if c else ""
+        o["campaign_name"] = c["offer_name"] if c else ""
+        o["campaign_live"] = bool(c and c.get("status") == "live" and c.get("offer_enabled", True))
+        out.append(o)
+    return out
 
 
 @api.post("/admin/banners")

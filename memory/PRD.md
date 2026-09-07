@@ -110,3 +110,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Lead search
 - Customer MyLeads: client-side search (name/mobile/email/lead id/campaign/any form field; whitespace-insensitive) + campaign & status dropdowns + result count + no-match state. testids: my-leads-search, my-leads-filter-campaign, my-leads-filter-status, my-leads-result-count, my-leads-no-match.
 - Admin /admin/leads search now also matches ref_code and data.pan.
+
+## 2026-06 — Offer banners: 2s auto-slide + campaign link
+- BannerIn.campaign_id; GET /banners enriches campaign_slug/campaign_name/campaign_live (also derives from legacy link "/campaign/{slug}").
+- OfferBanners.jsx: slides every 2000ms with translateX transition, pause on hover, dot nav. Campaign banners link to /api/go/{slug}?ref={referral_code} (new tab) -> lead form -> partner site. testids: offer-banner-link/title/image.
+- AdminBanners: campaign dropdown (banner-campaign); custom link disabled when campaign chosen.
+- Preview test banners created (Choice Trade -> choice-trade-test, All Campaigns -> /campaigns).
