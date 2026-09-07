@@ -130,3 +130,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - unlock_signup_bonus(partner_id) called in PATCH /admin/leads when status=approved or account_status=account_opened -> bonus txns become type credit/completed + notification.
 - UI: Signup page banner (signup-bonus-banner) when ref present; ReferEarnCard share message mentions signup bonus (refer-signup-bonus-note); Wallet page Bonus Wallet card (bonus-wallet-card, wallet-bonus-locked) + LOCKED tag on txns; Dashboard strip (dash-bonus-locked).
 - Verified e2e via API: set 75 -> signup -> bonus_locked 75 -> lead approved -> balance 75.
+
+## 2026-06 — Admin withdrawal ON/OFF switch
+- settings.withdrawals_enabled (default true) + withdrawals_paused_message. PUT /admin/settings partial. POST /withdrawals -> 403 with message when paused (checked before KYC/PIN).
+- AdminDashboard: WithdrawalToggleSetting.jsx (withdrawal-toggle-btn, withdrawal-toggle-current, withdrawal-paused-message[-save]). Customer Withdrawals page hides form and shows withdraw-paused-notice when paused.

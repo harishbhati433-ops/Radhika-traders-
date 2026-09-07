@@ -115,12 +115,15 @@ class SettingsIn(BaseModel):
     referral_bonus: Optional[float] = None
     min_withdrawal: Optional[float] = None
     signup_bonus: Optional[float] = None
+    withdrawals_enabled: Optional[bool] = None
+    withdrawals_paused_message: Optional[str] = None
 
 
 async def get_settings() -> dict:
     s = await db.settings.find_one({"key": "app"}) or {}
     return {"referral_bonus": float(s.get("referral_bonus", 0)), "min_withdrawal": float(s.get("min_withdrawal", MIN_WITHDRAWAL)),
-            "signup_bonus": float(s.get("signup_bonus", 50))}
+            "signup_bonus": float(s.get("signup_bonus", 50)), "withdrawals_enabled": bool(s.get("withdrawals_enabled", True)),
+            "withdrawals_paused_message": s.get("withdrawals_paused_message") or "Withdrawals are temporarily paused by Radhika Traders. Please check back soon."}
 
 
 class OtpVerifyIn(BaseModel):
@@ -378,6 +381,10 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
         if body.signup_bonus < 0:
             raise HTTPException(status_code=400, detail="Signup bonus cannot be negative")
         upd["signup_bonus"] = body.signup_bonus
+    if body.withdrawals_enabled is not None:
+        upd["withdrawals_enabled"] = body.withdrawals_enabled
+    if body.withdrawals_paused_message is not None:
+        upd["withdrawals_paused_message"] = body.withdrawals_paused_message.strip()[:300]
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.settings.update_one({"key": "app"}, {"$set": {**upd, "updated_at": now_iso()}}, upsert=True)
@@ -939,11 +946,14 @@ async def leaderboard(user: dict = Depends(get_current_user)):
 # ----------------------------- Withdrawals -----------------------------
 @api.post("/withdrawals")
 async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = Depends(get_current_user)):
+    settings = await get_settings()
+    if not settings["withdrawals_enabled"]:
+        raise HTTPException(status_code=403, detail=settings["withdrawals_paused_message"])
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     if full.get("kyc", {}).get("status") != "verified":
         raise HTTPException(status_code=400, detail="Your KYC must be verified by Radhika Traders before withdrawal")
     await require_txn_password(user["id"], body.transaction_password, request)
-    min_wd = (await get_settings())["min_withdrawal"]
+    min_wd = settings["min_withdrawal"]
     if body.amount < min_wd:
         raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(min_wd)}")
     wallet = await compute_wallet(user["id"])

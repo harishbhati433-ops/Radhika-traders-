@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Receipt } from "lucide-react";
+import { Loader2, Receipt, PauseCircle } from "lucide-react";
 
 const STATUS = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -26,11 +26,12 @@ export default function Withdrawals() {
   const [txnPin, setTxnPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [minWd, setMinWd] = useState(100);
+  const [wdOpen, setWdOpen] = useState({ enabled: true, message: "" });
 
   const load = () => {
     api.get("/wallet").then(({ data }) => setWallet(data));
     api.get("/withdrawals").then(({ data }) => setList(data));
-    api.get("/settings/public").then(({ data }) => setMinWd(data.min_withdrawal)).catch(() => {});
+    api.get("/settings/public").then(({ data }) => { setMinWd(data.min_withdrawal); setWdOpen({ enabled: data.withdrawals_enabled, message: data.withdrawals_paused_message }); }).catch(() => {});
   };
   useEffect(load, []);
 
@@ -60,7 +61,12 @@ export default function Withdrawals() {
           <h2 className="font-display text-lg font-bold text-slate-900">Request Withdrawal</h2>
           <p className="mt-1 text-sm text-slate-500">Available: <span className="font-mono font-bold text-emerald-600">₹{wallet?.balance ?? "…"}</span> · Min <span data-testid="withdraw-min">₹{minWd}</span></p>
 
-          {!kycDone ? (
+          {!wdOpen.enabled ? (
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" data-testid="withdraw-paused-notice">
+              <PauseCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+              <div><div className="font-bold">Withdrawals paused</div><div className="mt-0.5 text-xs">{wdOpen.message}</div></div>
+            </div>
+          ) : !kycDone ? (
             <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800" data-testid="withdraw-kyc-warning">
               {kycState === "pending" ? "Your KYC is under review by Radhika Traders. Withdrawals will be enabled once verified."
                 : kycState === "rejected" ? <>Your KYC was rejected. Please <Link to="/profile" className="font-bold underline">re-submit your KYC</Link>.</>
