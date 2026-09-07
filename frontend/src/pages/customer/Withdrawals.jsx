@@ -25,10 +25,12 @@ export default function Withdrawals() {
   const [details, setDetails] = useState("");
   const [txnPin, setTxnPin] = useState("");
   const [loading, setLoading] = useState(false);
+  const [minWd, setMinWd] = useState(100);
 
   const load = () => {
     api.get("/wallet").then(({ data }) => setWallet(data));
     api.get("/withdrawals").then(({ data }) => setList(data));
+    api.get("/settings/public").then(({ data }) => setMinWd(data.min_withdrawal)).catch(() => {});
   };
   useEffect(load, []);
 
@@ -56,7 +58,7 @@ export default function Withdrawals() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-slate-900">Request Withdrawal</h2>
-          <p className="mt-1 text-sm text-slate-500">Available: <span className="font-mono font-bold text-emerald-600">₹{wallet?.balance ?? "…"}</span> · Min ₹100</p>
+          <p className="mt-1 text-sm text-slate-500">Available: <span className="font-mono font-bold text-emerald-600">₹{wallet?.balance ?? "…"}</span> · Min <span data-testid="withdraw-min">₹{minWd}</span></p>
 
           {!kycDone ? (
             <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800" data-testid="withdraw-kyc-warning">
@@ -67,7 +69,7 @@ export default function Withdrawals() {
             </div>
           ) : (
             <form onSubmit={submit} className="mt-4 space-y-4">
-              <div><Label>Amount (₹)</Label><Input data-testid="withdraw-amount" type="number" min="100" required value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1.5" /></div>
+              <div><Label>Amount (₹)</Label><Input data-testid="withdraw-amount" type="number" min={minWd} required value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1.5" /></div>
               <div>
                 <Label>Payment Method</Label>
                 <select data-testid="withdraw-method" value={method} onChange={(e) => setMethod(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">

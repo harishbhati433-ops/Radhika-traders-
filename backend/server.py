@@ -112,12 +112,13 @@ class RegisterIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    referral_bonus: float = 0
+    referral_bonus: Optional[float] = None
+    min_withdrawal: Optional[float] = None
 
 
 async def get_settings() -> dict:
     s = await db.settings.find_one({"key": "app"}) or {}
-    return {"referral_bonus": float(s.get("referral_bonus", 0))}
+    return {"referral_bonus": float(s.get("referral_bonus", 0)), "min_withdrawal": float(s.get("min_withdrawal", MIN_WITHDRAWAL))}
 
 
 class OtpVerifyIn(BaseModel):
@@ -351,9 +352,18 @@ async def public_settings():
 
 @api.put("/admin/settings")
 async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)):
-    if body.referral_bonus < 0:
-        raise HTTPException(status_code=400, detail="Bonus cannot be negative")
-    await db.settings.update_one({"key": "app"}, {"$set": {"referral_bonus": body.referral_bonus, "updated_at": now_iso()}}, upsert=True)
+    upd = {}
+    if body.referral_bonus is not None:
+        if body.referral_bonus < 0:
+            raise HTTPException(status_code=400, detail="Bonus cannot be negative")
+        upd["referral_bonus"] = body.referral_bonus
+    if body.min_withdrawal is not None:
+        if body.min_withdrawal < 1:
+            raise HTTPException(status_code=400, detail="Minimum withdrawal must be at least Rs.1")
+        upd["min_withdrawal"] = body.min_withdrawal
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.settings.update_one({"key": "app"}, {"$set": {**upd, "updated_at": now_iso()}}, upsert=True)
     return await get_settings()
 
 
@@ -899,8 +909,9 @@ async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = De
     if full.get("kyc", {}).get("status") != "verified":
         raise HTTPException(status_code=400, detail="Your KYC must be verified by Radhika Traders before withdrawal")
     await require_txn_password(user["id"], body.transaction_password, request)
-    if body.amount < MIN_WITHDRAWAL:
-        raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(MIN_WITHDRAWAL)}")
+    min_wd = (await get_settings())["min_withdrawal"]
+    if body.amount < min_wd:
+        raise HTTPException(status_code=400, detail=f"Minimum withdrawal is Rs.{int(min_wd)}")
     wallet = await compute_wallet(user["id"])
     if body.amount > wallet["balance"]:
         raise HTTPException(status_code=400, detail="Insufficient available balance")

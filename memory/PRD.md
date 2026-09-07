@@ -119,3 +119,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Install prompt UX
 - Compact single-row bar; mobile bottom (inset-x-2 bottom-2), desktop bottom-LEFT (no overlap with WhatsApp float). Adds body padding-bottom 96px while visible so nothing is hidden behind it. Auto-hides after 20s (no dismiss stored); X = 7-day dismiss. Deferred prompt stored on window.__rtInstallPrompt; "Install App" button in DashboardLayout sidebar (sidebar-install-app) when available and not standalone.
+
+## 2026-06 — Admin-controlled minimum withdrawal
+- settings.app.min_withdrawal (fallback env MIN_WITHDRAWAL=100). GET /settings/public returns it; PUT /admin/settings accepts partial {min_withdrawal} or {referral_bonus} (>=1 validation). POST /withdrawals enforces dynamic minimum.
+- Admin Dashboard: MinWithdrawalSetting.jsx (presets 100-500 + custom; testids min-withdrawal-preset-{n}, min-withdrawal-custom, min-withdrawal-save, min-withdrawal-current). Customer Withdrawals shows live min (withdraw-min) and input min.
