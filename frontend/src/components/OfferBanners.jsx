@@ -29,8 +29,8 @@ export function OfferBanners() {
   const Slide = ({ b, active }) => {
     const href = hrefFor(b);
     const inner = (
-      <div className="relative h-44 w-full sm:h-56">
-        <img src={fileUrl(b.image_url)} alt={b.title} className="h-full w-full object-cover" data-testid={active ? "offer-banner-image" : undefined} />
+      <div className="relative aspect-[3/1] w-full bg-[#0B0F17]">
+        <img src={fileUrl(b.image_url)} alt={b.title} className="h-full w-full object-contain" data-testid={active ? "offer-banner-image" : undefined} />
         {(b.title || b.subtitle) && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-5 text-white">
             {b.title && <div className="font-display text-xl font-extrabold sm:text-2xl" data-testid={active ? "offer-banner-title" : undefined}>{b.title}</div>}
@@ -43,7 +43,7 @@ export function OfferBanners() {
       </div>
     );
     const cls = "block h-full w-full";
-    if (b.campaign_slug) return <a href={href} target="_blank" rel="noreferrer" className={cls} data-testid={active ? "offer-banner-link" : undefined}>{inner}</a>;
+    if (b.campaign_slug) return <a href={href} target="_blank" rel="noreferrer" className={cls} data-testid={active ? "offer-banner-link" : undefined} data-auto={b.auto ? "1" : undefined}>{inner}</a>;
     if (href.startsWith("/")) return <Link to={href} className={cls} data-testid={active ? "offer-banner-link" : undefined}>{inner}</Link>;
     if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} data-testid={active ? "offer-banner-link" : undefined}>{inner}</a>;
     return <div className={cls}>{inner}</div>;

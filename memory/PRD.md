@@ -170,3 +170,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Profile KYC: Confirm Account Number field (kyc-account-confirm; paste disabled) with live match/mismatch text (kyc-account-match / kyc-account-mismatch); submit blocked on mismatch. Backend KycIn.bank_account_confirm optional -> 400 if differs.
 - WelcomeModal.jsx on CustomerDashboard: shows once after signup (sessionStorage rt_just_signed_up set in Signup verify step; localStorage rt_welcome_seen_{id}). Branded header, Partner ID, 3 steps, CTA to KYC / welcome letter. testids welcome-modal, welcome-modal-code, welcome-modal-kyc, welcome-modal-letter, welcome-modal-close.
 - iteration_8: KYC confirm + welcome modal all pass (3 pytest + 17 UI assertions).
+
+## 2026-06 — Banner display fix
+- OfferBanners + AdminBanners: image container aspect-[3/1] with object-contain on dark bg (was fixed h-44/h-56 + object-cover which cropped top/bottom of 1200x400 uploads). Full image always visible.
+
+## 2026-06 — Auto campaign banners in slider
+- GET /banners (customer view) appends auto entries for every live+offer_enabled campaign with banner_url and show_in_slider!=False (id "auto-<cid>", auto:true, subtitle "Earn ₹X per approved account", links via campaign_slug). Manual banner for same campaign_id takes precedence. CampaignIn.show_in_slider (default true) + checkbox in CampaignForm (cf-show-in-slider). AdminBanners shows info note (banners-auto-note).

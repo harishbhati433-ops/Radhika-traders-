@@ -14,7 +14,7 @@ const EMPTY = {
   description: "", requirements: "", important_notes: "", min_requirement: "", max_payout: "",
   special_bonus: "", payment_timeline: "", validity: "", important_conditions: "",
   start_date: "", end_date: "", budget: "", report_frequency: "", payment_terms: "",
-  logo_url: "", banner_url: "", status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [],
+  logo_url: "", banner_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [],
 };
 const LEAD_FIELDS = [["name", "Full Name"], ["mobile", "Mobile Number"], ["email", "Gmail / Email ID"], ["pan", "PAN Number"], ["dob", "Date of Birth"], ["aadhaar", "Aadhaar Number"], ["bank_account", "Bank Account Number"], ["ifsc", "IFSC Code"], ["upi", "UPI ID"], ["address", "Address"]];
 const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
@@ -114,7 +114,13 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
 
           <Row>
             <ImageUpload label="Logo" value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} testId="cf-upload-logo" />
-            <ImageUpload label="Banner" value={f.banner_url} onChange={(v) => setF({ ...f, banner_url: v })} testId="cf-upload-banner" />
+            <div>
+              <ImageUpload label="Banner — 1200×400 px (3:1). Auto-shows in the customer dashboard slider while the campaign is live." value={f.banner_url} onChange={(v) => setF({ ...f, banner_url: v })} testId="cf-upload-banner" />
+              <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <input type="checkbox" checked={f.show_in_slider !== false} onChange={(e) => setF({ ...f, show_in_slider: e.target.checked })} data-testid="cf-show-in-slider" />
+                Show this banner in customer dashboard slider
+              </label>
+            </div>
           </Row>
 
           <div className="rounded-xl border border-slate-200 p-4" data-testid="cf-lead-fields">

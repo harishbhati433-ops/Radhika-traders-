@@ -256,6 +256,7 @@ class CampaignIn(BaseModel):
     banner_url: str = ""
     status: str = "live"
     offer_enabled: bool = True
+    show_in_slider: bool = True
     affiliate_links: List[AffiliateLink] = []
     lead_fields: List[dict] = []
 
@@ -1167,6 +1168,18 @@ async def list_banners(all: bool = False, user: dict = Depends(get_current_user)
         o["campaign_name"] = c["offer_name"] if c else ""
         o["campaign_live"] = bool(c and c.get("status") == "live" and c.get("offer_enabled", True))
         out.append(o)
+    if not (all and user.get("role") == "admin"):
+        manual_ids = {b.get("campaign_id") for b in items if b.get("campaign_id")}
+        camps = await db.campaigns.find({"is_deleted": False, "status": "live", "offer_enabled": True, "banner_url": {"$nin": ["", None]},
+                                         "show_in_slider": {"$ne": False}}).sort("created_at", -1).to_list(50)
+        for c in camps:
+            if str(c["_id"]) in manual_ids:
+                continue
+            out.append({"id": f"auto-{c['_id']}", "auto": True, "title": c.get("offer_name", ""),
+                        "subtitle": f"Earn ₹{c.get('payout_amount', 0):g} per approved account" if c.get("payout_amount") else "",
+                        "image_url": c["banner_url"], "link": "", "campaign_id": str(c["_id"]), "enabled": True, "order": 50,
+                        "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True})
+
     return out
 
 

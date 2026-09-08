@@ -35,9 +35,12 @@ export default function AdminBanners() {
 
   return (
     <DashboardLayout nav={adminNav} title="Offer Banners">
-      <p className="mb-6 text-sm text-slate-500">These banners appear on every customer's dashboard after login. Use them to highlight payouts, e.g. "Choice Trade — ₹300 per account".</p>
+      <p className="mb-3 text-sm text-slate-500">These banners appear on every customer's dashboard after login. Use them to highlight payouts, e.g. "Choice Trade — ₹300 per account".</p>
+      <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900" data-testid="banners-auto-note">
+        <b>Automatic:</b> every live campaign that has a Banner image (uploaded in the campaign form) is shown in the customer dashboard slider automatically — no need to add it here. Use this page only for extra/custom banners.
+      </div>
       <form onSubmit={add} className="mb-8 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-2" data-testid="banner-form">
-        <div className="lg:col-span-2"><ImageUpload label="Banner image (recommended 1200×400)" value={f.image_url} onChange={(v) => setF({ ...f, image_url: v })} testId="banner-upload" /></div>
+        <div className="lg:col-span-2"><ImageUpload label="Banner image — use 1200×400 px (3:1). The full image is always shown, nothing is cropped." value={f.image_url} onChange={(v) => setF({ ...f, image_url: v })} testId="banner-upload" /></div>
         <div><Label>Title</Label><Input data-testid="banner-title" value={f.title} onChange={set("title")} placeholder="Choice Trade" className="mt-1.5" /></div>
         <div><Label>Payout / Subtitle</Label><Input data-testid="banner-subtitle" value={f.subtitle} onChange={set("subtitle")} placeholder="₹300 per account opening" className="mt-1.5" /></div>
         <div><Label>Campaign (banner click → lead form → partner site)</Label>
@@ -59,7 +62,7 @@ export default function AdminBanners() {
         {list.length === 0 && <p className="text-sm text-slate-500" data-testid="banner-empty">No banners yet.</p>}
         {list.map((b) => (
           <div key={b.id} data-testid={`banner-${b.id}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <img src={fileUrl(b.image_url)} alt={b.title} className="h-36 w-full object-cover" />
+            <img src={fileUrl(b.image_url)} alt={b.title} className="aspect-[3/1] w-full bg-[#0B0F17] object-contain" />
             <div className="flex items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <div className="truncate font-semibold text-slate-900">{b.title || "Untitled"}</div>
