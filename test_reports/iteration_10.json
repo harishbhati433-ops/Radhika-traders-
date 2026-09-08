@@ -1,0 +1,56 @@
+{
+  "summary": "Tested new PAN/Aadhaar validation (Lead Form + KYC) and Admin Leads Export (xlsx/csv with date presets). All 8 pytest backend tests passed and all frontend flows worked end-to-end. Lead created and cleaned up. testcust KYC values were restored (not submitted).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/profile/kyc", "issue": "Dead code at server.py:651 — an unreachable second HTTPException raise immediately after the aadhaar validation raise on line 650. Cosmetic only, remove for cleanliness."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pan_aadhaar_export.py",
+    "/app/test_reports/pytest/pan_export_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Remove dead-code line at /app/backend/server.py:651 — duplicate/unreachable HTTPException in submit_kyc."
+  ],
+  "critical_code_review_comments": [
+    "server.py:651 unreachable raise HTTPException after the aadhaar validation on line 650 — safe but dead code.",
+    "server.py admin_leads/export uses ISO string prefix comparison for created_at date filter (works because ISO timestamps sort lexicographically and stored values include 'T' after date). Documented behaviour, verified correct.",
+    "LeadExport.jsx uses fetch with Bearer token from localStorage — works, but no explicit 401 handling; a stale token would show 'Export failed' toast rather than redirect. Minor UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pan_aadhaar_export.py (new)",
+    "/app/test_reports/iteration_10.json (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin); Customer testcust@example.com / Test@1234",
+  "seed_data_creation": "None persistent. Created and deleted 2 test leads (mobile 9555500001, 9555500004) during backend tests; 1 UI lead (9555500099) cleaned up. Toggled campaign axis-mutual-fund-sip aadhaar field enabled during test and restored to disabled after.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Only live campaign in preview is 'axis-mutual-fund-sip' (was seeded as 'CHOICE BROKING TRADE' name). Aadhaar field is disabled by default on it; use array_filters mongosh update to toggle for testing. testcust KYC is verified with PAN TSTCU1234F — do not submit KYC while testing, only manipulate input formatting and restore original value.",
+  "verification_details": {
+    "backend_pan_lowercase_stored_upper": "PASS — lead.data.pan == 'ABCDE1234F' when submitted as 'abcde1234f'",
+    "backend_invalid_pan_400": "PASS — 'ABC12' returns 400 'Invalid PAN...'",
+    "backend_aadhaar_5_digit_400": "PASS — returns 400 'Aadhaar must be exactly 12 digits'",
+    "backend_aadhaar_12_digit_200": "PASS — stored as '123456789012'",
+    "backend_export_xlsx_all": "PASS — Content-Disposition filename=radhika_leads_all_to_all.xlsx, expected columns present, row count matches /api/admin/leads",
+    "backend_export_csv_all": "PASS — text/csv with correct header",
+    "backend_export_empty_range": "PASS — 2020-01-01..2020-01-02 returns empty (header-only) xlsx",
+    "backend_export_date_range_filter": "PASS — rows filtered by created_at date match /api/admin/leads?date_from&date_to",
+    "frontend_lead_pan_uppercase": "PASS — typing 'abcde1234f' becomes 'ABCDE1234F' in lead-field-pan",
+    "frontend_lead_pan_error": "PASS — 'ABC12' shows lead-pan-error with format hint; submit shows toast; no success",
+    "frontend_lead_success_valid": "PASS — with valid data, lead created and redirected to campaign URL",
+    "frontend_kyc_aadhaar_digits_only_max12": "PASS — 'abc12345' -> '12345' with error '(5/12 entered)'; 12 digits clears error",
+    "frontend_kyc_pan_uppercase_and_error": "PASS — lowercase becomes uppercase; 'ABC12' shows kyc-pan-error",
+    "frontend_admin_leads_presets": "PASS — all 7 presets present (all/today/yesterday/last7/this_month/last_month/custom)",
+    "frontend_yesterday_preset": "PASS — set from=to=2026-09-07",
+    "frontend_this_month_preset": "PASS — from=2026-09-01, to=2026-09-08",
+    "frontend_download_xlsx": "PASS — filename radhika_leads_all_to_all.xlsx",
+    "frontend_download_csv": "PASS — download triggered (pandas verification skipped in browser env; backend pytest already verified content)"
+  }
+}

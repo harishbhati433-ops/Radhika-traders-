@@ -1,0 +1,36 @@
+{
+  "summary": "Verified auto campaign banners feature end-to-end. Backend /api/banners returns auto banner id='auto-6a9d87a93ee34323c98dfdc1' with correct title/subtitle/image_url/campaign_live for Axis Mutual Fund SIP. Pause->auto banner disappears; live->reappears. show_in_slider=false hides, true shows. Image URL 200 image/jpeg. Frontend customer dashboard slider (data-testid offer-banners) shows the auto banner (data-auto='1', href /api/go/axis-mutual-fund-sip?ref=RTA12499). Container aspect ratio = 3.000 on both desktop (968x323) and mobile (390 -> 358x119); image (nat 1600x535) rendered fully inside container with object-fit:contain (fitsInside=true, rendered ratio 3.000). Screenshots confirm banner top text 'START YOUR SIP TODAY' and bottom 'RADHIKA TRADERS ... Connect Now' both visible - not cropped.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "n/a", "issue": "Backend became unresponsive during test run due to blocking email retries against emergent email service returning 429. Required a supervisor restart to recover. Consider making email retry non-blocking / background task."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_banners_slider.py",
+    "/app/test_reports/pytest/banners_slider.xml"
+  ],
+  "action_items": [
+    "Note: campaign slug is 'axis-mutual-fund-sip' (not 'choice-trade-test' as mentioned in request) - probably renamed. All functionality verified against actual slug.",
+    "Investigate backend hang caused by email service 429 retry loops (email_service retries observed for many minutes; blocked /api/health)."
+  ],
+  "critical_code_review_comments": [
+    "list_banners (server.py:1156) correctly filters auto banners by status='live', offer_enabled, banner_url present, show_in_slider!=False. Manual banner de-dup by campaign_id works.",
+    "banner_out excludes _id correctly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_banners_slider.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Customer: testcust@example.com / Test@1234; Admin: bhatiharish276@gmail.com / Radhika@2023",
+  "seed_data_creation": "None. Campaign left in 'live' state as required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Banner auto-inclusion feature is working. Container aspect 3:1 with object-contain confirmed on desktop+mobile. If backend appears unresponsive, restart backend (email retries can block). Campaign 'Axis Mutual Fund SIP' slug is 'axis-mutual-fund-sip'.",
+  "rca of the issue": "n/a - feature verified working"
+}

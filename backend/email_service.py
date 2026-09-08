@@ -259,3 +259,20 @@ async def send_welcome_email(to: str, name: str, referral_code: str, signup_bonu
         f'{_signature()}'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_report_email(to: str, name: str, title: str, note: str, link: str, expires_on: str) -> str | None:
+    if not to:
+        return None
+    subject = f"{_first(name)}, a new report is ready for you — {title}"
+    note_html = f'<p style="font-size:14px;color:#334155;line-height:1.6">{escape(note)}</p>' if note else ""
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+        f'<p style="font-size:14px;color:#334155">Radhika Traders has shared a new file with you: <b>{escape(title)}</b>.</p>'
+        f'{note_html}'
+        f'<p style="margin:18px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;'
+        f'border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open Reports &amp; download</a></p>'
+        f'<p style="font-size:12px;color:#64748b">Log in to your dashboard → <b>Reports</b> to download it. This file stays available until <b>{escape(expires_on)}</b> (7 days) and is then removed automatically.</p>'
+        f'{_signature()}'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))

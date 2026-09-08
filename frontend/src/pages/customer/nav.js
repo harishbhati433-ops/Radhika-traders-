@@ -1,4 +1,4 @@
-import { LayoutDashboard, Megaphone, Wallet, ArrowDownToLine, FileText, User, ClipboardList, Award } from "lucide-react";
+import { LayoutDashboard, Megaphone, Wallet, ArrowDownToLine, FileText, User, ClipboardList, Award, FolderDown } from "lucide-react";
 
 export const customerNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -7,6 +7,7 @@ export const customerNav = [
   { to: "/wallet", label: "Wallet", icon: Wallet },
   { to: "/withdrawals", label: "Withdrawals", icon: ArrowDownToLine },
   { to: "/statements", label: "Statements", icon: FileText },
+  { to: "/reports", label: "Reports & Files", icon: FolderDown },
   { to: "/welcome-letter", label: "Welcome Letter", icon: Award },
   { to: "/profile", label: "Profile & KYC", icon: User },
 ];

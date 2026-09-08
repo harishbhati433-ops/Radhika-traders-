@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { formatPan, formatAadhaar, panError, aadhaarError } from "../../lib/validators";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -45,6 +46,8 @@ export default function Profile() {
   const saveKyc = async (e) => {
     e.preventDefault();
     if (!acctMatch) return toast.error("Account numbers do not match. Please re-enter.");
+    if (panError(kyc.pan)) return toast.error(panError(kyc.pan));
+    if (aadhaarError(kyc.aadhaar)) return toast.error(aadhaarError(kyc.aadhaar));
     setSavingK(true);
     try { const { data } = await api.put("/profile/kyc", { ...kyc, bank_account_confirm: confirmAcct }); setUser(data); toast.success("KYC verified successfully ✓ Withdrawals enabled"); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
@@ -90,8 +93,8 @@ export default function Profile() {
           <div className="mt-4 space-y-4">
             <div><Label>Account Holder Name</Label><Input data-testid="kyc-holder" required value={kyc.account_holder} onChange={setK("account_holder")} className="mt-1.5" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>PAN</Label><Input data-testid="kyc-pan" required value={kyc.pan} onChange={setK("pan")} className="mt-1.5" placeholder="ABCDE1234F" /></div>
-              <div><Label>Aadhaar</Label><Input data-testid="kyc-aadhaar" value={kyc.aadhaar} onChange={setK("aadhaar")} className="mt-1.5" placeholder="Optional" /></div>
+              <div><Label>PAN</Label><Input data-testid="kyc-pan" required value={kyc.pan} maxLength={10} onChange={(e) => setKyc({ ...kyc, pan: formatPan(e.target.value) })} className={`mt-1.5 uppercase ${panError(kyc.pan) ? "border-rose-400" : ""}`} placeholder="ABCDE1234F" />{panError(kyc.pan) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-pan-error">{panError(kyc.pan)}</div>}</div>
+              <div><Label>Aadhaar</Label><Input data-testid="kyc-aadhaar" inputMode="numeric" maxLength={12} value={kyc.aadhaar} onChange={(e) => setKyc({ ...kyc, aadhaar: formatAadhaar(e.target.value) })} className={`mt-1.5 ${aadhaarError(kyc.aadhaar) ? "border-rose-400" : ""}`} placeholder="12-digit number (optional)" />{aadhaarError(kyc.aadhaar) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-aadhaar-error">{aadhaarError(kyc.aadhaar)}</div>}</div>
             </div>
             <div><Label>Bank Account Number</Label><Input data-testid="kyc-account" required value={kyc.bank_account} onChange={setK("bank_account")} className="mt-1.5" autoComplete="off" onCopy={(e) => e.preventDefault()} /></div>
             <div>

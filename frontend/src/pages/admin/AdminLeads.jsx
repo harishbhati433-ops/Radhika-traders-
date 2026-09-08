@@ -4,6 +4,7 @@ import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { CampaignChip } from "../../components/CampaignChip";
+import { LeadExport, DATE_PRESETS, presetRange } from "../../components/LeadExport";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
 import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2 } from "lucide-react";
@@ -16,11 +17,11 @@ export default function AdminLeads() {
   const [summary, setSummary] = useState({});
   const [list, setList] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
-  const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: "", date_from: "", date_to: "" });
+  const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: "", date_from: "", date_to: "", preset: "" });
   const [view, setView] = useState(null);
 
   const load = () => {
-    const params = Object.fromEntries(Object.entries(flt).filter(([, v]) => v));
+    const params = Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset"));
     api.get("/admin/leads", { params }).then(({ data }) => setList(data));
     api.get("/admin/leads/summary").then(({ data }) => setSummary(data));
   };
@@ -48,7 +49,19 @@ export default function AdminLeads() {
         <select data-testid="lead-filter-status" value={flt.status} onChange={(e) => setFlt({ ...flt, status: e.target.value })} className={sel}><option value="">Lead status</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
         <select data-testid="lead-filter-account" value={flt.account_status} onChange={(e) => setFlt({ ...flt, account_status: e.target.value })} className={sel}><option value="">Account status</option><option value="pending">Pending</option><option value="account_opened">Account Opened</option><option value="rejected">Rejected</option></select>
         <Input data-testid="lead-filter-ref" placeholder="Publisher / Ref ID" value={flt.ref} onChange={(e) => setFlt({ ...flt, ref: e.target.value })} />
-        <div className="flex gap-1"><Input data-testid="lead-filter-from" type="date" value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value })} /><Input data-testid="lead-filter-to" type="date" value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value })} /></div>
+        <div className="flex gap-1"><Input data-testid="lead-filter-from" type="date" value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value, preset: "custom" })} /><Input data-testid="lead-filter-to" type="date" value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value, preset: "custom" })} /></div>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3" data-testid="lead-export-bar">
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="lead-date-presets">
+          <span className="mr-1 text-xs font-bold text-slate-600">Date:</span>
+          <button onClick={() => setFlt({ ...flt, date_from: "", date_to: "", preset: "" })} data-testid="lead-preset-all" className={`rounded-full px-3 py-1 text-xs font-bold ${!flt.preset && !flt.date_from ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>All time</button>
+          {DATE_PRESETS.map(([k, l]) => (
+            <button key={k} data-testid={`lead-preset-${k}`} onClick={() => { const [a, b] = presetRange(k); setFlt({ ...flt, date_from: a, date_to: b, preset: k }); }}
+              className={`rounded-full px-3 py-1 text-xs font-bold ${flt.preset === k ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{l}</button>
+          ))}
+          {flt.date_from && <span className="ml-1 text-xs text-slate-500" data-testid="lead-date-range-label">{flt.date_from} → {flt.date_to || "today"}</span>}
+        </div>
+        <LeadExport filters={{ campaign_id: flt.campaign_id, status: flt.status, account_status: flt.account_status, ref: flt.ref, search: flt.search, date_from: flt.date_from, date_to: flt.date_to }} count={list.length} />
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white rt-scroll">

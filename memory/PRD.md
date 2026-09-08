@@ -176,3 +176,12 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Auto campaign banners in slider
 - GET /banners (customer view) appends auto entries for every live+offer_enabled campaign with banner_url and show_in_slider!=False (id "auto-<cid>", auto:true, subtitle "Earn ₹X per approved account", links via campaign_slug). Manual banner for same campaign_id takes precedence. CampaignIn.show_in_slider (default true) + checkbox in CampaignForm (cf-show-in-slider). AdminBanners shows info note (banners-auto-note).
+
+## 2026-06 — PAN/Aadhaar validation + Lead export
+- lib/validators.js (formatPan uppercase+alnum max10, formatAadhaar digits max12, panError/aadhaarError). Applied in LeadForm (lead-pan-error / lead-aadhaar-error) and Profile KYC (kyc-pan-error / kyc-aadhaar-error); submit blocked on error. Backend: /leads uppercases PAN, validates PAN + 12-digit Aadhaar; /profile/kyc Aadhaar msg.
+- GET /admin/leads/export?format=xlsx|csv&date_from&date_to&campaign_id&status&account_status&ref&search -> file (columns: Lead ID, Date, Time, Campaign, statuses, partner, ref, all lead field labels, reject reason, updated). AdminLeads: date presets (lead-preset-today/yesterday/last7/this_month/last_month/custom/all) + custom From/To + LeadExport buttons (lead-export-xlsx / lead-export-csv). Verified xlsx (10 rows) + csv via curl.
+
+## 2026-06 — Reports (admin -> publishers, 7-day expiry)
+- db.reports {title, note, file_path, file_name, content_type, size, audience all|selected, recipients[], created_at, expires_at(+7d), downloaded_by[]}. POST /admin/reports (multipart: file, title, note, audience, user_ids csv, send_email) -> stores via put_object under {APP}/reports/, notifications + background send_report_email (link /reports). GET/DELETE /admin/reports. GET /reports (customer, access by audience/recipients, unexpired), GET /reports/{id}/download (marks downloaded_by). _purge_expired_reports() runs on list calls + startup; marks db.files is_deleted. Max 25MB.
+- UI: /admin/reports (AdminReports.jsx: report-title, report-file, report-note, report-audience-all/selected, report-recipient-{id}, report-send-email, report-send, report-row-{id}, report-delete-{id}); /reports (Reports.jsx: report-item-{id}, report-download-{id}, report-days-{id}). Nav: admin "Send Reports", customer "Reports & Files".
+- iteration_10 (PAN/Aadhaar + export) and iteration_11 (Reports feature): all pass (15 pytest + UI).

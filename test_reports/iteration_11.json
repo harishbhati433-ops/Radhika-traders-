@@ -1,0 +1,51 @@
+{
+  "summary": "Full backend + frontend testing of Admin 'Send Reports' feature (admin -> publishers). All 15 pytest backend tests passed and all UI flows worked end-to-end. Report send (selected/all), listing, expiry auto-purge, delete, download (bytes match, content-disposition attachment with original filename), downloaded flag persistence, notifications, admin download_count increment, throwaway (audience 'selected' isolation) all verified. Cleaned up throwaway user, test reports, login_attempts.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reports_feature.py",
+    "/app/test_reports/pytest/reports_feature.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:1730 — user_ids is only parsed when audience=='selected'. Reasonable, but the 400 for empty selected is raised AFTER file already uploaded to storage (put_object) and a files row inserted. Result: a small orphan blob + files row (is_deleted=false) is created for every failed selected-with-no-ids attempt. Consider validating audience/user_ids BEFORE writing to storage.",
+    "server.py:1717 title='' after strip returns 400, but FastAPI Form(...) required means missing title yields 422 (validated in test).",
+    "server.py:1790 Content-Disposition uses non-RFC5987 encoding — for filenames with unicode it may not decode nicely. sanitize via re.sub keeps ASCII so acceptable for now.",
+    "AdminReports.jsx uses q (search state) inside the customers filter — search state is not reset between opens; minor UX only.",
+    "Reports.jsx download: on 404 (expired) toast text says 'File not available (it may have expired)' — good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reports_feature.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin); Customer testcust@example.com / Test@1234 (id 6a9d87aa3ee34323c98dfdc2).",
+  "seed_data_creation": "Test-only. Created throwaway customer 'test_throwaway_reports@example.com' (password hash copied from testcust). Deleted at end of run. Also created and deleted several test reports. All cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reports feature endpoints /api/admin/reports (GET,POST,DELETE) and /api/reports (GET) and /api/reports/{id}/download plus _purge_expired_reports all covered. Note: login uses lowercased email — when creating throwaway users via mongosh, store email lowercase or login will fail with 'Invalid email or password'. Login response uses key 'token' (not 'access_token'). Notifications endpoint returns {unread, items} dict.",
+  "verification_details": {
+    "backend_missing_title_400_or_422": "PASS (422 from FastAPI Form)",
+    "backend_selected_empty_userids_400": "PASS",
+    "backend_send_selected_message_and_expiry_7d": "PASS (~7 days)",
+    "backend_admin_list_recipient_and_downloads": "PASS",
+    "backend_testcust_sees_report": "PASS (downloaded false initially)",
+    "backend_throwaway_does_not_see_selected": "PASS",
+    "backend_download_bytes_and_content_disposition": "PASS (attachment; filename=\"qa_report.csv\")",
+    "backend_downloaded_flag_and_download_count": "PASS (customer.downloaded true, admin.download_count=1)",
+    "backend_throwaway_download_404": "PASS",
+    "backend_notification_created": "PASS (title 'New report: QA Report')",
+    "backend_expiry_purges_and_files_is_deleted_true": "PASS",
+    "backend_delete_endpoint": "PASS (fresh report deleted and not visible to customer)",
+    "backend_audience_all_visible_to_both": "PASS",
+    "frontend_admin_send_flow": "PASS (title/file/note/audience selected/recipient search/uncheck send_email/send -> success toast 'Report sent to 1 publisher'; row shows '1 selected', '0 downloads', '7 days left')",
+    "frontend_customer_view_and_download": "PASS (report-item visible; days text 'Available for 7 more days'; download event with filename 'ui_report.csv'; downloaded bytes match uploaded; toast 'Download started'; after reload 'Downloaded' badge shown)",
+    "frontend_admin_delete": "PASS ('Deleted' toast, report-empty shown after delete)"
+  }
+}

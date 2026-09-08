@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Query, Header, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Form, Query, Header, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -23,7 +23,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp,
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email
 from storage_service import init_storage, put_object, get_object, APP_NAME
 
 mongo_url = os.environ["MONGO_URL"]
@@ -647,6 +647,7 @@ async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
     if not re.fullmatch(r"\d{9,18}", acct):
         raise HTTPException(status_code=400, detail="Bank account number must be 9–18 digits")
     if body.aadhaar and not re.fullmatch(r"\d{12}", re.sub(r"\s", "", body.aadhaar)):
+        raise HTTPException(status_code=400, detail="Aadhaar must be exactly 12 digits (numbers only)")
         raise HTTPException(status_code=400, detail="Aadhaar must be 12 digits")
     if body.upi and not re.fullmatch(r"[\w.\-]{2,}@[A-Za-z]{2,}", body.upi.strip()):
         raise HTTPException(status_code=400, detail="Invalid UPI ID (e.g. name@upi)")
@@ -796,8 +797,14 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
         raise HTTPException(status_code=400, detail=f"Required: {', '.join(missing)}")
     if data.get("mobile") and not re.fullmatch(r"\d{10}", data["mobile"]):
         raise HTTPException(status_code=400, detail="Mobile number must be 10 digits")
-    if data.get("pan") and not re.fullmatch(r"[A-Za-z]{5}\d{4}[A-Za-z]", data["pan"]):
-        raise HTTPException(status_code=400, detail="Invalid PAN format")
+    if data.get("pan"):
+        data["pan"] = data["pan"].upper()
+        if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", data["pan"]):
+            raise HTTPException(status_code=400, detail="Invalid PAN. Format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)")
+    if data.get("aadhaar"):
+        data["aadhaar"] = re.sub(r"\s", "", data["aadhaar"])
+        if not re.fullmatch(r"\d{12}", data["aadhaar"]):
+            raise HTTPException(status_code=400, detail="Aadhaar must be exactly 12 digits (numbers only)")
     ref = (body.ref or "").upper()
     partner = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
@@ -857,6 +864,71 @@ async def admin_leads(campaign_id: Optional[str] = None, status: Optional[str] =
         q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
     items = await db.leads.find(q).sort("created_at", -1).to_list(5000)
     return [lead_out(l) for l in items]
+
+
+def _lead_query(campaign_id, status, account_status, ref, search, date_from, date_to) -> dict:
+    q: dict = {}
+    if campaign_id:
+        q["campaign_id"] = campaign_id
+    if status:
+        q["status"] = status
+    if account_status:
+        q["account_status"] = account_status
+    if ref:
+        q["$or"] = [{"ref_code": ref.upper()}, {"partner_name": {"$regex": re.escape(ref), "$options": "i"}}]
+    if date_from or date_to:
+        q["created_at"] = {**({"$gte": date_from} if date_from else {}), **({"$lte": date_to + "T23:59:59"} if date_to else {})}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
+    return q
+
+
+@api.get("/admin/leads/export")
+async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = None, status: Optional[str] = None,
+                             account_status: Optional[str] = None, ref: Optional[str] = None, search: Optional[str] = None,
+                             date_from: Optional[str] = None, date_to: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = _lead_query(campaign_id, status, account_status, ref, search, date_from, date_to)
+    items = await db.leads.find(q).sort("created_at", -1).to_list(50000)
+    field_keys: list = []
+    for l in items:
+        for k in (l.get("data") or {}):
+            if k not in field_keys:
+                field_keys.append(k)
+    labels = {k: v for k, v in LEAD_FIELDS} if isinstance(LEAD_FIELDS, list) and LEAD_FIELDS and isinstance(LEAD_FIELDS[0], tuple) else {}
+    rows = []
+    for l in items:
+        row = {"Lead ID": l.get("lead_id", ""), "Date": (l.get("created_at") or "")[:10], "Time": (l.get("created_at") or "")[11:19],
+               "Campaign": l.get("campaign_name", ""), "Lead Status": l.get("status", ""), "Account Status": l.get("account_status", ""),
+               "Referred By (Partner)": l.get("partner_name", ""), "Ref Code": l.get("ref_code", "")}
+        for k in field_keys:
+            row[labels.get(k, k.replace("_", " ").title())] = (l.get("data") or {}).get(k, "")
+        row["Reject Reason"] = l.get("reject_reason", "")
+        row["Last Updated"] = (l.get("updated_at") or "")[:19].replace("T", " ")
+        rows.append(row)
+    cols = list(rows[0].keys()) if rows else ["Lead ID", "Date", "Campaign", "Lead Status", "Account Status"]
+    tag = f"{date_from or 'all'}_to_{date_to or 'all'}"
+    fname = f"radhika_leads_{tag}"
+    if format == "csv":
+        import csv
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+        return Response(content=buf.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": f"attachment; filename={fname}.csv"})
+    import pandas as pd
+    buf = io.BytesIO()
+    df = pd.DataFrame(rows, columns=cols)
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Leads")
+        ws = writer.sheets["Leads"]
+        for i, c in enumerate(cols, 1):
+            width = max([len(str(c))] + [len(str(r.get(c, ""))) for r in rows[:500]]) + 2
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = min(max(width, 10), 45)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f"attachment; filename={fname}.xlsx"})
 
 
 @api.patch("/admin/leads/{lid}")
@@ -1618,6 +1690,106 @@ async def serve_file(path: str):
     return Response(content=data, media_type=record.get("content_type", ct))
 
 
+# ----------------------------- Reports (admin -> publishers) -----------------------------
+REPORT_TTL_DAYS = 7
+
+
+async def _purge_expired_reports():
+    now = now_iso()
+    expired = await db.reports.find({"expires_at": {"$lte": now}}).to_list(500)
+    for r in expired:
+        await db.files.update_one({"storage_path": r["file_path"]}, {"$set": {"is_deleted": True}})
+    if expired:
+        await db.reports.delete_many({"_id": {"$in": [r["_id"] for r in expired]}})
+
+
+def _report_out(r: dict, user_id: Optional[str] = None) -> dict:
+    return {"id": str(r["_id"]), "title": r["title"], "note": r.get("note", ""), "file_name": r["file_name"], "content_type": r.get("content_type", ""),
+            "size": r.get("size", 0), "created_at": r["created_at"], "expires_at": r["expires_at"], "audience": r.get("audience", "all"),
+            "recipient_count": len(r.get("recipients", [])) if r.get("audience") == "selected" else None,
+            "downloaded": user_id in (r.get("downloaded_by") or []) if user_id else None,
+            "download_count": len(r.get("downloaded_by") or [])}
+
+
+@api.post("/admin/reports")
+async def admin_send_report(request: Request, background: BackgroundTasks, file: UploadFile = File(...), title: str = Form(...), note: str = Form(""),
+                            audience: str = Form("all"), user_ids: str = Form(""), send_email: bool = Form(True), admin: dict = Depends(require_admin)):
+    title = title.strip()[:120]
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 25 MB)")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
+    ct = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
+    path = f"{APP_NAME}/reports/{uuid.uuid4().hex}.{ext}"
+    stored = put_object(path, data, ct)
+    await db.files.insert_one({"storage_path": stored["path"], "original_filename": file.filename, "content_type": ct, "size": len(data), "is_deleted": False, "created_at": now_iso()})
+    ids = [i.strip() for i in user_ids.split(",") if i.strip()] if audience == "selected" else []
+    if audience == "selected" and not ids:
+        raise HTTPException(status_code=400, detail="Select at least one publisher")
+    q = {"role": "customer", "email_verified": True, "account_status": {"$nin": ["disabled", "deleted", "deactivated"]}}
+    if audience == "selected":
+        q["_id"] = {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}
+    users = await db.users.find(q, {"email": 1, "name": 1}).to_list(10000)
+    expires = (datetime.now(timezone.utc) + timedelta(days=REPORT_TTL_DAYS)).isoformat()
+    doc = {"title": title, "note": note.strip()[:1000], "file_path": stored["path"], "file_name": file.filename, "content_type": ct, "size": len(data),
+           "audience": "selected" if audience == "selected" else "all", "recipients": [str(u["_id"]) for u in users] if audience == "selected" else [],
+           "created_at": now_iso(), "expires_at": expires, "created_by": admin["id"], "downloaded_by": []}
+    res = await db.reports.insert_one(doc)
+    if users:
+        await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": f"New report: {title}", "body": (note.strip()[:140] or "A new file has been shared with you. Download it from Reports."),
+                                             "link": "/reports", "type": "report", "read": False, "created_at": now_iso()} for u in users])
+    origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+    expires_on = datetime.fromisoformat(expires).astimezone(IST).strftime("%d %b %Y")
+    if send_email:
+        for u in users:
+            background.add_task(send_report_email, u.get("email", ""), u.get("name", ""), title, note.strip(), f"{origin}/reports", expires_on)
+    await _log_security(admin["id"], "report_sent", request, f"{title} -> {len(users)} publishers")
+    return {"message": f"Report sent to {len(users)} publisher{'s' if len(users) != 1 else ''}", "id": str(res.inserted_id), "recipients": len(users), "expires_at": expires}
+
+
+@api.get("/admin/reports")
+async def admin_list_reports(admin: dict = Depends(require_admin)):
+    await _purge_expired_reports()
+    items = await db.reports.find({}).sort("created_at", -1).to_list(500)
+    return [_report_out(r) for r in items]
+
+
+@api.delete("/admin/reports/{rid}")
+async def admin_delete_report(rid: str, admin: dict = Depends(require_admin)):
+    r = await db.reports.find_one({"_id": ObjectId(rid)}) if ObjectId.is_valid(rid) else None
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found")
+    await db.files.update_one({"storage_path": r["file_path"]}, {"$set": {"is_deleted": True}})
+    await db.reports.delete_one({"_id": r["_id"]})
+    return {"message": "Report deleted"}
+
+
+def _report_access_q(user_id: str) -> dict:
+    return {"expires_at": {"$gt": now_iso()}, "$or": [{"audience": "all"}, {"recipients": user_id}]}
+
+
+@api.get("/reports")
+async def my_reports(user: dict = Depends(get_current_user)):
+    await _purge_expired_reports()
+    items = await db.reports.find(_report_access_q(user["id"])).sort("created_at", -1).to_list(200)
+    return [_report_out(r, user["id"]) for r in items]
+
+
+@api.get("/reports/{rid}/download")
+async def download_report(rid: str, user: dict = Depends(get_current_user)):
+    r = await db.reports.find_one({"_id": ObjectId(rid), **_report_access_q(user["id"])}) if ObjectId.is_valid(rid) else None
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found or expired")
+    data, ct = get_object(r["file_path"])
+    await db.reports.update_one({"_id": r["_id"]}, {"$addToSet": {"downloaded_by": user["id"]}})
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", r["file_name"])
+    return Response(content=data, media_type=r.get("content_type") or ct, headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+
 # ----------------------------- Statements -----------------------------
 async def _statement_rows(user_id: str):
     txns = await db.transactions.find({"user_id": user_id}).sort("created_at", -1).to_list(5000)
@@ -1716,6 +1888,8 @@ async def startup():
         await db.users.create_index("email", unique=True)
         await db.otp_codes.create_index("email")
         await db.login_attempts.create_index("identifier", unique=True)
+        await db.reports.create_index("expires_at")
+        await _purge_expired_reports()
         await db.campaigns.create_index("slug")
     except Exception as e:
         logger.warning(f"Index creation: {e}")

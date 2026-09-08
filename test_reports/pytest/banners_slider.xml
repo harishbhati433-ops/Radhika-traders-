@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="3.794" timestamp="2026-09-08T06:55:21.617295+00:00" hostname="agent-env-4d34bc32-de68-46ef-86d3-6f86c52f3f86"><testcase classname="tests.test_banners_slider" name="test_customer_banners_contains_auto" time="0.701"><failure message="AssertionError: assert 'axis-mutual-fund-sip' == 'choice-trade-test'&#10;  &#10;  - choice-trade-test&#10;  + axis-mutual-fund-sip">backend/tests/test_banners_slider.py:42: in test_customer_banners_contains_auto
+    assert a["campaign_slug"] == "choice-trade-test"
+E   AssertionError: assert 'axis-mutual-fund-sip' == 'choice-trade-test'
+E     
+E     - choice-trade-test
+E     + axis-mutual-fund-sip</failure></testcase><testcase classname="tests.test_banners_slider" name="test_banner_image_accessible" time="0.486" /><testcase classname="tests.test_banners_slider" name="test_pause_and_live_toggle" time="1.119" /><testcase classname="tests.test_banners_slider" name="test_show_in_slider_toggle" time="0.947" /></testsuite></testsuites>

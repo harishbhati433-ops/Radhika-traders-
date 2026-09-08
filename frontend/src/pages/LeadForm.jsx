@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import api, { formatApiErrorDetail, fileUrl } from "../lib/api";
 import { Input } from "../components/ui/input";
+import { formatPan, formatAadhaar, panError, aadhaarError } from "../lib/validators";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, UserCheck, ArrowRight } from "lucide-react";
@@ -25,7 +26,9 @@ export default function LeadForm() {
   }, [slug, ref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {
-    e.preventDefault(); setBusy(true);
+    e.preventDefault();
+    if (panError(data.pan)) return toast.error(panError(data.pan));
+    if (aadhaarError(data.aadhaar)) return toast.error(aadhaarError(data.aadhaar)); setBusy(true);
     try {
       const { data: res } = await api.post(`/leads/${slug}`, { ref, data });
       setDone(res);
@@ -69,7 +72,11 @@ export default function LeadForm() {
                   <div key={f.key} className={f.key === "address" ? "sm:col-span-2" : ""}>
                     <Label>{f.label}{f.required && <span className="text-red-600"> *</span>}</Label>
                     <Input data-testid={`lead-field-${f.key}`} type={TYPES[f.key] || "text"} required={f.required} value={data[f.key] || ""}
-                      onChange={(e) => setData({ ...data, [f.key]: f.key === "pan" ? e.target.value.toUpperCase() : e.target.value })} className="mt-1.5" />
+                      inputMode={f.key === "aadhaar" || f.key === "mobile" ? "numeric" : undefined} maxLength={f.key === "pan" ? 10 : f.key === "aadhaar" ? 12 : undefined}
+                      onChange={(e) => setData({ ...data, [f.key]: f.key === "pan" ? formatPan(e.target.value) : f.key === "aadhaar" ? formatAadhaar(e.target.value) : e.target.value })}
+                      className={`mt-1.5 ${(f.key === "pan" && panError(data.pan)) || (f.key === "aadhaar" && aadhaarError(data.aadhaar)) ? "border-rose-400" : ""}`} />
+                    {f.key === "pan" && panError(data.pan) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="lead-pan-error">{panError(data.pan)}</div>}
+                    {f.key === "aadhaar" && aadhaarError(data.aadhaar) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="lead-aadhaar-error">{aadhaarError(data.aadhaar)}</div>}
                   </div>
                 ))}
               </div>

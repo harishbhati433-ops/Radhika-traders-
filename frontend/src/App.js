@@ -39,6 +39,8 @@ import Partners from "./pages/Partners";
 import LeadForm from "./pages/LeadForm";
 import AdminLeads from "./pages/admin/AdminLeads";
 import AdminSecurity from "./pages/admin/AdminSecurity";
+import AdminReports from "./pages/admin/AdminReports";
+import Reports from "./pages/customer/Reports";
 import MyLeads from "./pages/customer/MyLeads";
 import ForgotEmail from "./pages/auth/ForgotEmail";
 
@@ -83,6 +85,8 @@ function App() {
           <Route path="/my-leads" element={<ProtectedRoute role="customer"><MyLeads /></ProtectedRoute>} />
           <Route path="/admin/leads" element={<ProtectedRoute role="admin"><AdminLeads /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute role="admin"><AdminSecurity /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute role="customer"><Reports /></ProtectedRoute>} />
         </Routes>
         <WhatsAppFloat />
         <InstallPrompt />
