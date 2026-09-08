@@ -185,3 +185,10 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - db.reports {title, note, file_path, file_name, content_type, size, audience all|selected, recipients[], created_at, expires_at(+7d), downloaded_by[]}. POST /admin/reports (multipart: file, title, note, audience, user_ids csv, send_email) -> stores via put_object under {APP}/reports/, notifications + background send_report_email (link /reports). GET/DELETE /admin/reports. GET /reports (customer, access by audience/recipients, unexpired), GET /reports/{id}/download (marks downloaded_by). _purge_expired_reports() runs on list calls + startup; marks db.files is_deleted. Max 25MB.
 - UI: /admin/reports (AdminReports.jsx: report-title, report-file, report-note, report-audience-all/selected, report-recipient-{id}, report-send-email, report-send, report-row-{id}, report-delete-{id}); /reports (Reports.jsx: report-item-{id}, report-download-{id}, report-days-{id}). Nav: admin "Send Reports", customer "Reports & Files".
 - iteration_10 (PAN/Aadhaar + export) and iteration_11 (Reports feature): all pass (15 pytest + UI).
+
+## 2026-06 — Campaign live: auto banner + one-time email; report delete cleanup
+- POST /api/campaigns with status=live now announces (in-app + email) once; `live_announced_at` flag guards re-sends (pause→live never re-emails).
+- GET /api/banners auto-includes live campaigns even without banner_url; OfferBanners.jsx renders generated slide (offer-banner-generated) using logo/company.
+- DELETE /api/admin/reports/{id} also removes customers' report notifications (notifications now store report_id).
+- Campaign-live email made personal (plain link, no button, throttled 0.6s) for Primary-tab deliverability.
+- iteration_12: all pass (6 pytest + UI).

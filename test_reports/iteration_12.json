@@ -1,0 +1,25 @@
+{
+  "summary": "Verified new features: (1) create-campaign-live announces once via background task (notification type campaign_live with campaign_id, live_announced_at flag set on doc, broadcasts entry kind=campaign_live audience=all). (2) PATCH status paused->live does NOT re-emit notification (one-time only, guarded by live_announced_at claim). (3) GET /api/banners returns auto-<cid> entry with image_url '', logo_url/company for live campaign without banner. (4) OfferBanners frontend renders offer-banner-generated slide (screenshot verified) with data-auto=1 href /api/go/<slug>?ref=<referral_code>. (5) Report notification stores report_id and DELETE /api/admin/reports/{id} removes the report notification from customer's notifications and hides the report. All 6 pytest tests pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_campaign_live_and_report_notif.py",
+    "/app/test_reports/pytest/campaign_live.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:1049 — announce_campaign_live sends emails sequentially with `await` inside a for-loop; with N verified customers and Emergent email rate limits (429 -> 3 retries ~10s each), this task can occupy the event loop for many minutes and left backend visibly unresponsive during preview testing when 100+ stale test customers existed. Consider asyncio.gather with a bounded semaphore (e.g. 5 concurrent) OR sending emails in a separate fire-and-forget batch to keep the announce task short.",
+    "server.py:988 create_campaign — background.add_task(announce_campaign_live, ...) is only added when status=='live' and offer_enabled True. If the admin creates a live-but-offer_disabled campaign, no announcement fires — intended, but consider announcing later when offer is toggled on (currently toggle-offer at 1058 does not trigger announce).",
+    "server.py:1026 update_campaign_status — announce only fires on paused->live/closed->live if never announced; correct. But because live_announced_at is claimed atomically inside announce_campaign_live, two rapid PATCH live calls could still both spawn background tasks; only one will insert notifications/broadcast, but the second still runs a users query. Minor.",
+    "OfferBanners.jsx:34/36 — data-testid only present on the ACTIVE slide, which makes automated detection depend on slider index. Consider adding a stable non-active variant testid like offer-banner-slide with a data-type='generated'|'image' attribute, in addition to the active-only testid, to make E2E tests easier.",
+    "server.py:1252 — auto-banner query filters `show_in_slider: {$ne: False}` (good). Consider also excluding campaigns already covered by manual banner via link slug (currently only campaign_id-linked manual banners are dedup'd; a manual banner using link='/campaign/<slug>' won't dedup)."
+  ],
+  "updated_files": ["/app/backend/tests/test_campaign_live_and_report_notif.py (new)"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100%"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin); Customer testcust@example.com / Test@1234.",
+  "seed_data_creation": "Created and deleted a UI test campaign (UI_GenBanner_*) and a backend test campaign (TEST_LiveAnnounce_*) plus a test report (TEST_ReportNotif_*). Also cleaned 18 stale test customers (test_/unverif_/bonus_/harishbhati4581+qa*) that were causing announce_campaign_live to hammer the rate-limited email API and stall the backend during testing. Verified customer roster now = 3 (harishbhati4581@gmail.com, testcust@example.com, rahul.ref@example.com).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview backend goes visibly slow whenever announce_campaign_live runs against many verified customers due to synchronous email retries against a rate-limited service. Keep verified customer set small; clean up test customers after any campaign-live tests. lead_fields is List[dict] (not a dict) in the CampaignIn model. Login response returns key 'token'. Notifications endpoint returns {items, unread}. broadcasts collection is the source of truth for campaign_live announcement audit.",
+  "rca of the issue": "N/A — features work as specified."
+}

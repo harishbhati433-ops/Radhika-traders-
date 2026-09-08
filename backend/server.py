@@ -1,4 +1,5 @@
 import os
+import asyncio
 import io
 import re
 import uuid
@@ -986,7 +987,7 @@ async def get_campaign(cid: str):
 
 
 @api.post("/campaigns")
-async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)):
+async def create_campaign(body: CampaignIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
@@ -996,6 +997,8 @@ async def create_campaign(body: CampaignIn, admin: dict = Depends(require_admin)
     doc["updated_at"] = now_iso()
     res = await db.campaigns.insert_one(doc)
     c = await db.campaigns.find_one({"_id": res.inserted_id})
+    if c.get("status") == "live" and c.get("offer_enabled", True):
+        background.add_task(announce_campaign_live, c, _origin(request))
     return campaign_out(c)
 
 
@@ -1031,7 +1034,11 @@ def _origin(request: Request) -> str:
 
 
 async def announce_campaign_live(c: dict, origin: str):
-    customers = await db.users.find({"role": "customer", "email_verified": True}, {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
+    claimed = await db.campaigns.update_one({"_id": c["_id"], "live_announced_at": {"$exists": False}}, {"$set": {"live_announced_at": now_iso()}})
+    if not claimed.modified_count:
+        return
+    customers = await db.users.find({"role": "customer", "email_verified": True, "account_status": {"$nin": ["disabled", "deleted"]}},
+                                    {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
     title = f"New Campaign LIVE: {c['offer_name']}"
     body = f"Payout Rs.{c.get('payout_amount', 0):g} · {c.get('company', '')}. Grab it and complete maximum eligible conversions!"
     link = f"/campaign/{c['slug']}"
@@ -1044,6 +1051,7 @@ async def announce_campaign_live(c: dict, origin: str):
         personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") else f"{origin}{link}"
         ok = await send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, personal)
         sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
+        await asyncio.sleep(0.6)
     await db.broadcasts.insert_one({"kind": "campaign_live", "campaign_id": str(c["_id"]), "subject": title, "message": body,
                                     "audience": "all", "recipients": len(customers), "sent": sent, "failed": failed,
                                     "channels": ["email", "in_app"], "created_at": now_iso()})
@@ -1242,14 +1250,15 @@ async def list_banners(all: bool = False, user: dict = Depends(get_current_user)
         out.append(o)
     if not (all and user.get("role") == "admin"):
         manual_ids = {b.get("campaign_id") for b in items if b.get("campaign_id")}
-        camps = await db.campaigns.find({"is_deleted": False, "status": "live", "offer_enabled": True, "banner_url": {"$nin": ["", None]},
+        camps = await db.campaigns.find({"is_deleted": False, "status": "live", "offer_enabled": True,
                                          "show_in_slider": {"$ne": False}}).sort("created_at", -1).to_list(50)
         for c in camps:
             if str(c["_id"]) in manual_ids:
                 continue
             out.append({"id": f"auto-{c['_id']}", "auto": True, "title": c.get("offer_name", ""),
                         "subtitle": f"Earn ₹{c.get('payout_amount', 0):g} per approved account" if c.get("payout_amount") else "",
-                        "image_url": c["banner_url"], "link": "", "campaign_id": str(c["_id"]), "enabled": True, "order": 50,
+                        "image_url": c.get("banner_url") or "", "logo_url": c.get("logo_url") or "", "company": c.get("company", ""),
+                        "link": "", "campaign_id": str(c["_id"]), "enabled": True, "order": 50,
                         "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True})
 
     return out
@@ -1741,7 +1750,7 @@ async def admin_send_report(request: Request, background: BackgroundTasks, file:
     res = await db.reports.insert_one(doc)
     if users:
         await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": f"New report: {title}", "body": (note.strip()[:140] or "A new file has been shared with you. Download it from Reports."),
-                                             "link": "/reports", "type": "report", "read": False, "created_at": now_iso()} for u in users])
+                                             "link": "/reports", "type": "report", "report_id": str(res.inserted_id), "read": False, "created_at": now_iso()} for u in users])
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
     expires_on = datetime.fromisoformat(expires).astimezone(IST).strftime("%d %b %Y")
     if send_email:
@@ -1765,6 +1774,7 @@ async def admin_delete_report(rid: str, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Report not found")
     await db.files.update_one({"storage_path": r["file_path"]}, {"$set": {"is_deleted": True}})
     await db.reports.delete_one({"_id": r["_id"]})
+    await db.notifications.delete_many({"type": "report", "report_id": rid})
     return {"message": "Report deleted"}
 
 

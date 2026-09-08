@@ -178,11 +178,9 @@ def _campaign_block(c: dict, link: str) -> str:
         f'<td style="padding:5px 0;color:#0B0F17;font-size:13px;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows if v)
     return (
         f'<div style="border:1px solid #e2e8f0;border-left:4px solid #F59E0B;border-radius:8px;padding:14px 16px;margin:16px 0;background:#fffdf7">'
-        f'<div style="font-size:17px;font-weight:bold;color:#0B0F17">{escape(c.get("offer_name", ""))}</div>'
+        f'<div style="font-size:16px;font-weight:bold;color:#0B0F17">{escape(c.get("offer_name", ""))}</div>'
         f'<table style="margin-top:6px;border-collapse:collapse">{table}</table>'
-        f'<p style="margin:14px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:10px 20px;'
-        f'border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open my referral link</a></p>'
-        f'<div style="font-size:11px;color:#64748b;word-break:break-all">or copy: <a href="{escape(link)}" style="color:#991B1B">{escape(link)}</a></div></div>')
+        f'<p style="margin:12px 0 0;font-size:13px;color:#334155">Your referral link: <a href="{escape(link)}" style="color:#991B1B;word-break:break-all">{escape(link)}</a></p></div>')
 
 
 def _signature() -> str:
@@ -203,11 +201,12 @@ def _first(name: str) -> str:
 async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
     if not to:
         return None
-    subject = f"{_first(name)}, {c.get('offer_name', 'a new campaign')} is live on your dashboard"
+    subject = f"{_first(name)}, {c.get('offer_name', 'a new campaign')} is now live for you"
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
-             f'<p style="font-size:14px;color:#334155">Good news — <b>{escape(c.get("offer_name", ""))}</b> is now live on your Radhika Traders dashboard. '
-             f'Here are the details so you can start sharing today.</p>'
-             f'{_campaign_block(c, link)}{_signature()}')
+             f'<p style="font-size:14px;color:#334155">Harish here from Radhika Traders. I have just added <b>{escape(c.get("offer_name", ""))}</b> to your dashboard '
+             f'and wanted to let you know personally. The details and your own referral link are below.</p>'
+             f'{_campaign_block(c, link)}'
+             f'<p style="font-size:14px;color:#334155">Login to your dashboard to view the full requirement and track your leads.</p>{_signature()}')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 

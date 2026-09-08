@@ -30,7 +30,19 @@ export function OfferBanners() {
     const href = hrefFor(b);
     const inner = (
       <div className="relative aspect-[3/1] w-full bg-[#0B0F17]">
-        <img src={fileUrl(b.image_url)} alt={b.title} className="h-full w-full object-contain" data-testid={active ? "offer-banner-image" : undefined} />
+        {b.image_url ? (
+          <img src={fileUrl(b.image_url)} alt={b.title} className="h-full w-full object-contain" data-testid={active ? "offer-banner-image" : undefined} />
+        ) : (
+          <div className="flex h-full w-full items-center gap-5 bg-[radial-gradient(ellipse_at_top_left,#1e293b,#0B0F17_60%)] px-6 sm:px-10" data-testid={active ? "offer-banner-generated" : undefined}>
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/20 sm:h-24 sm:w-24">
+              {b.logo_url ? <img src={fileUrl(b.logo_url)} alt="" className="h-full w-full object-cover" /> : <span className="font-display text-2xl font-extrabold text-amber-400 sm:text-4xl">{(b.title || "?").slice(0, 1).toUpperCase()}</span>}
+            </div>
+            <div className="min-w-0 pb-14 sm:pb-16">
+              <span className="inline-block rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-300 ring-1 ring-emerald-400/40">New · Live</span>
+              {b.company && <div className="mt-2 truncate text-xs font-semibold uppercase tracking-wider text-slate-400 sm:text-sm">{b.company}</div>}
+            </div>
+          </div>
+        )}
         {(b.title || b.subtitle) && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-5 text-white">
             {b.title && <div className="font-display text-xl font-extrabold sm:text-2xl" data-testid={active ? "offer-banner-title" : undefined}>{b.title}</div>}
