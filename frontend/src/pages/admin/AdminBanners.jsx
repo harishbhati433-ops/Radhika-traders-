@@ -6,17 +6,19 @@ import { ImageUpload } from "../../components/ImageUpload";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Power, Loader2 } from "lucide-react";
+import { Plus, Trash2, Power, Loader2, Sparkles } from "lucide-react";
+import { AutoBannerList } from "../../components/AutoBannerList";
 
 const empty = { title: "", subtitle: "", image_url: "", link: "", campaign_id: "", enabled: true, order: 0 };
 
 export default function AdminBanners() {
   const [list, setList] = useState([]);
+  const [autos, setAutos] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api.get("/banners", { params: { all: true } }).then(({ data }) => setList(data));
+  const load = () => api.get("/banners", { params: { all: true } }).then(({ data }) => { setList(data.manual || []); setAutos(data.auto || []); });
   useEffect(() => { load(); api.get("/campaigns", { params: { admin_view: true } }).then(({ data }) => setCampaigns(data)).catch(() => {}); }, []);
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -36,9 +38,12 @@ export default function AdminBanners() {
   return (
     <DashboardLayout nav={adminNav} title="Offer Banners">
       <p className="mb-3 text-sm text-slate-500">These banners appear on every customer's dashboard after login. Use them to highlight payouts, e.g. "Choice Trade — ₹300 per account".</p>
-      <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900" data-testid="banners-auto-note">
-        <b>Automatic:</b> every live campaign that has a Banner image (uploaded in the campaign form) is shown in the customer dashboard slider automatically — no need to add it here. Use this page only for extra/custom banners.
-      </div>
+      <section className="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5" data-testid="banners-auto-section">
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold text-slate-900"><Sparkles className="h-5 w-5 text-emerald-600" /> Automatic campaign banners</h2>
+        <p className="mb-4 mt-1 text-xs text-slate-600" data-testid="banners-auto-note">Every <b>live</b> campaign gets a banner here automatically — with its name, type, payout, fund requirement, customer benefit and a LIVE badge — and rotates in the customer slider. It updates when you edit the campaign and disappears the moment the campaign is paused, disabled or deleted. Reorder, hide or change the headline below.</p>
+        <AutoBannerList autos={autos} reload={load} />
+      </section>
+      <h2 className="mb-2 font-display text-lg font-bold text-slate-900">Custom banners (optional)</h2>
       <form onSubmit={add} className="mb-8 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-2" data-testid="banner-form">
         <div className="lg:col-span-2"><ImageUpload label="Banner image — use 1200×400 px (3:1). The full image is always shown, nothing is cropped." value={f.image_url} onChange={(v) => setF({ ...f, image_url: v })} testId="banner-upload" /></div>
         <div><Label>Title</Label><Input data-testid="banner-title" value={f.title} onChange={set("title")} placeholder="Choice Trade" className="mt-1.5" /></div>
@@ -59,7 +64,7 @@ export default function AdminBanners() {
       </form>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {list.length === 0 && <p className="text-sm text-slate-500" data-testid="banner-empty">No banners yet.</p>}
+        {list.length === 0 && <p className="text-sm text-slate-500" data-testid="banner-empty">No custom banners.</p>}
         {list.map((b) => (
           <div key={b.id} data-testid={`banner-${b.id}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <img src={fileUrl(b.image_url)} alt={b.title} className="aspect-[3/1] w-full bg-[#0B0F17] object-contain" />

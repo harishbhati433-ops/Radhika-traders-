@@ -1,0 +1,55 @@
+{
+  "summary": "Tested new Share Kit (poster/QR/captions), Refer & Earn QR + invite message, strict IFSC/UPI validation (Profile + Admin edit), and Admin KYC copy icons. Backend: 9/9 pytest passed. Frontend: all critical share-kit and copy flows verified. No blocker bugs found; only minor observations.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_share_kit_kyc.py",
+    "/app/test_reports/pytest/share_kit_kyc.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ShareKit useBlobUrl doesn't surface load errors — if /api/share/poster fails (e.g. auth expired) the spinner stays forever with no user feedback. Consider showing a fallback/retry.",
+    "ReferEarnCard uses window.location.origin/signup?ref=CODE for the invite link, but ShareKit poster QR encodes /api/go/<slug>?ref=CODE (server-derived origin from request Origin header). These two link shapes are inconsistent; verify Origin header is set by ingress in production so tracked link resolves.",
+    "In server.py _validate_kyc, error message reads 'Invalid IFSC code (e.g. HDFC0001234)'. Frontend expects prefix 'Invalid IFSC code' — matches, but for consistency with the spec ('Invalid IFSC code') consider trimming the example from the response detail or exposing structured errors.",
+    "AdminKyc detail modal hides copy-aadhaar when aadhaar is empty (fine), but consumers must not assume the button always exists — currently OK because our review only requires it for stored values."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_share_kit_kyc.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Customer testcust@example.com/Test@1234 (RTA12499); Admin bhatiharish276@gmail.com/Radhika@2023.",
+  "seed_data_creation": "None. Test Customer's original IFSC (HDFC0009999) and UPI (testcust@ybl) were restored in-page (only client-side edits, no PUT with invalid values persisted).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend save button in CustomerEditDialog is data-testid=cust-edit-kyc-save (not cust-edit-save). Admin login form uses admin-email/admin-password/admin-submit testids. Grant clipboard-read/clipboard-write context permissions before testing copy-to-clipboard. /api/auth/login returns {token, user} not {access_token}. Frontend Refer & Earn message pre-element contains the emoji-prefixed message; the surrounding refer-message-preview div also has a header — assert on the <pre> content, not full div text.",
+  "detailed_results": {
+    "backend": {
+      "TestShareQR": {"auth_required": "PASS", "ok_png_400x400": "PASS", "invalid_url_400": "PASS"},
+      "TestSharePoster": {"auth_required": "PASS", "unknown_slug_404": "PASS", "ok_png_1080x1080_>10KB": "PASS (axis-mutual-fund-sip)"},
+      "TestKycValidation": {"short_ifsc_400": "PASS", "bad_ifsc_400": "PASS", "bad_upi_400": "PASS"}
+    },
+    "frontend": {
+      "share_kit_visible_on_campaign_axis-mutual-fund-sip": "PASS",
+      "poster_img_blob_url": "PASS",
+      "qr_img_blob_url": "PASS",
+      "captions_hindi_english_short_contain_referral_link_and_emojis_and_wa_link": "PASS",
+      "copy_caption_writes_to_clipboard": "PASS",
+      "refer_earn_qr_img_loads_blob": "PASS",
+      "invite_message_contains_*Test Customer*_and_Join_here": "PASS",
+      "kyc_ifsc_auto_uppercase_and_short_error": "PASS (typing 'hdfc12' -> value 'HDFC12', error 'IFSC must be 11 characters (6/11 entered) — e.g. HDFC0001234')",
+      "kyc_ifsc_valid_clears_error": "PASS",
+      "kyc_upi_error_for_abc": "PASS ('Invalid UPI ID. Format: name@bank (e.g. rahul@upi)')",
+      "admin_kyc_copy_icons_present": "PASS (kyc-copy-pan/account/ifsc/upi per row)",
+      "admin_copy_ifsc_writes_exact_value": "PASS (clipboard = 'HDFC0009999')",
+      "admin_detail_modal_copy_icons": "PASS (pan, holder, account, ifsc, upi, ref present; aadhaar hidden when empty)",
+      "admin_edit_dialog_cust-edit-ifsc-error_on_SBIN": "PASS"
+    }
+  }
+}

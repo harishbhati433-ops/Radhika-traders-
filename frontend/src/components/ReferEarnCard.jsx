@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { ShareButtons } from "./ShareButtons";
+import { useBlobUrl } from "./ShareKit";
 import { useAuth } from "../context/AuthContext";
-import { Gift, Users, Copy, ChevronDown, MessageSquareText } from "lucide-react";
+import { Gift, Users, Copy, ChevronDown, MessageSquareText, QrCode, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export function ReferEarnCard({ code }) {
@@ -18,12 +19,14 @@ export function ReferEarnCard({ code }) {
   }, []);
 
   const link = `${window.location.origin}/signup?ref=${code}`;
-  const bonusLine = signupBonus > 0 ? `\n\nSign up using my link and receive a ₹${signupBonus} welcome bonus in your account.` : "";
+  const qr = useBlobUrl(`/share/qr?url=${encodeURIComponent(link)}&size=400`, [link]);
+  const partnerName = (user?.name || "a partner").replace(/\b\w/g, (m) => m.toUpperCase());
+  const bonusLine = signupBonus > 0 ? `\n🎁 Sign up with my link and receive a *₹${signupBonus} welcome bonus*` : "";
   const inviteMessage =
-    `Hello,\n\nI am ${user?.name || "a partner"} with Radhika Traders — an advertising and affiliate marketing agency working with India's leading brokers, banks and insurers.\n\n` +
-    `You can join free of cost (zero investment), share campaign links and earn a fixed payout on every approved account opening.${bonusLine}\n\n` +
-    `Join here: ${link}\n\nRadhika Traders · Trusted Partner for Financial Growth`;
-  const shareMsg = inviteMessage.replace(`\n\nJoin here: ${link}`, "\n\nJoin here:");
+    `🙏 Hello!\n\nI'm *${partnerName}*, a partner with *Radhika Traders* 🏦 — an advertising & affiliate marketing agency working with India's leading brokers, banks and insurers.\n\n` +
+    `✅ Join free of cost (zero investment)\n🔗 Share campaign links with your network\n💰 Earn a fixed payout on every approved account opening${bonusLine}\n\n` +
+    `👉 Join here: ${link}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: +91 63765 41191`;
+  const shareMsg = inviteMessage.replace(`\n\n👉 Join here: ${link}`, "\n\n👉 Join here:");
   const copy = () => { navigator.clipboard.writeText(inviteMessage); toast.success("Invite message with your link copied — paste it anywhere"); };
   const copyLinkOnly = () => { navigator.clipboard.writeText(link); toast.success("Link copied"); };
 
@@ -61,12 +64,19 @@ export function ReferEarnCard({ code }) {
         <input readOnly value={link} data-testid="refer-link-input" className="flex-1 bg-transparent px-1 text-xs text-slate-600 outline-none" />
         <button onClick={copyLinkOnly} title="Copy link only" data-testid="refer-copy" className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
       </div>
-      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3" data-testid="refer-message-preview">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><MessageSquareText className="h-3.5 w-3.5 text-red-600" /> Your invite message (auto-updates with bonus)</span>
-          <button onClick={copy} data-testid="refer-copy-message" className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-700">Copy message</button>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <div className="rounded-xl border border-slate-200 bg-white p-3" data-testid="refer-message-preview">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><MessageSquareText className="h-3.5 w-3.5 text-red-600" /> Your invite message (auto-updates with bonus)</span>
+            <button onClick={copy} data-testid="refer-copy-message" className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-700">Copy message</button>
+          </div>
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-600">{inviteMessage}</pre>
         </div>
-        <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-600">{inviteMessage}</pre>
+        <div className="flex flex-col items-center rounded-xl border border-slate-200 bg-white p-3 sm:w-44" data-testid="refer-qr">
+          <div className="mb-1.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-500"><QrCode className="h-3.5 w-3.5" /> Scan to join</div>
+          <div className="flex h-32 w-32 items-center justify-center">{qr ? <img src={qr} alt="Invite QR" className="h-32 w-32" data-testid="refer-qr-img" /> : <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />}</div>
+          <button onClick={() => { if (!qr) return; const a = document.createElement("a"); a.href = qr; a.download = `invite-qr-${code}.png`; a.click(); }} disabled={!qr} data-testid="refer-qr-download" className="mt-2 inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50"><Download className="h-3 w-3" /> Download</button>
+        </div>
       </div>
       <div className="mt-3"><ShareButtons link={link} message={shareMsg} copyText={inviteMessage} testPrefix="refer-share" /></div>
       {stats?.recent?.length > 0 && (

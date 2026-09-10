@@ -1,5 +1,6 @@
 import os
 import asyncio
+import httpx
 import io
 import re
 import uuid
@@ -26,6 +27,7 @@ from auth_utils import (
 )
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email
 from storage_service import init_storage, put_object, get_object, APP_NAME
+from share_kit import qr_png, poster_png
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -258,8 +260,18 @@ class CampaignIn(BaseModel):
     status: str = "live"
     offer_enabled: bool = True
     show_in_slider: bool = True
+    slider_order: int = 0
+    banner_headline: str = ""
+    banner_tagline: str = ""
     affiliate_links: List[AffiliateLink] = []
     lead_fields: List[dict] = []
+
+
+class SliderSettingsIn(BaseModel):
+    show_in_slider: Optional[bool] = None
+    slider_order: Optional[int] = None
+    banner_headline: Optional[str] = None
+    banner_tagline: Optional[str] = None
 
 
 LEAD_FIELDS = [
@@ -1143,6 +1155,21 @@ async def toggle_offer(cid: str, enabled: bool = Query(...), admin: dict = Depen
     return {"message": "Offer updated"}
 
 
+@api.patch("/admin/campaigns/{cid}/slider")
+async def update_slider_settings(cid: str, body: SliderSettingsIn, admin: dict = Depends(require_admin)):
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not upd or not ObjectId.is_valid(cid):
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    for k in ("banner_headline", "banner_tagline"):
+        if k in upd:
+            upd[k] = upd[k].strip()[:120]
+    upd["updated_at"] = now_iso()
+    res = await db.campaigns.update_one({"_id": ObjectId(cid), "is_deleted": False}, {"$set": upd})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"message": "Slider settings saved"}
+
+
 @api.delete("/campaigns/{cid}")
 async def archive_campaign(cid: str, admin: dict = Depends(require_admin)):
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"is_deleted": True, "updated_at": now_iso()}})
@@ -1312,9 +1339,22 @@ def banner_out(b: dict) -> dict:
     return {**{k: v for k, v in b.items() if k != "_id"}, "id": str(b["_id"])}
 
 
+def _auto_banner(c: dict) -> dict:
+    payout = c.get("payout_amount") or 0
+    return {"id": f"auto-{c['_id']}", "auto": True, "title": (c.get("banner_headline") or "").strip() or c.get("offer_name", ""),
+            "subtitle": (c.get("banner_tagline") or "").strip() or (f"Earn ₹{payout:g} per approved account" if payout else ""),
+            "image_url": c.get("banner_url") or "", "logo_url": c.get("logo_url") or "", "company": c.get("company", ""),
+            "campaign_type": c.get("campaign_type", ""), "payout_amount": payout, "payout_type": c.get("payout_type", ""),
+            "investment": c.get("investment", ""), "requirement": c.get("min_requirement") or c.get("requirements", ""),
+            "customer_benefit": c.get("customer_benefit", ""), "benefits": c.get("benefits", ""), "description": c.get("description", ""),
+            "link": "", "campaign_id": str(c["_id"]), "enabled": c.get("show_in_slider", True) is not False, "order": c.get("slider_order", 0) or 0,
+            "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True, "status": c.get("status")}
+
+
 @api.get("/banners")
 async def list_banners(all: bool = False, user: dict = Depends(get_current_user)):
-    q = {} if (all and user.get("role") == "admin") else {"enabled": True}
+    admin_all = all and user.get("role") == "admin"
+    q = {} if admin_all else {"enabled": True}
     items = await db.banners.find(q).sort([("order", 1), ("created_at", -1)]).to_list(100)
     out = []
     for b in items:
@@ -1328,20 +1368,15 @@ async def list_banners(all: bool = False, user: dict = Depends(get_current_user)
         o["campaign_name"] = c["offer_name"] if c else ""
         o["campaign_live"] = bool(c and c.get("status") == "live" and c.get("offer_enabled", True))
         out.append(o)
-    if not (all and user.get("role") == "admin"):
-        manual_ids = {b.get("campaign_id") for b in items if b.get("campaign_id")}
-        camps = await db.campaigns.find({"is_deleted": False, "status": "live", "offer_enabled": True,
-                                         "show_in_slider": {"$ne": False}}).sort("created_at", -1).to_list(50)
-        for c in camps:
-            if str(c["_id"]) in manual_ids:
-                continue
-            out.append({"id": f"auto-{c['_id']}", "auto": True, "title": c.get("offer_name", ""),
-                        "subtitle": f"Earn ₹{c.get('payout_amount', 0):g} per approved account" if c.get("payout_amount") else "",
-                        "image_url": c.get("banner_url") or "", "logo_url": c.get("logo_url") or "", "company": c.get("company", ""),
-                        "link": "", "campaign_id": str(c["_id"]), "enabled": True, "order": 50,
-                        "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True})
-
-    return out
+    manual_ids = {b.get("campaign_id") for b in items if b.get("campaign_id")}
+    cq = {"is_deleted": False, "status": "live", "offer_enabled": True}
+    if not admin_all:
+        cq["show_in_slider"] = {"$ne": False}
+    camps = await db.campaigns.find(cq).sort([("slider_order", 1), ("created_at", -1)]).to_list(50)
+    autos = [_auto_banner(c) for c in camps if str(c["_id"]) not in manual_ids]
+    if admin_all:
+        return {"manual": out, "auto": autos}
+    return out + autos
 
 
 @api.post("/admin/banners")
@@ -1851,6 +1886,45 @@ async def serve_file(path: str):
         raise HTTPException(status_code=404, detail="File not found")
     data, ct = get_object(path)
     return Response(content=data, media_type=record.get("content_type", ct))
+
+
+# ----------------------------- Share Kit (QR + poster) -----------------------------
+def _share_origin(request: Request) -> str:
+    return request.headers.get("origin") or _origin(request)
+
+
+@api.get("/share/qr")
+async def share_qr(url: str, size: int = 600, user: dict = Depends(get_current_user)):
+    if not url.startswith(("http://", "https://")) or len(url) > 500:
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    png = await asyncio.to_thread(qr_png, url, max(200, min(size, 1200)))
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def _logo_bytes(logo_url: str) -> Optional[bytes]:
+    if not logo_url:
+        return None
+    try:
+        if logo_url.startswith("http"):
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(logo_url)
+                return r.content if r.status_code == 200 else None
+        return (await asyncio.to_thread(get_object, logo_url))[0]
+    except Exception:
+        return None
+
+
+@api.get("/share/poster/{slug}")
+async def share_poster(slug: str, request: Request, user: dict = Depends(get_current_user)):
+    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+    if not c:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    origin = _share_origin(request)
+    link = f"{origin}/api/go/{slug}?ref={user.get('referral_code')}" if user.get("referral_code") else f"{origin}/campaign/{slug}"
+    logo = await _logo_bytes(c.get("logo_url", ""))
+    png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo)
+    fname = f"{slug}-{user.get('referral_code', 'share')}.png"
+    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "private, max-age=3600"})
 
 
 # ----------------------------- Reports (admin -> publishers) -----------------------------

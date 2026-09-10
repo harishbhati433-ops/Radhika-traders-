@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 15: Full E2E testing of Auto Campaign Banner & Slider feature (backend + frontend). Created a new live campaign 'TEST_UIBanner' (Non-Trade, ₹300, TestCo) without banner_url and validated the full lifecycle: auto banner appears in GET /api/banners for customer with all expected fields; PUT to campaign refreshes title/subtitle; pause / offer_enabled=false / archive remove it; PATCH /api/admin/campaigns/{cid}/slider correctly toggles show_in_slider, updates banner_headline/banner_tagline, respects slider_order; non-admin gets 403; empty body returns 400; admin GET /api/banners?all=true returns {manual, auto} incl. hidden autos with enabled:false. Frontend: customer dashboard slider on mobile 390x844 renders GeneratedSlide with LIVE badge, type chip 'Non-Trade', title, company, customer benefit, facts chips (Payout ₹300, Fund: ₹1000, Complete KYC, Easy account opening, Approved TestCo partner) and 'Tap to apply'; link href = /api/go/test-uibanner?ref=RTA12499. Admin /admin/banners banners-auto-section: toggle hides row (state text 'Hidden from slider'), edit → headline/tagline → save updates row title, up/down reorder swaps positions, 'Campaign' link routes to /admin/campaigns?edit=<cid> and opens the campaign edit form, manual banner add form still present (regression OK). All 10 pytest tests + all UI checks passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_auto_banner_slider.py",
+    "/app/test_reports/pytest/iter15_auto_banner.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 2167 lines — should be split into routers by feature (campaigns, banners, wallet, KYC) for maintainability. Currently violates the <700 lines guideline.",
+    "GET /api/banners returns different shapes (list vs {manual, auto}) based on admin all=true — consider a dedicated /api/admin/banners endpoint to keep response types stable and reduce client-side branching."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auto_banner_slider.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023; Customer testcust@example.com / Test@1234 (RTA12499)",
+  "seed_data_creation": "Created and later archived campaign 'TEST_UIBanner' (id 6aa2c879d193d1a12d4d82fc, slug test-uibanner). Axis campaign slider_order restored to 1 and banner_tagline unchanged ('Zero brokerage · ₹500 payout').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auto banner slider is fully green. Regression suite at /app/backend/tests/test_auto_banner_slider.py creates+archives its own campaign, so it is idempotent. Axis campaign (6a9d87a93ee34323c98dfdc1) is used for ordering assertions — its slider_order was intentionally toggled 1↔2 and restored to 1 at the end.",
+  "rca of the issue": "No issues found."
+}

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShareButtons } from "../components/ShareButtons";
+import { ShareKit } from "../components/ShareKit";
 import api, { fileUrl } from "../lib/api";
 import { useLivePoll } from "../lib/useLivePoll";
 import { useAuth } from "../context/AuthContext";
@@ -46,11 +47,13 @@ export default function CampaignDetail() {
   const myClicks = clicks?.by_campaign?.[c.id] || 0;
 
   const copyRef = () => { navigator.clipboard.writeText(applyMessage); toast.success("Message with your referral link copied!"); };
+  const partnerName = (user?.name || "").replace(/\b\w/g, (m) => m.toUpperCase());
   const applyMessage =
-    `Hello,\n\n${user?.name ? `I am ${user.name}, a partner with Radhika Traders.` : "Greetings from Radhika Traders."} I would like to share an opportunity with ${c.company || c.offer_name}.\n\n` +
-    `${c.offer_name}${c.customer_benefit ? ` — ${c.customer_benefit}` : ""}\n` +
-    `${c.requirements ? `Requirements: ${String(c.requirements).slice(0, 160)}\n` : ""}` +
-    `\nApply using my link: ${referralLink}\n\nRadhika Traders · Trusted Partner for Financial Growth`;
+    `🙏 Hello!\n\n${partnerName ? `I'm *${partnerName}*, a partner with *Radhika Traders*.` : "Greetings from *Radhika Traders*."} Sharing a great opportunity with *${c.company || c.offer_name}* 🏦\n\n` +
+    `✨ *${c.offer_name}*\n` +
+    `${c.customer_benefit ? `🎯 ${c.customer_benefit}\n` : ""}` +
+    `${c.requirements ? `📋 Requirements: ${String(c.requirements).slice(0, 160)}\n` : ""}` +
+    `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: +91 63765 41191`;
 
   return (
     <PublicLayout>
@@ -133,7 +136,7 @@ export default function CampaignDetail() {
                     <input data-testid="referral-link-input" readOnly value={referralLink} className="flex-1 bg-transparent text-xs text-slate-600 outline-none" />
                     <button data-testid="referral-copy-btn" onClick={copyRef} className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
                   </div>
-                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage.replace(`\n\nApply using my link: ${referralLink}`, "\n\nApply using my link:")} copyText={applyMessage} testPrefix="detail-share" /></div>
+                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage.replace(`\n\n👉 Apply using my link: ${referralLink}`, "\n\n👉 Apply using my link:")} copyText={applyMessage} testPrefix="detail-share" /></div>
                   <div className="mt-4 flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
                     <span className="flex items-center gap-1.5 font-semibold text-emerald-800"><MousePointerClick className="h-3.5 w-3.5" /> Clicks on your link</span>
                     <span className="font-mono font-bold text-emerald-700" data-testid="referral-clicks">{myClicks}</span>
@@ -164,6 +167,7 @@ export default function CampaignDetail() {
             </div>
           </div>
         </div>
+        {user?.role === "customer" && <div className="mt-8"><ShareKit c={c} link={referralLink} user={user} /></div>}
       </section>
     </PublicLayout>
   );

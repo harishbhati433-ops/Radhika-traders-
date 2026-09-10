@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -16,10 +17,15 @@ export default function AdminCampaigns() {
   const [showArchived, setShowArchived] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [params, setParams] = useSearchParams();
 
   const load = () => {
     if (showArchived) api.get("/campaigns/archived").then(({ data }) => setItems(data));
-    else api.get("/campaigns", { params: { admin_view: true, ...(search ? { search } : {}) } }).then(({ data }) => setItems(data));
+    else api.get("/campaigns", { params: { admin_view: true, ...(search ? { search } : {}) } }).then(({ data }) => {
+      setItems(data);
+      const eid = params.get("edit");
+      if (eid) { const c = data.find((x) => x.id === eid); if (c) { setEditing(c); setFormOpen(true); } setParams({}, { replace: true }); }
+    });
   };
   useEffect(() => { api.get("/categories?all=true").then(({ data }) => setCats(data)); }, []);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [search, showArchived]);

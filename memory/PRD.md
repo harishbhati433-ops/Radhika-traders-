@@ -202,3 +202,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Strict IFSC (11 chars, 4 letters+0+6) + UPI format validation on customer Profile and admin edit dialog (backend already strict).
 - Speed: React.lazy route splitting, /go parallel lookups + background click log, LeadForm redirect 900ms.
 - iteration_13: 17 pytest + all UI flows pass.
+
+## 2026-06 — Share Kit, emoji messages, auto campaign banners v2
+- Share Kit (ShareKit.jsx) on campaign detail for customers: 1080x1080 poster (share_kit.py, PIL + qrcode, bundled Liberation fonts in backend/assets), QR (GET /api/share/qr), poster (GET /api/share/poster/{slug}), 3 WhatsApp captions (Hindi/English/Short). Refer & Earn card shows invite QR.
+- Invite + campaign apply messages: emojis, WhatsApp *bold*, Title-cased partner name.
+- Auto banners v2: /api/banners auto entries carry type/payout/investment/requirement/benefit/company; GeneratedSlide with LIVE badge when no image; admin GET /api/banners?all=true → {manual, auto}; PATCH /api/admin/campaigns/{id}/slider (show_in_slider, slider_order, banner_headline, banner_tagline); AdminBanners "Automatic campaign banners" section (hide/reorder/edit headline, link to campaign edit via /admin/campaigns?edit=id). Slider aspect 16/9 mobile, 3/1 desktop.
+- iteration_14 (share kit/IFSC/copy) + iteration_15 (auto banners): pass.
