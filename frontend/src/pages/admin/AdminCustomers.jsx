@@ -7,14 +7,18 @@ import { Label } from "../../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { toast } from "sonner";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
-import { Search, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2 } from "lucide-react";
+import { Search, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2, SlidersHorizontal, UserCog } from "lucide-react";
 import { AccountStatusControl, ACCOUNT_TONE } from "../../components/AccountStatusControl";
+import { WalletAdjustDialog } from "../../components/WalletAdjustDialog";
+import { CustomerEditDialog } from "../../components/CustomerEditDialog";
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState("");
   const [showDeleted, setShowDeleted] = useState(false);
   const [active, setActive] = useState(null);
+  const [adjust, setAdjust] = useState(null);
+  const [edit, setEdit] = useState(null);
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("Affiliate earning credit");
   const [busy, setBusy] = useState(false);
@@ -66,9 +70,17 @@ export default function AdminCustomers() {
                 <td className="p-4">
                   <div className="flex flex-col gap-1.5">
                     {c.account_status !== "deleted" && (
-                      <button onClick={() => setActive(c)} data-testid={`credit-btn-${c.id}`} className="inline-flex w-fit items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:brightness-125">
-                        <Plus className="h-3.5 w-3.5" /> Credit
-                      </button>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button onClick={() => setActive(c)} data-testid={`credit-btn-${c.id}`} className="inline-flex w-fit items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:brightness-125">
+                          <Plus className="h-3.5 w-3.5" /> Credit
+                        </button>
+                        <button onClick={() => setAdjust(c)} data-testid={`adjust-btn-${c.id}`} className="inline-flex w-fit items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50">
+                          <SlidersHorizontal className="h-3.5 w-3.5" /> Adjust
+                        </button>
+                        <button onClick={() => setEdit(c)} data-testid={`edit-btn-${c.id}`} className="inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          <UserCog className="h-3.5 w-3.5" /> Edit
+                        </button>
+                      </div>
                     )}
                     <AccountStatusControl customer={c} onChanged={load} />
                   </div>
@@ -92,6 +104,8 @@ export default function AdminCustomers() {
           </form>
         </DialogContent>
       </Dialog>
+      <WalletAdjustDialog customer={adjust} open={!!adjust} onClose={() => setAdjust(null)} onDone={load} />
+      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={load} />
     </DashboardLayout>
   );
 }

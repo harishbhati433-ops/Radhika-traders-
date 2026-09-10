@@ -1,4 +1,5 @@
 import "@/App.css";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
@@ -7,87 +8,98 @@ import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
-import About from "./pages/About";
-import Services from "./pages/Services";
-import Contact from "./pages/Contact";
-import Campaigns from "./pages/Campaigns";
-import CampaignDetail from "./pages/CampaignDetail";
-
 import Login from "./pages/auth/Login";
-import Signup from "./pages/auth/Signup";
-import AdminLogin from "./pages/auth/AdminLogin";
-import ForgotPassword from "./pages/auth/ForgotPassword";
-
-import CustomerDashboard from "./pages/customer/CustomerDashboard";
-import Wallet from "./pages/customer/Wallet";
-import Withdrawals from "./pages/customer/Withdrawals";
-import Profile from "./pages/customer/Profile";
-import WelcomeLetter from "./pages/customer/WelcomeLetter";
-import Statements from "./pages/customer/Statements";
-import CustomerCampaigns from "./pages/customer/CustomerCampaigns";
-
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminCampaigns from "./pages/admin/AdminCampaigns";
-import AdminCategories from "./pages/admin/AdminCategories";
-import AdminCustomers from "./pages/admin/AdminCustomers";
-import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
-import AdminBanners from "./pages/admin/AdminBanners";
-import AdminKyc from "./pages/admin/AdminKyc";
-import AdminBroadcast from "./pages/admin/AdminBroadcast";
-import OfferEnded from "./pages/OfferEnded";
-import Partners from "./pages/Partners";
 import LeadForm from "./pages/LeadForm";
-import AdminLeads from "./pages/admin/AdminLeads";
-import AdminSecurity from "./pages/admin/AdminSecurity";
-import AdminReports from "./pages/admin/AdminReports";
-import Reports from "./pages/customer/Reports";
-import MyLeads from "./pages/customer/MyLeads";
-import ForgotEmail from "./pages/auth/ForgotEmail";
+import OfferEnded from "./pages/OfferEnded";
+import CustomerDashboard from "./pages/customer/CustomerDashboard";
+
+const About = lazy(() => import("./pages/About"));
+const Services = lazy(() => import("./pages/Services"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
+const Partners = lazy(() => import("./pages/Partners"));
+const Signup = lazy(() => import("./pages/auth/Signup"));
+const AdminLogin = lazy(() => import("./pages/auth/AdminLogin"));
+const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const ForgotEmail = lazy(() => import("./pages/auth/ForgotEmail"));
+
+const Wallet = lazy(() => import("./pages/customer/Wallet"));
+const Withdrawals = lazy(() => import("./pages/customer/Withdrawals"));
+const Profile = lazy(() => import("./pages/customer/Profile"));
+const WelcomeLetter = lazy(() => import("./pages/customer/WelcomeLetter"));
+const Statements = lazy(() => import("./pages/customer/Statements"));
+const CustomerCampaigns = lazy(() => import("./pages/customer/CustomerCampaigns"));
+const MyLeads = lazy(() => import("./pages/customer/MyLeads"));
+const Reports = lazy(() => import("./pages/customer/Reports"));
+
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminCampaigns = lazy(() => import("./pages/admin/AdminCampaigns"));
+const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
+const AdminCustomers = lazy(() => import("./pages/admin/AdminCustomers"));
+const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
+const AdminBanners = lazy(() => import("./pages/admin/AdminBanners"));
+const AdminKyc = lazy(() => import("./pages/admin/AdminKyc"));
+const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
+const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
+const AdminSecurity = lazy(() => import("./pages/admin/AdminSecurity"));
+const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
+
+const Fallback = () => (
+  <div className="flex min-h-screen items-center justify-center" data-testid="route-loading">
+    <div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
+  </div>
+);
+
+const C = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
+const A = (el) => <ProtectedRoute role="admin">{el}</ProtectedRoute>;
 
 function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/campaign/:slug" element={<CampaignDetail />} />
+        <Suspense fallback={<Fallback />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/campaigns" element={<Campaigns />} />
+            <Route path="/campaign/:slug" element={<CampaignDetail />} />
+            <Route path="/partners" element={<Partners />} />
+            <Route path="/offer-ended" element={<OfferEnded />} />
+            <Route path="/join/:slug" element={<LeadForm />} />
 
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/forgot-email" element={<ForgotEmail />} />
 
-          <Route path="/dashboard" element={<ProtectedRoute role="customer"><CustomerDashboard /></ProtectedRoute>} />
-          <Route path="/my-campaigns" element={<ProtectedRoute role="customer"><CustomerCampaigns /></ProtectedRoute>} />
-          <Route path="/wallet" element={<ProtectedRoute role="customer"><Wallet /></ProtectedRoute>} />
-          <Route path="/withdrawals" element={<ProtectedRoute role="customer"><Withdrawals /></ProtectedRoute>} />
-          <Route path="/statements" element={<ProtectedRoute role="customer"><Statements /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute role="customer"><Profile /></ProtectedRoute>} />
-          <Route path="/welcome-letter" element={<ProtectedRoute role="customer"><WelcomeLetter /></ProtectedRoute>} />
+            <Route path="/dashboard" element={C(<CustomerDashboard />)} />
+            <Route path="/my-campaigns" element={C(<CustomerCampaigns />)} />
+            <Route path="/wallet" element={C(<Wallet />)} />
+            <Route path="/withdrawals" element={C(<Withdrawals />)} />
+            <Route path="/statements" element={C(<Statements />)} />
+            <Route path="/profile" element={C(<Profile />)} />
+            <Route path="/welcome-letter" element={C(<WelcomeLetter />)} />
+            <Route path="/my-leads" element={C(<MyLeads />)} />
+            <Route path="/reports" element={C(<Reports />)} />
 
-          <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
-          <Route path="/admin/campaigns" element={<ProtectedRoute role="admin"><AdminCampaigns /></ProtectedRoute>} />
-          <Route path="/admin/categories" element={<ProtectedRoute role="admin"><AdminCategories /></ProtectedRoute>} />
-          <Route path="/admin/customers" element={<ProtectedRoute role="admin"><AdminCustomers /></ProtectedRoute>} />
-          <Route path="/admin/withdrawals" element={<ProtectedRoute role="admin"><AdminWithdrawals /></ProtectedRoute>} />
-          <Route path="/admin/banners" element={<ProtectedRoute role="admin"><AdminBanners /></ProtectedRoute>} />
-          <Route path="/admin/kyc" element={<ProtectedRoute role="admin"><AdminKyc /></ProtectedRoute>} />
-          <Route path="/admin/broadcast" element={<ProtectedRoute role="admin"><AdminBroadcast /></ProtectedRoute>} />
-          <Route path="/offer-ended" element={<OfferEnded />} />
-          <Route path="/partners" element={<Partners />} />
-          <Route path="/join/:slug" element={<LeadForm />} />
-          <Route path="/forgot-email" element={<ForgotEmail />} />
-          <Route path="/my-leads" element={<ProtectedRoute role="customer"><MyLeads /></ProtectedRoute>} />
-          <Route path="/admin/leads" element={<ProtectedRoute role="admin"><AdminLeads /></ProtectedRoute>} />
-          <Route path="/admin/security" element={<ProtectedRoute role="admin"><AdminSecurity /></ProtectedRoute>} />
-          <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute role="customer"><Reports /></ProtectedRoute>} />
-        </Routes>
+            <Route path="/admin" element={A(<AdminDashboard />)} />
+            <Route path="/admin/campaigns" element={A(<AdminCampaigns />)} />
+            <Route path="/admin/categories" element={A(<AdminCategories />)} />
+            <Route path="/admin/customers" element={A(<AdminCustomers />)} />
+            <Route path="/admin/withdrawals" element={A(<AdminWithdrawals />)} />
+            <Route path="/admin/banners" element={A(<AdminBanners />)} />
+            <Route path="/admin/kyc" element={A(<AdminKyc />)} />
+            <Route path="/admin/broadcast" element={A(<AdminBroadcast />)} />
+            <Route path="/admin/leads" element={A(<AdminLeads />)} />
+            <Route path="/admin/security" element={A(<AdminSecurity />)} />
+            <Route path="/admin/reports" element={A(<AdminReports />)} />
+          </Routes>
+        </Suspense>
         <WhatsAppFloat />
         <InstallPrompt />
       </BrowserRouter>

@@ -192,3 +192,13 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - DELETE /api/admin/reports/{id} also removes customers' report notifications (notifications now store report_id).
 - Campaign-live email made personal (plain link, no button, throttled 0.6s) for Primary-tab deliverability.
 - iteration_12: all pass (6 pytest + UI).
+
+## 2026-06 — Final dev batch: copy, dates, wallet, KYC/profile edit, speed
+- Per-field copy (CopyValue.jsx) on admin leads rows/modal, customer My Leads, admin KYC list/modal (PAN/A-C/IFSC/UPI). One value per click.
+- Admin Leads "Custom Range" chip opens inline From/To panel (lead-custom-range) — filters instantly; presets untouched.
+- Lead "Add Fund" (POST /api/admin/leads/{id}/fund) credits referring publisher; fund_history/fund_total on lead; separate from approval.
+- Wallet Adjust (POST /api/admin/wallet/adjust add/deduct/zero, reason required, confirm step) → wallet_adjustments log + txn + notification.
+- Admin edit customer profile/KYC (PUT /api/admin/customers/{id}/profile|kyc, GET .../detail with profile_history/kyc_history). Customer edits log by='self'.
+- Strict IFSC (11 chars, 4 letters+0+6) + UPI format validation on customer Profile and admin edit dialog (backend already strict).
+- Speed: React.lazy route splitting, /go parallel lookups + background click log, LeadForm redirect 900ms.
+- iteration_13: 17 pytest + all UI flows pass.

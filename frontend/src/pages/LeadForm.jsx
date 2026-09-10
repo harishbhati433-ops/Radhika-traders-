@@ -33,7 +33,7 @@ export default function LeadForm() {
       const { data: res } = await api.post(`/leads/${slug}`, { ref, data });
       setDone(res);
       toast.success("Details submitted! Redirecting to the offer…");
-      setTimeout(() => { window.location.href = res.redirect_url; }, 1800);
+      setTimeout(() => { window.location.href = res.redirect_url; }, 900);
     } catch (e2) { toast.error(formatApiErrorDetail(e2.response?.data?.detail)); }
     finally { setBusy(false); }
   };

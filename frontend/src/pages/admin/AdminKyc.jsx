@@ -4,7 +4,9 @@ import { adminNav } from "./nav";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { toast } from "sonner";
-import { ShieldCheck, ShieldX, ShieldOff, Clock, Eye, X } from "lucide-react";
+import { ShieldCheck, ShieldX, ShieldOff, Clock, Eye, X, Pencil } from "lucide-react";
+import { CustomerEditDialog } from "../../components/CustomerEditDialog";
+import { CopyValue } from "../../components/CopyValue";
 
 const TABS = [["", "All"], ["pending", "Pending"], ["verified", "Verified"], ["rejected", "Rejected"], ["deactivated", "Deactivated"]];
 const TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", verified: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", deactivated: "bg-slate-100 text-slate-600 border-slate-200" };
@@ -13,6 +15,7 @@ export default function AdminKyc() {
   const [tab, setTab] = useState("");
   const [list, setList] = useState([]);
   const [view, setView] = useState(null);
+  const [edit, setEdit] = useState(null);
 
   const load = () => api.get("/admin/kyc", { params: tab ? { status: tab } : {} }).then(({ data }) => setList(data));
   useEffect(() => { load(); }, [tab]);
@@ -43,11 +46,17 @@ export default function AdminKyc() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-900">{u.name}</span><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${TONE[u.kyc.status]}`}>{u.kyc.status}</span></div>
               <div className="mt-1.5 flex flex-wrap gap-1.5"><PhoneLink value={u.mobile} testId={`kyc-phone-${u.id}`} /><EmailLink value={u.email} testId={`kyc-email-${u.id}`} /></div>
-              <div className="mt-1 text-xs text-slate-500">PAN <b className="font-mono">{u.kyc.pan}</b> · A/C <b className="font-mono">{u.bank?.bank_account}</b> · {u.bank?.ifsc}{u.bank?.upi && <> · UPI <b>{u.bank.upi}</b></>}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-slate-500" data-testid={`kyc-bank-${u.id}`}>
+                <span>PAN <b className="font-mono">{u.kyc.pan}</b></span><CopyValue value={u.kyc.pan} label="PAN" testId={`kyc-copy-pan-${u.id}`} />
+                <span>· A/C <b className="font-mono">{u.bank?.bank_account}</b></span><CopyValue value={u.bank?.bank_account} label="Account number" testId={`kyc-copy-account-${u.id}`} />
+                <span>· IFSC <b className="font-mono">{u.bank?.ifsc}</b></span><CopyValue value={u.bank?.ifsc} label="IFSC" testId={`kyc-copy-ifsc-${u.id}`} />
+                {u.bank?.upi && <><span>· UPI <b>{u.bank.upi}</b></span><CopyValue value={u.bank.upi} label="UPI ID" testId={`kyc-copy-upi-${u.id}`} /></>}
+              </div>
               {u.kyc.admin_note && <div className="text-xs text-rose-500">Note: {u.kyc.admin_note}</div>}
             </div>
             <div className="flex flex-wrap gap-1.5">
               <button onClick={() => setView(u)} data-testid={`kyc-view-${u.id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700"><Eye className="h-3.5 w-3.5" /> View</button>
+              <button onClick={() => setEdit(u)} data-testid={`kyc-edit-${u.id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700"><Pencil className="h-3.5 w-3.5" /> Edit</button>
               {u.kyc.status !== "verified" && <button onClick={() => setStatus(u, "verified")} data-testid={`kyc-verify-${u.id}`} className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Verify</button>}
               {u.kyc.status === "pending" && <button onClick={() => setStatus(u, "rejected")} data-testid={`kyc-reject-${u.id}`} className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject</button>}
               {u.kyc.status === "verified" && <button onClick={() => setStatus(u, "deactivated")} data-testid={`kyc-deactivate-${u.id}`} className="rounded-full bg-slate-700 px-3 py-1.5 text-xs font-bold text-white">Deactivate</button>}
@@ -62,13 +71,14 @@ export default function AdminKyc() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between"><h3 className="font-display text-lg font-bold">{view.name} — KYC Details</h3><button onClick={() => setView(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              {[["Status", view.kyc.status], ["PAN", view.kyc.pan], ["Aadhaar", view.kyc.aadhaar || "—"], ["Account Holder", view.bank?.account_holder], ["Bank A/C", view.bank?.bank_account], ["IFSC", view.bank?.ifsc], ["UPI", view.bank?.upi || "—"], ["Submitted", (view.kyc.submitted_at || "").slice(0, 10)], ["Referral Code", view.referral_code], ["Address", view.address || "—"]].map(([k, v]) => (
-                <div key={k}><dt className="text-[11px] uppercase tracking-wider text-slate-400">{k}</dt><dd className="font-semibold text-slate-900 break-all capitalize">{v}</dd></div>
+              {[["Status", view.kyc.status], ["PAN", view.kyc.pan, "pan"], ["Aadhaar", view.kyc.aadhaar || "—", "aadhaar"], ["Account Holder", view.bank?.account_holder, "holder"], ["Bank A/C", view.bank?.bank_account, "account"], ["IFSC", view.bank?.ifsc, "ifsc"], ["UPI", view.bank?.upi || "—", "upi"], ["Submitted", (view.kyc.submitted_at || "").slice(0, 10)], ["Referral Code", view.referral_code, "ref"], ["Address", view.address || "—"]].map(([k, v, copyKey]) => (
+                <div key={k}><dt className="text-[11px] uppercase tracking-wider text-slate-400">{k}</dt><dd className={`flex items-center gap-0.5 font-semibold text-slate-900 break-all ${k === "Status" ? "capitalize" : ""}`}>{v}{copyKey && v !== "—" && <CopyValue value={v} label={k} testId={`kyc-detail-copy-${copyKey}`} />}</dd></div>
               ))}
             </dl>
             <div className="mt-3 flex flex-wrap gap-1.5"><PhoneLink value={view.mobile} /><EmailLink value={view.email} /></div>
             {view.bank?.upi_qr_url && <img src={fileUrl(view.bank.upi_qr_url)} alt="UPI QR" className="mt-3 h-28 w-28 rounded-lg border object-contain" />}
             <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button onClick={() => { setEdit(view); setView(null); }} data-testid="kyc-detail-edit" className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700"><Pencil className="h-3.5 w-3.5" /> Edit Details</button>
               {view.kyc.status !== "verified" && <button onClick={() => setStatus(view, "verified")} className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-bold text-white">Verify</button>}
               {view.kyc.status !== "rejected" && <button onClick={() => setStatus(view, "rejected")} className="rounded-full bg-rose-500 px-4 py-2 text-xs font-bold text-white">Reject</button>}
               {view.kyc.status === "verified" ? <button onClick={() => setStatus(view, "deactivated")} className="rounded-full bg-slate-700 px-4 py-2 text-xs font-bold text-white">Deactivate</button>
@@ -77,6 +87,7 @@ export default function AdminKyc() {
           </div>
         </div>
       )}
+      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={load} initialTab="kyc" />
     </DashboardLayout>
   );
 }

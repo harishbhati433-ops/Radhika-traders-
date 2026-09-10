@@ -5,9 +5,11 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { CampaignChip } from "../../components/CampaignChip";
 import { LeadExport, DATE_PRESETS, presetRange } from "../../components/LeadExport";
+import { CopyValue } from "../../components/CopyValue";
+import { LeadFundDialog } from "../../components/LeadFundDialog";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
-import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2 } from "lucide-react";
+import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2, Wallet, CalendarDays } from "lucide-react";
 
 const S_TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", approved: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", account_opened: "bg-sky-50 text-sky-700 border-sky-200" };
 const Badge = ({ s, testId }) => <span data-testid={testId} className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${S_TONE[s] || "bg-slate-100 text-slate-600"}`}>{(s || "").replace("_", " ")}</span>;
@@ -19,6 +21,13 @@ export default function AdminLeads() {
   const [campaigns, setCampaigns] = useState([]);
   const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: "", date_from: "", date_to: "", preset: "" });
   const [view, setView] = useState(null);
+  const [fundOpen, setFundOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const payoutFor = (cid) => campaigns.find((c) => c.id === cid)?.payout_amount || "";
+  const pickPreset = (k) => {
+    if (k === "custom") { setCustomOpen(true); setFlt({ ...flt, preset: "custom" }); return; }
+    setCustomOpen(false); const [a, b] = presetRange(k); setFlt({ ...flt, date_from: a, date_to: b, preset: k });
+  };
 
   const load = () => {
     const params = Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset"));
@@ -54,13 +63,21 @@ export default function AdminLeads() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3" data-testid="lead-export-bar">
         <div className="flex flex-wrap items-center gap-1.5" data-testid="lead-date-presets">
           <span className="mr-1 text-xs font-bold text-slate-600">Date:</span>
-          <button onClick={() => setFlt({ ...flt, date_from: "", date_to: "", preset: "" })} data-testid="lead-preset-all" className={`rounded-full px-3 py-1 text-xs font-bold ${!flt.preset && !flt.date_from ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>All time</button>
+          <button onClick={() => { setCustomOpen(false); setFlt({ ...flt, date_from: "", date_to: "", preset: "" }); }} data-testid="lead-preset-all" className={`rounded-full px-3 py-1 text-xs font-bold ${!flt.preset && !flt.date_from ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>All time</button>
           {DATE_PRESETS.map(([k, l]) => (
-            <button key={k} data-testid={`lead-preset-${k}`} onClick={() => { const [a, b] = presetRange(k); setFlt({ ...flt, date_from: a, date_to: b, preset: k }); }}
-              className={`rounded-full px-3 py-1 text-xs font-bold ${flt.preset === k ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{l}</button>
+            <button key={k} data-testid={`lead-preset-${k}`} onClick={() => pickPreset(k)}
+              className={`rounded-full px-3 py-1 text-xs font-bold ${flt.preset === k ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{k === "custom" ? <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" /> {l}</span> : l}</button>
           ))}
           {flt.date_from && <span className="ml-1 text-xs text-slate-500" data-testid="lead-date-range-label">{flt.date_from} → {flt.date_to || "today"}</span>}
         </div>
+        {(customOpen || flt.preset === "custom") && (
+          <div className="flex w-full flex-wrap items-end gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3" data-testid="lead-custom-range">
+            <div><div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">From</div><Input data-testid="lead-custom-from" type="date" max={flt.date_to || undefined} value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value, preset: "custom" })} className="h-9 bg-white" /></div>
+            <div><div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">To</div><Input data-testid="lead-custom-to" type="date" min={flt.date_from || undefined} value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value, preset: "custom" })} className="h-9 bg-white" /></div>
+            <div className="text-xs text-slate-500">{flt.date_from || flt.date_to ? `Showing ${list.length} leads` : "Pick a From and To date — list filters instantly."}</div>
+            <button onClick={() => { setCustomOpen(false); setFlt({ ...flt, date_from: "", date_to: "", preset: "" }); }} data-testid="lead-custom-clear" className="ml-auto rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">Clear</button>
+          </div>
+        )}
         <LeadExport filters={{ campaign_id: flt.campaign_id, status: flt.status, account_status: flt.account_status, ref: flt.ref, search: flt.search, date_from: flt.date_from, date_to: flt.date_to }} count={list.length} />
       </div>
 
@@ -70,8 +87,8 @@ export default function AdminLeads() {
           <tbody className="divide-y divide-slate-100">
             {list.map((l) => (
               <tr key={l.id} data-testid={`lead-row-${l.id}`}>
-                <td className="p-3 font-mono text-xs font-bold text-slate-700">{l.lead_id}</td>
-                <td className="p-3"><div className="font-semibold text-slate-900">{l.customer_name || "—"}</div><div className="mt-1 flex flex-wrap gap-1"><PhoneLink value={l.mobile} /><EmailLink value={l.email} /></div></td>
+                <td className="p-3 font-mono text-xs font-bold text-slate-700"><span className="inline-flex items-center gap-0.5">{l.lead_id}<CopyValue value={l.lead_id} label="Lead ID" testId={`copy-leadid-${l.id}`} /></span></td>
+                <td className="p-3"><div className="inline-flex items-center gap-0.5 font-semibold text-slate-900">{l.customer_name || "—"}<CopyValue value={l.customer_name} label="Name" testId={`copy-name-${l.id}`} /></div><div className="mt-1 flex flex-wrap items-center gap-1"><PhoneLink value={l.mobile} /><CopyValue value={l.mobile} label="Mobile" testId={`copy-mobile-${l.id}`} /><EmailLink value={l.email} /><CopyValue value={l.email} label="Email" testId={`copy-email-${l.id}`} /></div></td>
                 <td className="p-3"><CampaignChip name={l.campaign_name} testId={`lead-campaign-${l.id}`} /></td>
                 <td className="p-3"><div className="font-medium text-slate-800">{l.partner_name || "Direct"}</div><div className="font-mono text-[10px] text-slate-400">{l.ref_code}</div></td>
                 <td className="p-3"><div className="flex flex-col gap-1"><Badge s={l.status} testId={`lead-status-${l.id}`} /><Badge s={l.account_status} /></div></td>
@@ -87,10 +104,10 @@ export default function AdminLeads() {
       {view && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="lead-detail-modal">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl rt-scroll">
-            <div className="flex items-start justify-between"><div><h3 className="font-display text-lg font-bold">Lead {view.lead_id}</h3><div className="text-xs text-slate-500">Created {(view.created_at || "").slice(0, 16).replace("T", " ")} · Updated {(view.updated_at || "").slice(0, 16).replace("T", " ")}</div></div><button onClick={() => setView(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+            <div className="flex items-start justify-between"><div><h3 className="inline-flex items-center gap-1 font-display text-lg font-bold">Lead {view.lead_id}<CopyValue value={view.lead_id} label="Lead ID" testId="lead-detail-copy-id" /></h3><div className="text-xs text-slate-500">Created {(view.created_at || "").slice(0, 16).replace("T", " ")} · Updated {(view.updated_at || "").slice(0, 16).replace("T", " ")}</div></div><button onClick={() => setView(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Customer Details</div>
-                <dl className="mt-2 space-y-1.5 text-sm">{Object.entries(view.data || {}).filter(([, v]) => v).map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-slate-500">{LABELS[k] || k}</dt><dd className="font-semibold text-slate-900 text-right break-all">{v}</dd></div>)}</dl>
+              <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Customer Details <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">· tap icon to copy one field</span></div>
+                <dl className="mt-2 space-y-1.5 text-sm">{Object.entries(view.data || {}).filter(([, v]) => v).map(([k, v]) => <div key={k} className="flex items-center justify-between gap-2" data-testid={`lead-detail-field-${k}`}><dt className="text-slate-500">{LABELS[k] || k}</dt><dd className="flex items-center gap-0.5 text-right font-semibold text-slate-900 break-all">{v}<CopyValue value={v} label={LABELS[k] || k} testId={`lead-detail-copy-${k}`} /></dd></div>)}</dl>
                 <div className="mt-2 flex flex-wrap gap-1"><PhoneLink value={view.mobile} /><EmailLink value={view.email} /></div></div>
               <div className="space-y-4">
                 <div className="rounded-xl border border-slate-200 p-4"><div className="text-[11px] font-bold uppercase tracking-wider text-red-600">Campaign</div><div className="mt-1"><CampaignChip name={view.campaign_name} /></div><div className="font-mono text-[10px] text-slate-400">ID {view.campaign_id}</div>{view.campaign_link && <a href={view.campaign_link} target="_blank" rel="noreferrer" className="block truncate text-xs text-sky-700 underline">{view.campaign_link}</a>}</div>
@@ -109,9 +126,24 @@ export default function AdminLeads() {
                 <button onClick={() => update(view, { account_status: "rejected" })} data-testid="lead-account-rejected" className="rounded-full bg-slate-700 px-3 py-1.5 text-xs font-bold text-white">Account Rejected</button>
               </div>
             </div>
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4" data-testid="lead-fund-section">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Publisher Wallet Fund</div>
+                  <div className="text-xs text-slate-600">Separate from approval. Credits <b>{view.partner_name || "—"}</b>'s wallet · Total added so far: <b className="font-mono" data-testid="lead-fund-total">₹{view.fund_total || 0}</b></div>
+                </div>
+                <button onClick={() => setFundOpen(true)} disabled={!view.partner_id} data-testid="lead-add-fund" title={view.partner_id ? "" : "No referring publisher on this lead"} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><Wallet className="h-3.5 w-3.5" /> Add Fund</button>
+              </div>
+              {view.fund_history?.length > 0 && (
+                <div className="mt-2 space-y-1" data-testid="lead-fund-history">
+                  {[...view.fund_history].reverse().map((f, i) => <div key={i} className="flex flex-wrap justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-xs"><span><b className="font-mono text-emerald-700">+₹{f.amount}</b> {f.note && <span className="text-slate-500">· {f.note}</span>} <span className="font-mono text-slate-400">{f.ref_id}</span></span><span className="text-slate-400">{(f.at || "").slice(0, 16).replace("T", " ")} · {f.by}</span></div>)}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
+      <LeadFundDialog lead={view} defaultAmount={view ? payoutFor(view.campaign_id) : ""} open={fundOpen && !!view} onClose={() => setFundOpen(false)} onDone={(data) => { setView(data.lead); load(); }} />
     </DashboardLayout>
   );
 }

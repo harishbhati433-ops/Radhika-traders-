@@ -296,6 +296,18 @@ class CreditIn(BaseModel):
     ref_id: Optional[str] = None
 
 
+class LeadFundIn(BaseModel):
+    amount: float
+    note: str = ""
+
+
+class WalletAdjustIn(BaseModel):
+    user_id: str
+    mode: str  # add | deduct | zero
+    amount: float = 0
+    reason: str
+
+
 class WithdrawIn(BaseModel):
     amount: float
     method: str
@@ -618,24 +630,35 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 # ----------------------------- Profile / KYC -----------------------------
-@api.put("/profile")
-async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)):
+PROFILE_FIELDS = ("name", "mobile", "address", "dob")
+
+
+async def _apply_profile_update(uid: str, body: ProfileIn, by: str) -> dict:
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "name" in upd and not upd["name"].strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty.")
     if "mobile" in upd:
         upd["mobile"] = _norm_mobile(upd["mobile"])
         if len(upd["mobile"]) != 10:
             raise HTTPException(status_code=400, detail="Please enter a valid 10-digit mobile number.")
-        clash = await db.users.find_one({"mobile": {"$regex": f"{upd['mobile']}$"}, "_id": {"$ne": ObjectId(user["id"])}, "email_verified": True})
+        clash = await db.users.find_one({"mobile": {"$regex": f"{upd['mobile']}$"}, "_id": {"$ne": ObjectId(uid)}, "email_verified": True})
         if clash:
             raise HTTPException(status_code=400, detail="This mobile number is already registered with another account.")
-    if upd:
-        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": upd})
-    full = await db.users.find_one({"_id": ObjectId(user["id"])})
-    return public_user(full)
+    current = await db.users.find_one({"_id": ObjectId(uid)})
+    if not current:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    changes = {k: {"from": current.get(k, ""), "to": v} for k, v in upd.items() if (current.get(k) or "") != v}
+    if changes:
+        await db.users.update_one({"_id": ObjectId(uid)}, {"$set": upd, "$push": {"profile_history": {"changes": changes, "at": now_iso(), "by": by}}})
+    return await db.users.find_one({"_id": ObjectId(uid)})
 
 
-@api.put("/profile/kyc")
-async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
+@api.put("/profile")
+async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)):
+    return public_user(await _apply_profile_update(user["id"], body, "self"))
+
+
+def _validate_kyc(body: KycIn) -> tuple[str, str, str]:
     pan = body.pan.strip().upper()
     ifsc = body.ifsc.strip().upper()
     acct = re.sub(r"\s", "", body.bank_account)
@@ -649,20 +672,48 @@ async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Bank account number must be 9–18 digits")
     if body.aadhaar and not re.fullmatch(r"\d{12}", re.sub(r"\s", "", body.aadhaar)):
         raise HTTPException(status_code=400, detail="Aadhaar must be exactly 12 digits (numbers only)")
-        raise HTTPException(status_code=400, detail="Aadhaar must be 12 digits")
     if body.upi and not re.fullmatch(r"[\w.\-]{2,}@[A-Za-z]{2,}", body.upi.strip()):
         raise HTTPException(status_code=400, detail="Invalid UPI ID (e.g. name@upi)")
-    dup = await db.users.find_one({"kyc.pan": pan, "_id": {"$ne": ObjectId(user["id"])}})
+    if not body.account_holder.strip():
+        raise HTTPException(status_code=400, detail="Account holder name is required")
+    return pan, ifsc, acct
+
+
+KYC_TRACKED = ("pan", "aadhaar", "bank_account", "ifsc", "upi", "account_holder")
+
+
+async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] = None) -> dict:
+    pan, ifsc, acct = _validate_kyc(body)
+    dup = await db.users.find_one({"kyc.pan": pan, "_id": {"$ne": ObjectId(uid)}})
     if dup:
         raise HTTPException(status_code=400, detail="This PAN is already registered with another account")
-    kyc = {**body.model_dump(), "pan": pan, "ifsc": ifsc, "bank_account": acct, "status": "verified",
-           "verified_mode": "auto", "submitted_at": now_iso(), "reviewed_at": now_iso(), "admin_note": ""}
-    bank = {"account_holder": body.account_holder.strip(), "bank_account": acct, "ifsc": ifsc,
-            "upi": (body.upi or "").strip(), "upi_qr_url": body.upi_qr_url or ""}
-    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"kyc": kyc, "bank": bank}})
+    current = await db.users.find_one({"_id": ObjectId(uid)})
+    if not current:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    old_kyc, old_bank = current.get("kyc", {}), current.get("bank", {})
+    new_vals = {"pan": pan, "aadhaar": re.sub(r"\s", "", body.aadhaar or ""), "bank_account": acct, "ifsc": ifsc,
+                "upi": (body.upi or "").strip(), "account_holder": body.account_holder.strip()}
+    old_vals = {"pan": old_kyc.get("pan", ""), "aadhaar": old_kyc.get("aadhaar", ""), "bank_account": old_bank.get("bank_account", ""),
+                "ifsc": old_bank.get("ifsc", ""), "upi": old_bank.get("upi", ""), "account_holder": old_bank.get("account_holder", "")}
+    changes = {k: {"from": old_vals[k], "to": new_vals[k]} for k in KYC_TRACKED if (old_vals[k] or "") != new_vals[k]}
+    status = keep_status or "verified"
+    kyc = {**body.model_dump(), **{k: new_vals[k] for k in ("pan", "aadhaar")}, "ifsc": ifsc, "bank_account": acct, "status": status,
+           "verified_mode": "admin" if by != "self" else "auto", "submitted_at": old_kyc.get("submitted_at") or now_iso(),
+           "reviewed_at": now_iso(), "admin_note": old_kyc.get("admin_note", "") if by != "self" else "", "updated_at": now_iso(), "updated_by": by}
+    bank = {"account_holder": new_vals["account_holder"], "bank_account": acct, "ifsc": ifsc, "upi": new_vals["upi"], "upi_qr_url": body.upi_qr_url or ""}
+    push = {"kyc_history": {"changes": changes, "status": status, "at": now_iso(), "by": by}} if (changes or not old_kyc.get("pan")) else None
+    op = {"$set": {"kyc": kyc, "bank": bank}}
+    if push:
+        op["$push"] = push
+    await db.users.update_one({"_id": ObjectId(uid)}, op)
+    return await db.users.find_one({"_id": ObjectId(uid)})
+
+
+@api.put("/profile/kyc")
+async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
+    full = await _apply_kyc(user["id"], body, "self")
     await db.notifications.insert_one({"user_id": user["id"], "title": "KYC Verified ✓", "body": "Your KYC details were verified successfully. Withdrawals are enabled.",
                                        "link": "/withdrawals", "type": "kyc", "read": False, "created_at": now_iso()})
-    full = await db.users.find_one({"_id": ObjectId(user["id"])})
     return public_user(full)
 
 
@@ -749,15 +800,17 @@ def _primary_link(c: dict) -> Optional[str]:
 
 
 @api.get("/go/{slug}")
-async def go_affiliate(slug: str, request: Request, ref: Optional[str] = None):
-    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+async def go_affiliate(slug: str, request: Request, background: BackgroundTasks, ref: Optional[str] = None):
     origin = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
+    c, partner = await asyncio.gather(
+        db.campaigns.find_one({"slug": slug, "is_deleted": False}),
+        db.users.find_one({"referral_code": ref, "account_status": {"$nin": ["disabled", "deleted"]}}, {"_id": 1}) if ref else asyncio.sleep(0, result=None),
+    )
     if not c:
         return RedirectResponse(url=f"{origin}/offer-ended", status_code=302)
     is_live = c.get("status") == "live" and c.get("offer_enabled", True)
     target = _primary_link(c) if is_live else None
-    partner = await db.users.find_one({"referral_code": ref, "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
-    await db.clicks.insert_one({
+    background.add_task(db.clicks.insert_one, {
         "campaign_id": str(c["_id"]), "slug": slug, "ref_code": ref or "",
         "user_id": str(partner["_id"]) if partner else None,
         "redirected_to": target or "", "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
@@ -957,6 +1010,33 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, admin: dict = Depends(
                                            "body": f"{l.get('customer_name') or 'Customer'} · {l['campaign_name']}" + (f" · {body.reject_reason}" if body.reject_reason else ""),
                                            "link": "/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
     return lead_out(await db.leads.find_one({"_id": l["_id"]}))
+
+
+@api.post("/admin/leads/{lid}/fund")
+async def admin_fund_lead(lid: str, body: LeadFundIn, admin: dict = Depends(require_admin)):
+    l = await db.leads.find_one({"_id": ObjectId(lid)}) if ObjectId.is_valid(lid) else None
+    if not l:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+    if not l.get("partner_id"):
+        raise HTTPException(status_code=400, detail="This lead has no referring publisher — no wallet to credit")
+    partner = await db.users.find_one({"_id": ObjectId(l["partner_id"])})
+    if not partner or partner.get("account_status") == "deleted":
+        raise HTTPException(status_code=404, detail="Publisher account not found")
+    amount = round(float(body.amount), 2)
+    ref_id = f"LF-{uuid.uuid4().hex[:8].upper()}"
+    desc = f"Lead {l['lead_id']} payout · {l.get('campaign_name', '')}" + (f" · {body.note.strip()}" if body.note.strip() else "")
+    await db.transactions.insert_one({"user_id": l["partner_id"], "amount": amount, "type": "credit", "description": desc, "ref_id": ref_id,
+                                      "campaign_id": l.get("campaign_id"), "lead_id": str(l["_id"]), "lead_ref": l["lead_id"], "status": "completed",
+                                      "source": "lead_fund", "created_by": admin["email"], "created_at": now_iso()})
+    entry = {"amount": amount, "note": body.note.strip(), "ref_id": ref_id, "at": now_iso(), "by": admin["email"]}
+    await db.leads.update_one({"_id": l["_id"]}, {"$push": {"fund_history": entry}, "$inc": {"fund_total": amount}, "$set": {"updated_at": now_iso()}})
+    await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"₹{amount:g} credited for lead {l['lead_id']}",
+                                       "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/wallet",
+                                       "type": "wallet", "read": False, "created_at": now_iso()})
+    wallet = await compute_wallet(l["partner_id"])
+    return {"message": f"₹{amount:g} added to {partner.get('name')}'s wallet", "lead": lead_out(await db.leads.find_one({"_id": l["_id"]})), "wallet": wallet}
 
 
 @api.get("/my-clicks")
@@ -1639,6 +1719,80 @@ async def credit_wallet(body: CreditIn, admin: dict = Depends(require_admin)):
     }
     await db.transactions.insert_one(doc)
     return {"message": "Wallet credited"}
+
+
+@api.post("/admin/wallet/adjust")
+async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dict = Depends(require_admin)):
+    if body.mode not in ("add", "deduct", "zero"):
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    reason = (body.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Please write a reason for this adjustment")
+    u = await db.users.find_one({"_id": ObjectId(body.user_id), "role": "customer"}) if ObjectId.is_valid(body.user_id) else None
+    if not u or u.get("account_status") == "deleted":
+        raise HTTPException(status_code=404, detail="Customer not found")
+    before = await compute_wallet(body.user_id)
+    if body.mode == "zero":
+        amount = round(before["balance"], 2)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Wallet balance is already ₹0")
+        ttype = "debit"
+    else:
+        amount = round(float(body.amount), 2)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+        ttype = "credit" if body.mode == "add" else "debit"
+        if ttype == "debit" and amount > before["balance"] + 0.001:
+            raise HTTPException(status_code=400, detail=f"Cannot deduct ₹{amount:g} — available balance is only ₹{before['balance']:g}")
+    ref_id = f"ADJ-{uuid.uuid4().hex[:8].upper()}"
+    label = {"add": "Wallet adjustment (added)", "deduct": "Wallet adjustment (deducted)", "zero": "Wallet reset to ₹0"}[body.mode]
+    await db.transactions.insert_one({"user_id": body.user_id, "amount": amount, "type": ttype, "description": f"{label} · {reason}", "ref_id": ref_id,
+                                      "campaign_id": None, "status": "completed", "source": "admin_adjust", "mode": body.mode,
+                                      "created_by": admin["email"], "created_at": now_iso()})
+    after = await compute_wallet(body.user_id)
+    await db.wallet_adjustments.insert_one({"user_id": body.user_id, "customer_name": u.get("name"), "mode": body.mode, "amount": amount, "reason": reason,
+                                            "ref_id": ref_id, "balance_before": before["balance"], "balance_after": after["balance"],
+                                            "admin_id": admin["id"], "admin_email": admin["email"], "created_at": now_iso()})
+    await _log_security(admin["id"], f"wallet_{body.mode}", request, f"{u.get('email')} ₹{amount:g} — {reason}")
+    await db.notifications.insert_one({"user_id": body.user_id, "title": f"Wallet {'credited' if ttype == 'credit' else 'debited'} ₹{amount:g}",
+                                       "body": f"{label}. Reason: {reason}", "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+    return {"message": f"{u.get('name')}: ₹{before['balance']:g} → ₹{after['balance']:g}", "ref_id": ref_id, "wallet": after}
+
+
+@api.get("/admin/customers/{uid}/detail")
+async def admin_customer_detail(uid: str, admin: dict = Depends(require_admin)):
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    pu = public_user(u)
+    pu["wallet"] = await compute_wallet(uid)
+    pu["profile_history"] = list(reversed(u.get("profile_history", [])))[:50]
+    pu["kyc_history"] = list(reversed(u.get("kyc_history", [])))[:50]
+    adj = await db.wallet_adjustments.find({"user_id": uid}).sort("created_at", -1).to_list(50)
+    pu["wallet_adjustments"] = [{**{k: v for k, v in a.items() if k != "_id"}, "id": str(a["_id"])} for a in adj]
+    txns = await db.transactions.find({"user_id": uid}).sort("created_at", -1).to_list(30)
+    pu["transactions"] = [{**{k: v for k, v in t.items() if k != "_id"}, "id": str(t["_id"])} for t in txns]
+    return pu
+
+
+@api.put("/admin/customers/{uid}/profile")
+async def admin_update_profile(uid: str, body: ProfileIn, admin: dict = Depends(require_admin)):
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(status_code=404, detail="Customer not found")
+    full = await _apply_profile_update(uid, body, admin["email"])
+    return public_user(full)
+
+
+@api.put("/admin/customers/{uid}/kyc")
+async def admin_edit_kyc(uid: str, body: KycIn, admin: dict = Depends(require_admin)):
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    cur_status = u.get("kyc", {}).get("status", "not_submitted")
+    full = await _apply_kyc(uid, body, admin["email"], keep_status="verified" if cur_status in ("not_submitted", "pending", "rejected", "verified") else cur_status)
+    await db.notifications.insert_one({"user_id": uid, "title": "KYC details updated", "body": "Radhika Traders updated your KYC / bank details. Check your profile.",
+                                       "link": "/profile", "type": "kyc", "read": False, "created_at": now_iso()})
+    return public_user(full)
 
 
 @api.get("/admin/dashboard")

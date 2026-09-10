@@ -5,6 +5,7 @@ import api from "../../lib/api";
 import { ClipboardList, Search, X } from "lucide-react";
 import { Input } from "../../components/ui/input";
 import { CampaignChip } from "../../components/CampaignChip";
+import { CopyValue } from "../../components/CopyValue";
 
 const TONE = { pending: "bg-amber-50 text-amber-700", approved: "bg-emerald-50 text-emerald-700", rejected: "bg-rose-50 text-rose-700", account_opened: "bg-sky-50 text-sky-700" };
 
@@ -47,15 +48,18 @@ export default function MyLeads() {
         {shown.map((l) => (
           <div key={l.id} data-testid={`my-lead-${l.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><div className="font-semibold text-slate-900">{l.customer_name || "Customer"} <span className="ml-1 font-mono text-[10px] text-slate-400">{l.lead_id}</span></div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500"><CampaignChip name={l.campaign_name} testId={`my-lead-campaign-${l.id}`} /><span>{(l.created_at || "").slice(0, 10)}</span></div>{l.reject_reason && <div className="text-xs text-rose-600">Reason: {l.reject_reason}</div>}</div>
+              <div><div className="inline-flex items-center gap-0.5 font-semibold text-slate-900">{l.customer_name || "Customer"}<CopyValue value={l.customer_name} label="Name" testId={`my-lead-copy-name-${l.id}`} /> <span className="ml-1 inline-flex items-center font-mono text-[10px] text-slate-400">{l.lead_id}<CopyValue value={l.lead_id} label="Lead ID" testId={`my-lead-copy-id-${l.id}`} /></span></div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500"><CampaignChip name={l.campaign_name} testId={`my-lead-campaign-${l.id}`} /><span>{(l.created_at || "").slice(0, 10)}</span></div>{l.reject_reason && <div className="text-xs text-rose-600">Reason: {l.reject_reason}</div>}</div>
               <div className="flex gap-1.5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${TONE[l.status]}`}>{l.status}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${TONE[l.account_status]}`}>{l.account_status.replace("_", " ")}</span></div>
             </div>
             {l.details?.length > 0 && (
               <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-3" data-testid={`my-lead-details-${l.id}`}>
                 {l.details.map((d) => (
-                  <div key={d.key} className="rounded-lg bg-slate-50 px-3 py-2">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{d.label}</div>
-                    <div className="break-all text-sm font-semibold text-slate-800">{d.key === "mobile" ? <a href={`tel:${d.value}`} className="text-red-600">{d.value}</a> : d.value}</div>
+                  <div key={d.key} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2" data-testid={`my-lead-field-${l.id}-${d.key}`}>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{d.label}</div>
+                      <div className="break-all text-sm font-semibold text-slate-800">{d.key === "mobile" ? <a href={`tel:${d.value}`} className="text-red-600">{d.value}</a> : d.value}</div>
+                    </div>
+                    <CopyValue value={d.value} label={d.label} testId={`my-lead-copy-${l.id}-${d.key}`} />
                   </div>
                 ))}
               </div>
