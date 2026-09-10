@@ -1,6 +1,7 @@
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import { SecuritySettings } from "../../components/SecuritySettings";
+import { ShutdownControl } from "../../components/ShutdownControl";
 import { useAuth } from "../../context/AuthContext";
 import { ShieldAlert } from "lucide-react";
 
@@ -15,6 +16,7 @@ export default function AdminSecurity() {
           <p className="mt-1 text-xs">Use a strong, unique password (min 8 chars, mix of letters, numbers & symbols). Never share it. If forgotten, use “Forgot Password” on the Admin Login page — an OTP will be sent to this email.</p>
         </div>
       </div>
+      <div className="mb-6"><ShutdownControl /></div>
       <SecuritySettings showTxn={false} />
     </DashboardLayout>
   );

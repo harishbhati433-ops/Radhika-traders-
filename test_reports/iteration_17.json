@@ -1,0 +1,23 @@
+{
+  "summary": "Tested Website Shutdown Switch (maintenance mode) end-to-end. All 8 backend tests pass (cycle: get/put/wrong-password 403/reopen-past 400/customer login 503/customer token 503/register 503/POST leads 503/GET go 302 to /maintenance/admin endpoints unaffected/OFF restore; auto-reopen after ~75s works; regression: /go redirect + customer login). Frontend: shutdown ON, /login, /, /signup, /campaign/axis-mutual-fund-sip all show maintenance-page with IST reopen time + ticking countdown; maintenance-admin-link leads to functional /admin/login; ShutdownControl on /admin/security shows CLOSED, shutdown-active-info, toggle → confirm-box → password → OPEN toast; /login returns to normal login form. Logged-in customer scenario: after API turns shutdown ON, navigating to /wallet shows maintenance-page and rt_token is cleared from localStorage. Shutdown left OFF at end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_shutdown.py",
+    "/app/test_reports/pytest/shutdown_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is > 2500 lines — consider splitting into modules (auth, campaigns, leads, wallet, admin, shutdown).",
+    "shutdown_state() re-queries DB inside HTTPException detail (get_current_user calls it twice; login and register call it twice). Minor perf; cache within request.",
+    "In go_affiliate the campaign-not-found branch runs BEFORE the shutdown check, so /api/go/<unknown-slug> goes to /offer-ended even during shutdown. Acceptable since slug is unknown, but note for consistency."
+  ],
+  "updated_files": ["/app/backend/tests/test_shutdown.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin bhatiharish276@gmail.com/Radhika@2023; Customer testcust@example.com/Test@1234; test campaign slug axis-mutual-fund-sip",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Shutdown Switch feature working. Live campaign slug in preview is axis-mutual-fund-sip (choice-trade-test in test_credentials.md is stale). Backend tests in /app/backend/tests/test_shutdown.py. Auto-reopen test takes ~80s; skip with -k 'not auto_reopen' for fast runs. Always leave shutdown OFF at end of any run.",
+  "rca of the issue": "N/A"
+}

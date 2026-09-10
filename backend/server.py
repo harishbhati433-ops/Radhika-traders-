@@ -90,7 +90,12 @@ def public_user(u: dict) -> dict:
 
 
 async def get_current_user(request: Request) -> dict:
-    return await get_current_user_from_db(request, db)
+    user = await get_current_user_from_db(request, db)
+    if user.get("role") == "customer":
+        sd = await shutdown_state()
+        if sd["active"]:
+            raise HTTPException(status_code=503, detail={"code": "shutdown", **sd})
+    return user
 
 
 async def require_admin(request: Request) -> dict:
@@ -156,6 +161,62 @@ async def get_settings() -> dict:
 
 
 DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+DEFAULT_SHUTDOWN_MSG = "Radhika Traders website is temporarily closed for maintenance. Your account, wallet and leads are completely safe."
+
+
+async def shutdown_state() -> dict:
+    s = await db.settings.find_one({"key": "app"}, {"shutdown_enabled": 1, "shutdown_message": 1, "shutdown_reopen_at": 1, "shutdown_at": 1}) or {}
+    enabled = bool(s.get("shutdown_enabled"))
+    reopen = s.get("shutdown_reopen_at") or ""
+    if enabled and reopen and reopen <= now_iso():
+        await db.settings.update_one({"key": "app"}, {"$set": {"shutdown_enabled": False, "shutdown_auto_reopened_at": now_iso()}})
+        enabled = False
+    return {"active": enabled, "message": s.get("shutdown_message") or DEFAULT_SHUTDOWN_MSG, "reopen_at": reopen if enabled else "",
+            "since": s.get("shutdown_at", "") if enabled else ""}
+
+
+class ShutdownIn(BaseModel):
+    enabled: bool
+    message: Optional[str] = None
+    reopen_at: Optional[str] = None
+    password: str
+
+
+@api.get("/status/public")
+async def public_status():
+    return await shutdown_state()
+
+
+@api.get("/admin/shutdown")
+async def admin_get_shutdown(admin: dict = Depends(require_admin)):
+    s = await db.settings.find_one({"key": "app"}) or {}
+    return {**(await shutdown_state()), "enabled_flag": bool(s.get("shutdown_enabled")), "by": s.get("shutdown_by", ""),
+            "message": s.get("shutdown_message") or DEFAULT_SHUTDOWN_MSG, "reopen_at": s.get("shutdown_reopen_at", "") or ""}
+
+
+@api.put("/admin/shutdown")
+async def admin_set_shutdown(body: ShutdownIn, request: Request, admin: dict = Depends(require_admin)):
+    full = await db.users.find_one({"_id": ObjectId(admin["id"])})
+    if not await asyncio.to_thread(verify_password, body.password, full.get("password_hash", "")):
+        await _log_security(admin["id"], "shutdown_password_failed", request)
+        raise HTTPException(status_code=403, detail="Incorrect admin password. Shutdown state not changed.")
+    reopen = (body.reopen_at or "").strip()
+    if reopen:
+        try:
+            dt = datetime.fromisoformat(reopen.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            reopen = dt.astimezone(timezone.utc).isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid reopen date/time")
+        if body.enabled and reopen <= now_iso():
+            raise HTTPException(status_code=400, detail="Reopen time must be in the future")
+    upd = {"shutdown_enabled": body.enabled, "shutdown_message": (body.message or "").strip()[:400] or DEFAULT_SHUTDOWN_MSG,
+           "shutdown_reopen_at": reopen if body.enabled else "", "shutdown_by": admin["email"], "shutdown_at": now_iso() if body.enabled else "",
+           "updated_at": now_iso()}
+    await db.settings.update_one({"key": "app"}, {"$set": upd}, upsert=True)
+    await _log_security(admin["id"], "shutdown_on" if body.enabled else "shutdown_off", request, f"reopen_at={reopen or '-'}")
+    return {"message": "Website is now CLOSED for customers" if body.enabled else "Website is OPEN again for customers", "state": await shutdown_state()}
 
 
 def withdrawals_open(s: dict) -> tuple:
@@ -352,6 +413,8 @@ def _norm_mobile(m: str) -> str:
 
 @api.post("/auth/register")
 async def register(body: RegisterIn):
+    if (await shutdown_state())["active"]:
+        raise HTTPException(status_code=503, detail={"code": "shutdown", **(await shutdown_state())})
     email = body.email.lower()
     mobile = _norm_mobile(body.mobile)
     if len(mobile) != 10:
@@ -577,6 +640,10 @@ async def login(body: LoginIn, request: Request):
         await db.login_attempts.delete_one({"_id": rec["_id"]})
         rec = None
     ok = bool(user) and await asyncio.to_thread(verify_password, body.password, user.get("password_hash", ""))
+    if ok and user.get("role") == "customer":
+        sd = await shutdown_state()
+        if sd["active"]:
+            raise HTTPException(status_code=503, detail={"code": "shutdown", **sd})
     if not ok:
         count = (rec.get("count", 0) if rec else 0) + 1
         upd = {"$set": {"identifier": identifier, "email": email, "count": count, "updated_at": now}}
@@ -861,6 +928,8 @@ async def go_affiliate(slug: str, request: Request, background: BackgroundTasks,
     )
     if not c:
         return RedirectResponse(url=f"{origin}/offer-ended", status_code=302)
+    if (await shutdown_state())["active"]:
+        return RedirectResponse(url=f"{origin}/maintenance", status_code=302)
     is_live = c.get("status") == "live" and c.get("offer_enabled", True)
     target = _primary_link(c) if is_live else None
     background.add_task(db.clicks.insert_one, {
@@ -894,6 +963,8 @@ async def join_info(slug: str, ref: Optional[str] = None):
 
 @api.post("/leads/{slug}")
 async def create_lead(slug: str, body: LeadIn, request: Request):
+    if (await shutdown_state())["active"]:
+        raise HTTPException(status_code=503, detail={"code": "shutdown", **(await shutdown_state())})
     c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
     if not c or c.get("status") != "live" or not c.get("offer_enabled", True):
         raise HTTPException(status_code=400, detail="Offer is not active")

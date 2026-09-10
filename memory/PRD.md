@@ -218,3 +218,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Bank name in payouts
 - Withdrawal payout_info now stores bank_name/branch at request time; GET /api/admin/withdrawals backfills older rows from IFSC lookup cache (persisted). PayoutDetails.jsx shows "Verified from IFSC" bank chip (wd-bank-{id}) for bank transfers and bank name in Alt A/C line for UPI payouts.
+
+## 2026-06 — Website Shutdown Switch (maintenance mode)
+- settings.app: shutdown_enabled/message/reopen_at/by/at. shutdown_state() auto-reopens when reopen_at passes. GET /api/status/public; GET/PUT /api/admin/shutdown (admin password required, security log).
+- When active: customer get_current_user → 503 {code:shutdown}, customer login → 503, register/lead POST → 503, /api/go → /maintenance. Admin untouched.
+- Frontend: ShutdownGate (polls 45s, listens rt:shutdown → logs customer out) renders MaintenancePage (message, reopen time IST + countdown, WhatsApp, admin link) for all non-/admin routes; /maintenance route. ShutdownControl on Admin Security page (message, reopen datetime, confirm + password).

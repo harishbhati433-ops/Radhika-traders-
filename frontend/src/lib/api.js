@@ -20,6 +20,9 @@ api.interceptors.response.use((r) => r, (err) => {
     localStorage.removeItem("rt_token");
     window.dispatchEvent(new Event("rt:logout"));
   }
+  if (err.response?.status === 503 && err.response?.data?.detail?.code === "shutdown") {
+    window.dispatchEvent(new CustomEvent("rt:shutdown", { detail: err.response.data.detail }));
+  }
   return Promise.reject(err);
 });
 

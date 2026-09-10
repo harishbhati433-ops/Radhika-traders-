@@ -1,11 +1,14 @@
 import "@/App.css";
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import api from "./lib/api";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ShutdownGate } from "./components/ShutdownGate";
+import MaintenancePage from "./pages/MaintenancePage";
 
 import Home from "./pages/Home";
 import Login from "./pages/auth/Login";
@@ -54,14 +57,24 @@ const Fallback = () => (
 const C = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
 const A = (el) => <ProtectedRoute role="admin">{el}</ProtectedRoute>;
 
+function MaintenanceRoute() {
+  const [state, setState] = useState(null);
+  const check = () => api.get("/status/public").then(({ data }) => setState(data)).catch(() => {});
+  useEffect(() => { check(); }, []);
+  if (state && !state.active) return <Navigate to="/" replace />;
+  return <MaintenancePage state={state || { message: "" }} onRecheck={check} />;
+}
+
 function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <BrowserRouter>
+        <ShutdownGate>
         <Suspense fallback={<Fallback />}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/maintenance" element={<MaintenanceRoute />} />
             <Route path="/about" element={<About />} />
             <Route path="/services" element={<Services />} />
             <Route path="/contact" element={<Contact />} />
@@ -100,6 +113,7 @@ function App() {
             <Route path="/admin/reports" element={A(<AdminReports />)} />
           </Routes>
         </Suspense>
+        </ShutdownGate>
         <WhatsAppFloat />
         <InstallPrompt />
       </BrowserRouter>
