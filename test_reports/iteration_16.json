@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 16: Verified auth speed-pass + bcrypt rehash, brute-force lockout, admin/customer portal separation, change-password roundtrip, IFSC lookup (Razorpay + Mongo cache) with UI display on /profile. 13/13 pytest tests passed. Frontend flows validated end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [
+    {"screen": "/profile Personal Details", "issues": ["DOB uses browser default date picker (<input type='date'>) instead of shadcn calendar — noted from prior iterations, not new"]}
+  ]},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_16_auth_ifsc.py",
+    "/app/test_reports/pytest/iter16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 2212 lines — recommend splitting (auth, kyc, admin, ifsc) into modules; exceeds 700-line guideline.",
+    "lookup_ifsc_info swallows all httpx errors uniformly — logging razorpay 5xx would help ops.",
+    "change_password endpoint does not enforce that new_password != current_password.",
+    "IfscBankInfo debounce (350ms) is fine but does not cancel in-flight API call on unmount — minor."
+  ],
+  "test_results_detail": {
+    "backend": "13/13 passed (5.9s). Login latency measured ~341ms first call, ~200-260ms subsequent. Stored hash after first successful login confirmed $2b$10$ prefix (rehash working).",
+    "frontend": {
+      "customer_login_submit_to_dashboard_ms": 267,
+      "admin_login_submit_to_dashboard_ms": "≈2530 (includes networkidle wait; actual render <1s based on visual)",
+      "profile_ifsc_MAHG0004001": "kyc-ifsc-bank shows 'Maharashtra Gramin Bank'",
+      "profile_ifsc_ZZZZ0999999": "kyc-ifsc-bank-miss shown with not_found message",
+      "ifsc_restore": "HDFC0001234 restored, KYC NOT submitted"
+    },
+    "ifsc_endpoint": {
+      "SBIN0005943": "available=true bank='State Bank of India'",
+      "MAHG0004001": "available=true bank='Maharashtra Gramin Bank'",
+      "ZZZZ0999999": "available=false reason=not_found",
+      "HDFC (short)": "available=false reason=invalid_format",
+      "unauthenticated": "401"
+    },
+    "regression": {"/api/go/axis-mutual-fund-sip?ref=RTA12499": "302 redirect OK"},
+    "lockout_flow": "After 5 wrong pw -> 429 lock; delete login_attempts doc unlocks; verified"
+  },
+  "updated_files": ["/app/backend/tests/test_iteration_16_auth_ifsc.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Customer: testcust@example.com/Test@1234 restored. Admin: bhatiharish276@gmail.com/Radhika@2023",
+  "seed_data_creation": "None — passwords restored to original at end of change_password roundtrip test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iteration 16 features validated. IFSC cache populated for SBIN0005943 and MAHG0004001 (30-day TTL). Login latency for customer is ~250-350ms — the parallel gather + bcrypt-in-thread optimization is effective. Bcrypt rehash to rounds=10 confirmed on stored hash."
+}

@@ -18,8 +18,18 @@ def get_jwt_secret() -> str:
     return os.environ["JWT_SECRET"]
 
 
+BCRYPT_ROUNDS = 10
+
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
+
+
+def needs_rehash(hashed: str) -> bool:
+    try:
+        return int(hashed.split("$")[2]) > BCRYPT_ROUNDS
+    except (IndexError, ValueError):
+        return False
 
 
 def verify_password(plain: str, hashed: str) -> bool:

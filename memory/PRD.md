@@ -211,3 +211,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — IFSC bank lookup
 - GET /api/ifsc/{code} (auth) → Razorpay public IFSC API (all RBI banks incl. RRB/Payments/SFB/co-op), Mongo cache `ifsc_cache` (30d, ISO strings), non-blocking. IfscBankInfo.jsx shows bank/branch under IFSC on customer Profile + admin edit dialog; bank_name/branch stored in users.bank on KYC save; shown in Admin KYC list/modal.
+
+## 2026-06 — Login/redirect speed
+- Login: parallel DB lookups, bcrypt verify in thread, bcrypt rounds 12→10 with transparent rehash on successful login (auth_utils.needs_rehash). ~370ms→~190ms; 10 concurrent logins 2.7s→1.06s.
+- Added Mongo indexes (users.referral_code/mobile, leads.*, transactions/withdrawals/notifications/clicks user_id, etc.).

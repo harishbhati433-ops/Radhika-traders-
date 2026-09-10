@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
 
 from auth_utils import (
-    hash_password, verify_password, create_access_token, generate_otp,
+    hash_password, verify_password, create_access_token, generate_otp, needs_rehash,
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email
@@ -569,15 +569,15 @@ async def login(body: LoginIn, request: Request):
     email = body.email.lower()
     identifier = f"{_client_ip(request)}:{email}"
     now = now_iso()
-    rec = await db.login_attempts.find_one({"identifier": identifier})
+    rec, user = await asyncio.gather(db.login_attempts.find_one({"identifier": identifier}), db.users.find_one({"email": email}))
     if rec and rec.get("count", 0) >= LOGIN_MAX_ATTEMPTS and (rec.get("locked_until") or "") > now:
         mins = max(1, int((datetime.fromisoformat(rec["locked_until"]) - datetime.now(timezone.utc)).total_seconds() // 60) + 1)
         raise HTTPException(status_code=429, detail=f"Too many failed login attempts. Account locked. Try again after {mins} minutes.")
     if rec and (rec.get("locked_until") or "") and rec["locked_until"] <= now:
         await db.login_attempts.delete_one({"_id": rec["_id"]})
         rec = None
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user.get("password_hash", "")):
+    ok = bool(user) and await asyncio.to_thread(verify_password, body.password, user.get("password_hash", ""))
+    if not ok:
         count = (rec.get("count", 0) if rec else 0) + 1
         upd = {"$set": {"identifier": identifier, "email": email, "count": count, "updated_at": now}}
         if count >= LOGIN_MAX_ATTEMPTS:
@@ -589,7 +589,8 @@ async def login(body: LoginIn, request: Request):
         if count >= LOGIN_MAX_ATTEMPTS:
             raise HTTPException(status_code=429, detail=f"Too many failed login attempts. Account locked for {LOGIN_LOCK_MINUTES} minutes.")
         raise HTTPException(status_code=401, detail=f"Invalid email or password. {left} attempt{'s' if left != 1 else ''} left before lock.")
-    await db.login_attempts.delete_one({"identifier": identifier})
+    if rec:
+        await db.login_attempts.delete_one({"identifier": identifier})
     st = user.get("account_status", "active")
     if st == "deleted":
         raise HTTPException(status_code=401, detail="Invalid email or password.")
@@ -602,6 +603,9 @@ async def login(body: LoginIn, request: Request):
     if user["role"] == "customer" and not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="Please verify your email first")
     token = create_access_token(str(user["_id"]), email, user["role"])
+    if needs_rehash(user.get("password_hash", "")):
+        new_hash = await asyncio.to_thread(hash_password, body.password)
+        await db.users.update_one({"_id": user["_id"], "password_hash": user["password_hash"]}, {"$set": {"password_hash": new_hash}})
     return {"token": token, "user": public_user(user)}
 
 
@@ -2166,6 +2170,10 @@ async def startup():
         await db.reports.create_index("expires_at")
         await _purge_expired_reports()
         await db.campaigns.create_index("slug")
+        for coll, key in (("users", "referral_code"), ("users", "mobile"), ("leads", "partner_id"), ("leads", "created_at"), ("leads", "campaign_id"),
+                          ("transactions", "user_id"), ("withdrawals", "user_id"), ("notifications", "user_id"), ("clicks", "user_id"),
+                          ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id")):
+            await db[coll].create_index(key)
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin
