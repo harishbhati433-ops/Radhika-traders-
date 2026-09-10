@@ -208,3 +208,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Invite + campaign apply messages: emojis, WhatsApp *bold*, Title-cased partner name.
 - Auto banners v2: /api/banners auto entries carry type/payout/investment/requirement/benefit/company; GeneratedSlide with LIVE badge when no image; admin GET /api/banners?all=true → {manual, auto}; PATCH /api/admin/campaigns/{id}/slider (show_in_slider, slider_order, banner_headline, banner_tagline); AdminBanners "Automatic campaign banners" section (hide/reorder/edit headline, link to campaign edit via /admin/campaigns?edit=id). Slider aspect 16/9 mobile, 3/1 desktop.
 - iteration_14 (share kit/IFSC/copy) + iteration_15 (auto banners): pass.
+
+## 2026-06 — IFSC bank lookup
+- GET /api/ifsc/{code} (auth) → Razorpay public IFSC API (all RBI banks incl. RRB/Payments/SFB/co-op), Mongo cache `ifsc_cache` (30d, ISO strings), non-blocking. IfscBankInfo.jsx shows bank/branch under IFSC on customer Profile + admin edit dialog; bank_name/branch stored in users.bank on KYC save; shown in Admin KYC list/modal.

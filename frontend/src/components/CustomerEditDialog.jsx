@@ -6,6 +6,7 @@ import api, { formatApiErrorDetail } from "../lib/api";
 import { formatPan, formatAadhaar, formatIfsc, panError, aadhaarError, ifscError, upiError } from "../lib/validators";
 import { toast } from "sonner";
 import { UserCog, Loader2, History } from "lucide-react";
+import { IfscBankInfo } from "./IfscBankInfo";
 
 const TABS = [["profile", "Profile"], ["kyc", "KYC & Bank"], ["history", "Change Log"]];
 const fmt = (iso) => (iso || "").slice(0, 16).replace("T", " ");
@@ -73,7 +74,7 @@ export function CustomerEditDialog({ customerId, open, onClose, onDone, initialT
             </div>
             <div><Label>Bank Account Number</Label>{inp(k, setK, "bank_account", { "data-testid": "cust-edit-account", required: true })}</div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>IFSC</Label><Input data-testid="cust-edit-ifsc" required maxLength={11} value={k.ifsc || ""} onChange={(e) => setK({ ...k, ifsc: formatIfsc(e.target.value) })} className={`mt-1.5 uppercase ${ifscError(k.ifsc) ? "border-rose-400" : ""}`} placeholder="HDFC0001234" />{ifscError(k.ifsc) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="cust-edit-ifsc-error">{ifscError(k.ifsc)}</div>}</div>
+              <div><Label>IFSC</Label><Input data-testid="cust-edit-ifsc" required maxLength={11} value={k.ifsc || ""} onChange={(e) => setK({ ...k, ifsc: formatIfsc(e.target.value) })} className={`mt-1.5 uppercase ${ifscError(k.ifsc) ? "border-rose-400" : ""}`} placeholder="HDFC0001234" />{ifscError(k.ifsc) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="cust-edit-ifsc-error">{ifscError(k.ifsc)}</div>}<IfscBankInfo ifsc={k.ifsc} testId="cust-edit-ifsc-bank" /></div>
               <div><Label>UPI ID</Label>{inp(k, setK, "upi", { "data-testid": "cust-edit-upi", placeholder: "name@upi" })}{upiError(k.upi) && <div className="mt-1 text-xs font-semibold text-rose-600">{upiError(k.upi)}</div>}</div>
             </div>
             <button type="submit" disabled={busy} data-testid="cust-edit-kyc-save" className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 py-2.5 text-sm font-bold text-white disabled:opacity-60">{busy && <Loader2 className="h-4 w-4 animate-spin" />} Save KYC</button>

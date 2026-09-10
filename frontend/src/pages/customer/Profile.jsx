@@ -11,6 +11,7 @@ import { ImageUpload } from "../../components/ImageUpload";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Award, ArrowRight } from "lucide-react";
 import { SecuritySettings } from "../../components/SecuritySettings";
+import { IfscBankInfo } from "../../components/IfscBankInfo";
 
 export default function Profile() {
   const { user, setUser, refresh } = useAuth();
@@ -108,7 +109,7 @@ export default function Profile() {
               {confirmAcct && acctMatch && <div className="mt-1 text-xs font-semibold text-emerald-600" data-testid="kyc-account-match">Account numbers match ✓</div>}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>IFSC</Label><Input data-testid="kyc-ifsc" required maxLength={11} value={kyc.ifsc} onChange={(e) => setKyc({ ...kyc, ifsc: formatIfsc(e.target.value) })} className={`mt-1.5 uppercase ${ifscError(kyc.ifsc) ? "border-rose-400" : kyc.ifsc.length === 11 ? "border-emerald-400" : ""}`} placeholder="HDFC0001234" />{ifscError(kyc.ifsc) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-ifsc-error">{ifscError(kyc.ifsc)}</div>}</div>
+              <div><Label>IFSC</Label><Input data-testid="kyc-ifsc" required maxLength={11} value={kyc.ifsc} onChange={(e) => setKyc({ ...kyc, ifsc: formatIfsc(e.target.value) })} className={`mt-1.5 uppercase ${ifscError(kyc.ifsc) ? "border-rose-400" : kyc.ifsc.length === 11 ? "border-emerald-400" : ""}`} placeholder="HDFC0001234" />{ifscError(kyc.ifsc) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-ifsc-error">{ifscError(kyc.ifsc)}</div>}<IfscBankInfo ifsc={kyc.ifsc} testId="kyc-ifsc-bank" /></div>
               <div><Label>UPI ID</Label><Input data-testid="kyc-upi" value={kyc.upi} onChange={setK("upi")} className={`mt-1.5 ${upiError(kyc.upi) ? "border-rose-400" : ""}`} placeholder="name@upi" />{upiError(kyc.upi) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="kyc-upi-error">{upiError(kyc.upi)}</div>}</div>
             </div>
             <ImageUpload label="UPI QR code (optional — PhonePe / GPay / Paytm QR screenshot)" value={kyc.upi_qr_url} onChange={(v) => setKyc({ ...kyc, upi_qr_url: v })} testId="kyc-upi-qr" />

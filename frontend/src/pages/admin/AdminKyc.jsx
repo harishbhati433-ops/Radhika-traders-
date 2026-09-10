@@ -50,6 +50,7 @@ export default function AdminKyc() {
                 <span>PAN <b className="font-mono">{u.kyc.pan}</b></span><CopyValue value={u.kyc.pan} label="PAN" testId={`kyc-copy-pan-${u.id}`} />
                 <span>· A/C <b className="font-mono">{u.bank?.bank_account}</b></span><CopyValue value={u.bank?.bank_account} label="Account number" testId={`kyc-copy-account-${u.id}`} />
                 <span>· IFSC <b className="font-mono">{u.bank?.ifsc}</b></span><CopyValue value={u.bank?.ifsc} label="IFSC" testId={`kyc-copy-ifsc-${u.id}`} />
+                {u.bank?.bank_name && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700" data-testid={`kyc-bank-name-${u.id}`}>{u.bank.bank_name}{u.bank.branch ? ` · ${u.bank.branch}` : ""}</span>}
                 {u.bank?.upi && <><span>· UPI <b>{u.bank.upi}</b></span><CopyValue value={u.bank.upi} label="UPI ID" testId={`kyc-copy-upi-${u.id}`} /></>}
               </div>
               {u.kyc.admin_note && <div className="text-xs text-rose-500">Note: {u.kyc.admin_note}</div>}
@@ -71,7 +72,7 @@ export default function AdminKyc() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between"><h3 className="font-display text-lg font-bold">{view.name} — KYC Details</h3><button onClick={() => setView(null)} className="rounded-lg p-1 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              {[["Status", view.kyc.status], ["PAN", view.kyc.pan, "pan"], ["Aadhaar", view.kyc.aadhaar || "—", "aadhaar"], ["Account Holder", view.bank?.account_holder, "holder"], ["Bank A/C", view.bank?.bank_account, "account"], ["IFSC", view.bank?.ifsc, "ifsc"], ["UPI", view.bank?.upi || "—", "upi"], ["Submitted", (view.kyc.submitted_at || "").slice(0, 10)], ["Referral Code", view.referral_code, "ref"], ["Address", view.address || "—"]].map(([k, v, copyKey]) => (
+              {[["Status", view.kyc.status], ["PAN", view.kyc.pan, "pan"], ["Aadhaar", view.kyc.aadhaar || "—", "aadhaar"], ["Account Holder", view.bank?.account_holder, "holder"], ["Bank A/C", view.bank?.bank_account, "account"], ["IFSC", view.bank?.ifsc, "ifsc"], ["Bank", view.bank?.bank_name ? `${view.bank.bank_name}${view.bank.branch ? ` · ${view.bank.branch}` : ""}` : "—"], ["UPI", view.bank?.upi || "—", "upi"], ["Submitted", (view.kyc.submitted_at || "").slice(0, 10)], ["Referral Code", view.referral_code, "ref"], ["Address", view.address || "—"]].map(([k, v, copyKey]) => (
                 <div key={k}><dt className="text-[11px] uppercase tracking-wider text-slate-400">{k}</dt><dd className={`flex items-center gap-0.5 font-semibold text-slate-900 break-all ${k === "Status" ? "capitalize" : ""}`}>{v}{copyKey && v !== "—" && <CopyValue value={v} label={k} testId={`kyc-detail-copy-${copyKey}`} />}</dd></div>
               ))}
             </dl>

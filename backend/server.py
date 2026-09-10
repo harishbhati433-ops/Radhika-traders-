@@ -692,6 +692,38 @@ def _validate_kyc(body: KycIn) -> tuple[str, str, str]:
 
 
 KYC_TRACKED = ("pan", "aadhaar", "bank_account", "ifsc", "upi", "account_holder")
+IFSC_RE = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+IFSC_CACHE_DAYS = 30
+
+
+async def lookup_ifsc_info(code: str) -> dict:
+    code = (code or "").strip().upper()
+    if not IFSC_RE.fullmatch(code):
+        return {"available": False, "reason": "invalid_format", "ifsc": code}
+    now = datetime.now(timezone.utc)
+    cached = await db.ifsc_cache.find_one({"_id": code})
+    if cached and cached.get("available") and str(cached.get("expires_at", "")) > now.isoformat():
+        return {"available": True, "source": "cache", "ifsc": code, **{k: cached.get(k) for k in ("bank", "branch", "city", "state")}}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
+            r = await client.get(f"https://ifsc.razorpay.com/{code}")
+        if r.status_code == 404:
+            return {"available": False, "reason": "not_found", "ifsc": code}
+        r.raise_for_status()
+        d = r.json()
+        info = {"bank": d.get("BANK"), "branch": d.get("BRANCH"), "city": d.get("CITY"), "state": d.get("STATE")}
+        await db.ifsc_cache.replace_one({"_id": code}, {"_id": code, "available": True, **info, "fetched_at": now.isoformat(),
+                                                        "expires_at": (now + timedelta(days=IFSC_CACHE_DAYS)).isoformat()}, upsert=True)
+        return {"available": True, "source": "razorpay", "ifsc": code, **info}
+    except (httpx.HTTPError, ValueError, KeyError):
+        if cached and cached.get("available"):
+            return {"available": True, "source": "stale_cache", "ifsc": code, **{k: cached.get(k) for k in ("bank", "branch", "city", "state")}}
+        return {"available": False, "reason": "lookup_unavailable", "ifsc": code}
+
+
+@api.get("/ifsc/{code}")
+async def ifsc_lookup(code: str, user: dict = Depends(get_current_user)):
+    return await lookup_ifsc_info(code[:11])
 
 
 async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] = None) -> dict:
@@ -713,6 +745,11 @@ async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] 
            "verified_mode": "admin" if by != "self" else "auto", "submitted_at": old_kyc.get("submitted_at") or now_iso(),
            "reviewed_at": now_iso(), "admin_note": old_kyc.get("admin_note", "") if by != "self" else "", "updated_at": now_iso(), "updated_by": by}
     bank = {"account_holder": new_vals["account_holder"], "bank_account": acct, "ifsc": ifsc, "upi": new_vals["upi"], "upi_qr_url": body.upi_qr_url or ""}
+    if ifsc == old_bank.get("ifsc") and old_bank.get("bank_name"):
+        bank["bank_name"], bank["branch"] = old_bank.get("bank_name"), old_bank.get("branch", "")
+    else:
+        info = await lookup_ifsc_info(ifsc)
+        bank["bank_name"], bank["branch"] = (info.get("bank") or "", info.get("branch") or "") if info.get("available") else ("", "")
     push = {"kyc_history": {"changes": changes, "status": status, "at": now_iso(), "by": by}} if (changes or not old_kyc.get("pan")) else None
     op = {"$set": {"kyc": kyc, "bank": bank}}
     if push:
