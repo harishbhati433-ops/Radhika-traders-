@@ -26,7 +26,7 @@ export function LeadFundDialog({ lead, defaultAmount, open, onClose, onDone }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent data-testid="lead-fund-modal" className="max-w-md">
+      <DialogContent data-testid="lead-fund-modal" className="z-[90] max-w-md" overlayClassName="z-[80]">
         <DialogHeader><DialogTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-emerald-600" /> Add Fund — Lead {lead?.lead_id}</DialogTitle></DialogHeader>
         <div className="rounded-xl bg-slate-50 p-3 text-sm">
           <div className="text-xs text-slate-500">Credits the wallet of the referring publisher</div>

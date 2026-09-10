@@ -223,3 +223,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - settings.app: shutdown_enabled/message/reopen_at/by/at. shutdown_state() auto-reopens when reopen_at passes. GET /api/status/public; GET/PUT /api/admin/shutdown (admin password required, security log).
 - When active: customer get_current_user → 503 {code:shutdown}, customer login → 503, register/lead POST → 503, /api/go → /maintenance. Admin untouched.
 - Frontend: ShutdownGate (polls 45s, listens rt:shutdown → logs customer out) renders MaintenancePage (message, reopen time IST + countdown, WhatsApp, admin link) for all non-/admin routes; /maintenance route. ShutdownControl on Admin Security page (message, reopen datetime, confirm + password).
+
+## 2026-06 — Bugfix: Add Fund dialog hidden
+- LeadFundDialog opened at z-50 behind lead detail modal (z-[70]) → looked dead on production. DialogContent now accepts overlayClassName; fund dialog uses z-[90]/overlay z-[80]. Verified via real click.
