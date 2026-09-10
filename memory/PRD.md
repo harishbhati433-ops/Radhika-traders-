@@ -226,3 +226,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Bugfix: Add Fund dialog hidden
 - LeadFundDialog opened at z-50 behind lead detail modal (z-[70]) → looked dead on production. DialogContent now accepts overlayClassName; fund dialog uses z-[90]/overlay z-[80]. Verified via real click.
+
+## 2026-06 — Deployment health check
+- Fixed: .gitignore no longer ignores .env; removed _purge_expired_reports() from startup (runs lazily on report listing). Deployment agent: PASS.

@@ -2253,7 +2253,6 @@ async def startup():
         await db.otp_codes.create_index("email")
         await db.login_attempts.create_index("identifier", unique=True)
         await db.reports.create_index("expires_at")
-        await _purge_expired_reports()
         await db.campaigns.create_index("slug")
         for coll, key in (("users", "referral_code"), ("users", "mobile"), ("leads", "partner_id"), ("leads", "created_at"), ("leads", "campaign_id"),
                           ("transactions", "user_id"), ("withdrawals", "user_id"), ("notifications", "user_id"), ("clicks", "user_id"),
