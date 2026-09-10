@@ -215,3 +215,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Login/redirect speed
 - Login: parallel DB lookups, bcrypt verify in thread, bcrypt rounds 12→10 with transparent rehash on successful login (auth_utils.needs_rehash). ~370ms→~190ms; 10 concurrent logins 2.7s→1.06s.
 - Added Mongo indexes (users.referral_code/mobile, leads.*, transactions/withdrawals/notifications/clicks user_id, etc.).
+
+## 2026-06 — Bank name in payouts
+- Withdrawal payout_info now stores bank_name/branch at request time; GET /api/admin/withdrawals backfills older rows from IFSC lookup cache (persisted). PayoutDetails.jsx shows "Verified from IFSC" bank chip (wd-bank-{id}) for bank transfers and bank name in Alt A/C line for UPI payouts.

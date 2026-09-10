@@ -1328,6 +1328,7 @@ async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = De
         "payout_info": {
             "account_holder": bank.get("account_holder", ""), "bank_account": bank.get("bank_account", ""),
             "ifsc": bank.get("ifsc", ""), "upi": bank.get("upi", ""), "upi_qr_url": bank.get("upi_qr_url", ""),
+            "bank_name": bank.get("bank_name", ""), "branch": bank.get("branch", ""),
             "pan": full.get("kyc", {}).get("pan", ""),
         },
         "status": "pending", "admin_note": "", "created_at": now_iso(), "updated_at": now_iso(),
@@ -1348,7 +1349,20 @@ async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(re
     if status:
         q["status"] = status
     items = await db.withdrawals.find(q).sort("created_at", -1).to_list(5000)
-    return [{**{k: v for k, v in w.items() if k != "_id"}, "id": str(w["_id"])} for w in items]
+    codes = {(w.get("payout_info") or {}).get("ifsc") for w in items if not (w.get("payout_info") or {}).get("bank_name") and (w.get("payout_info") or {}).get("ifsc")}
+    found = {}
+    for code in list(codes)[:100]:
+        info = await lookup_ifsc_info(code)
+        if info.get("available"):
+            found[code] = (info.get("bank") or "", info.get("branch") or "")
+    out = []
+    for w in items:
+        pi = dict(w.get("payout_info") or {})
+        if not pi.get("bank_name") and pi.get("ifsc") in found:
+            pi["bank_name"], pi["branch"] = found[pi["ifsc"]]
+            await db.withdrawals.update_one({"_id": w["_id"]}, {"$set": {"payout_info.bank_name": pi["bank_name"], "payout_info.branch": pi["branch"]}})
+        out.append({**{k: v for k, v in w.items() if k != "_id"}, "payout_info": pi, "id": str(w["_id"])})
+    return out
 
 
 @api.patch("/admin/withdrawals/{wid}")
