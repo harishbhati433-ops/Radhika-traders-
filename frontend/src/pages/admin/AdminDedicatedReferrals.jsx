@@ -21,8 +21,7 @@ function PayoutPicker({ value, onChange, testId }) {
 export default function AdminDedicatedReferrals() {
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
-  const [results, setResults] = useState(null);
-  const [searching, setSearching] = useState(false);
+  const [customers, setCustomers] = useState(null);
   const [adding, setAdding] = useState(null);
   const [payout, setPayout] = useState("10");
   const [editing, setEditing] = useState(null);
@@ -31,20 +30,17 @@ export default function AdminDedicatedReferrals() {
   const [log, setLog] = useState(null);
 
   const load = () => api.get("/admin/dedicated-referrals").then(({ data }) => setList(data));
-  useEffect(() => { load(); }, []);
+  const loadCustomers = () => api.get("/admin/dedicated-referrals/search", { params: { q: "" } }).then(({ data }) => setCustomers(data)).catch((err) => toast.error(formatApiErrorDetail(err.response?.data?.detail)));
+  useEffect(() => { load(); loadCustomers(); }, []);
 
-  const search = async (e) => {
-    e?.preventDefault();
-    if (q.trim().length < 2) return toast.error("Enter at least 2 characters");
-    setSearching(true);
-    try { const { data } = await api.get("/admin/dedicated-referrals/search", { params: { q: q.trim() } }); setResults(data); }
-    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setSearching(false); }
-  };
+  const norm = (s) => (s || "").toString().toLowerCase().replace(/\s/g, "");
+  const term = norm(q);
+  const filtered = (customers || []).filter((c) => !term || [c.name, c.customer_id, c.mobile, c.email].some((v) => norm(v).includes(term)));
   const enable = async () => {
     const p = parseFloat(payout);
     if (!(p >= 0)) return toast.error("Enter a valid payout");
     if (!window.confirm(`Enable dedicated referral for ${adding.name} at ₹${p} per eligible referral?`)) return;
-    try { await api.post("/admin/dedicated-referrals", { user_id: adding.user_id, payout: p, enabled: true }); toast.success(`Dedicated referral enabled for ${adding.name}`); setAdding(null); setResults(null); setQ(""); load(); }
+    try { await api.post("/admin/dedicated-referrals", { user_id: adding.user_id, payout: p, enabled: true }); toast.success(`Dedicated referral enabled for ${adding.name}`); setAdding(null); setQ(""); load(); loadCustomers(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
   const toggle = async (d) => {
@@ -71,25 +67,14 @@ export default function AdminDedicatedReferrals() {
         ))}
       </div>
 
-      <form onSubmit={search} className="mb-6 rounded-2xl border border-slate-200 bg-white p-4" data-testid="ded-search-box">
-        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-600"><UserPlus className="h-3.5 w-3.5" /> Add a dedicated customer</label>
-        <div className="flex flex-wrap gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} data-testid="ded-search-input" placeholder="Search by Customer Name, Customer ID or Mobile Number" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-red-400 focus:outline-none" />
-          <button type="submit" disabled={searching} data-testid="ded-search-btn" className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search</button>
-          <button type="button" onClick={() => { setQ(""); setResults(null); setAdding(null); }} data-testid="ded-search-reset" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700"><RotateCcw className="h-4 w-4" /> Reset</button>
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4" data-testid="ded-search-box">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-600"><UserPlus className="h-3.5 w-3.5" /> Add a dedicated customer <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600" data-testid="ded-customer-count">{customers ? `${filtered.length} / ${customers.length} customers` : "loading…"}</span></label>
         </div>
-        {results && (
-          <div className="mt-3 space-y-2" data-testid="ded-search-results">
-            {results.length === 0 && <div className="text-sm font-semibold text-rose-600" data-testid="ded-search-notfound">Not Found — no customer matches "{q}"</div>}
-            {results.map((r) => (
-              <div key={r.user_id} data-testid={`ded-result-${r.user_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                <div><b>{r.name}</b> <span className="font-mono text-xs text-slate-500">{r.customer_id}</span> · {r.mobile} · <span className="text-xs text-slate-500">{r.email}</span></div>
-                {r.dedicated ? <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${r.dedicated.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>Already added · ₹{r.dedicated.payout} · {r.dedicated.enabled ? "Enabled" : "Disabled"}</span>
-                  : <button onClick={() => { setAdding(r); setPayout("10"); }} data-testid={`ded-select-${r.user_id}`} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">Select</button>}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={q} onChange={(e) => setQ(e.target.value)} data-testid="ded-search-input" placeholder="Filter by Customer Name, Customer ID, Mobile or Email" className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm focus:border-red-400 focus:outline-none" /></div>
+          <button type="button" onClick={() => { setQ(""); setAdding(null); loadCustomers(); }} data-testid="ded-search-reset" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700"><RotateCcw className="h-4 w-4" /> Reset</button>
+        </div>
         {adding && (
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3" data-testid="ded-enable-box">
             <div className="mb-2 text-sm">Enable for <b>{adding.name}</b> <span className="font-mono text-xs text-slate-500">{adding.customer_id}</span> — payout per eligible referral:</div>
@@ -97,13 +82,25 @@ export default function AdminDedicatedReferrals() {
             <div className="mt-3 flex gap-2"><button onClick={enable} data-testid="ded-enable-confirm" className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white">Enable Dedicated Referral</button><button onClick={() => setAdding(null)} className="rounded-full border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700">Cancel</button></div>
           </div>
         )}
-      </form>
+        <div className="mt-3 max-h-80 space-y-1.5 overflow-y-auto rt-scroll" data-testid="ded-search-results">
+          {!customers && <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>}
+          {customers && customers.length === 0 && <div className="py-6 text-center text-sm text-slate-500" data-testid="ded-no-customers">No verified customers yet. Customers appear here once they sign up and verify their email.</div>}
+          {customers && customers.length > 0 && filtered.length === 0 && <div className="text-sm font-semibold text-rose-600" data-testid="ded-search-notfound">Not Found — no customer matches "{q}"</div>}
+          {filtered.map((r) => (
+            <div key={r.user_id} data-testid={`ded-result-${r.user_id}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm ${adding?.user_id === r.user_id ? "bg-emerald-50 ring-1 ring-emerald-300" : "bg-slate-50"}`}>
+              <div className="min-w-0"><b>{r.name}</b> <span className="font-mono text-xs text-slate-500">{r.customer_id}</span> · {r.mobile} · <span className="text-xs text-slate-500">{r.email}</span> <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${r.kyc_status === "verified" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>KYC {r.kyc_status.replace("_", " ")}</span></div>
+              {r.dedicated ? <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${r.dedicated.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>Already added · ₹{r.dedicated.payout} · {r.dedicated.enabled ? "Enabled" : "Disabled"}</span>
+                : <button onClick={() => { setAdding(r); setPayout("10"); }} data-testid={`ded-select-${r.user_id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white"><UserPlus className="h-3 w-3" /> Add</button>}
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-sm" data-testid="ded-table">
           <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500"><tr><th className="p-3">Customer</th><th className="p-3">Payout</th><th className="p-3">Referrals</th><th className="p-3">Eligible</th><th className="p-3">Earnings</th><th className="p-3">Status</th><th className="p-3">Actions</th></tr></thead>
           <tbody>
-            {list.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-slate-500" data-testid="ded-empty">No dedicated customers yet. Search above to add one.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-slate-500" data-testid="ded-empty">No dedicated customers yet. Click "Add" on a customer above.</td></tr>}
             {list.map((d) => (
               <tr key={d.id} data-testid={`ded-row-${d.user_id}`} className="border-t border-slate-100">
                 <td className="p-3"><div className="font-semibold text-slate-900">{d.name}</div><div className="flex items-center gap-0.5 font-mono text-xs text-slate-500">{d.customer_id}<CopyValue value={d.customer_id} label="Customer ID" /> · {d.mobile}</div></td>

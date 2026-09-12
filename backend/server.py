@@ -2384,15 +2384,16 @@ async def ded_list(admin: dict = Depends(require_admin)):
 
 
 @api.get("/admin/dedicated-referrals/search")
-async def ded_search(q: str, admin: dict = Depends(require_admin)):
+async def ded_search(q: str = "", admin: dict = Depends(require_admin)):
     term = (q or "").strip()
-    if len(term) < 2:
-        raise HTTPException(status_code=400, detail="Enter at least 2 characters (name, Customer ID or mobile)")
-    rx = {"$regex": re.escape(term), "$options": "i"}
-    users = await db.users.find({"role": "customer", "account_status": {"$ne": "deleted"}, "$or": [{"name": rx}, {"referral_code": term.upper()}, {"mobile": rx}, {"email": rx}]},
-                                {"name": 1, "referral_code": 1, "mobile": 1, "email": 1}).limit(15).to_list(15)
-    existing = {d["user_id"]: d for d in await db.dedicated_referrals.find({"user_id": {"$in": [str(u["_id"]) for u in users]}}).to_list(15)}
+    base = {"role": "customer", "email_verified": True, "account_status": {"$nin": ["deleted", "disabled"]}}
+    if term:
+        rx = {"$regex": re.escape(term), "$options": "i"}
+        base["$or"] = [{"name": rx}, {"referral_code": term.upper()}, {"mobile": rx}, {"email": rx}]
+    users = await db.users.find(base, {"name": 1, "referral_code": 1, "mobile": 1, "email": 1, "kyc.status": 1, "created_at": 1}).sort("name", 1).to_list(1000)
+    existing = {d["user_id"]: d for d in await db.dedicated_referrals.find({"user_id": {"$in": [str(u["_id"]) for u in users]}}).to_list(1000)}
     return [{"user_id": str(u["_id"]), "name": u.get("name"), "customer_id": u.get("referral_code"), "mobile": u.get("mobile"), "email": u.get("email"),
+             "kyc_status": (u.get("kyc") or {}).get("status", "not_submitted"), "joined_at": u.get("created_at"),
              "dedicated": {"enabled": existing[str(u["_id"])].get("enabled"), "payout": existing[str(u["_id"])].get("payout")} if str(u["_id"]) in existing else None} for u in users]
 
 
