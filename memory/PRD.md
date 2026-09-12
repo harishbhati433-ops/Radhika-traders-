@@ -241,3 +241,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Admin email alert on new withdrawal
 - POST /api/withdrawals → BackgroundTask _notify_admin_withdrawal: email (send_admin_withdrawal_alert: customer, Client ID, amount, IST date/time, method, status Pending, "Open & review" link → /admin/withdrawals?highlight=<id>) to all admin users + ADMIN_EMAIL, plus admin bell notification.
 - AdminWithdrawals reads ?highlight= → scrolls to and outlines that request ("From email alert").
+
+## 2026-06 — Admin Leads filter: closed/archived campaigns
+- Campaign dropdown now lists live + paused/closed (status label) + archived campaigns (via /campaigns/archived) so old leads stay filterable; labels "All campaigns (incl. closed/archived)", "All lead statuses", "All account statuses". Leads are never deleted with campaigns (soft-archive only).
