@@ -1704,6 +1704,26 @@ async def mark_notifications_read(ids: List[str] = [], user: dict = Depends(get_
     return {"message": "ok"}
 
 
+@api.get("/admin/kyc/search")
+async def admin_search_kyc(q: str, admin: dict = Depends(require_admin)):
+    term = (q or "").strip()
+    if len(term) < 3:
+        raise HTTPException(status_code=400, detail="Enter at least 3 characters (PAN, Aadhaar, Client/Referral ID, mobile, email or name)")
+    rx = {"$regex": re.escape(term), "$options": "i"}
+    ors = [{"kyc.pan": term.upper()}, {"kyc.aadhaar": re.sub(r"\s", "", term)}, {"referral_code": term.upper()}, {"mobile": rx}, {"email": rx}, {"name": rx},
+           {"bank.bank_account": re.sub(r"\s", "", term)}, {"bank.upi": rx}]
+    if ObjectId.is_valid(term):
+        ors.append({"_id": ObjectId(term)})
+    users = await db.users.find({"role": "customer", "$or": ors}).limit(25).to_list(25)
+    out = []
+    for u in users:
+        pu = public_user(u)
+        pu["kyc"] = {**u.get("kyc", {}), "status": u.get("kyc", {}).get("status", "not_submitted")}
+        pu["bank"] = u.get("bank", {})
+        out.append(pu)
+    return {"query": term, "count": len(out), "results": out}
+
+
 @api.get("/admin/kyc")
 async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_admin)):
     q = {"role": "customer", "email_verified": True}

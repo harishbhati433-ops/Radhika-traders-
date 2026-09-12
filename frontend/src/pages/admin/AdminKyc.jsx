@@ -4,26 +4,42 @@ import { adminNav } from "./nav";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { toast } from "sonner";
-import { ShieldCheck, ShieldX, ShieldOff, Clock, Eye, X, Pencil } from "lucide-react";
+import { ShieldCheck, ShieldX, ShieldOff, Clock, Eye, X, Pencil, Search, RotateCcw, Loader2 } from "lucide-react";
 import { CustomerEditDialog } from "../../components/CustomerEditDialog";
 import { CopyValue } from "../../components/CopyValue";
 
 const TABS = [["", "All"], ["pending", "Pending"], ["verified", "Verified"], ["rejected", "Rejected"], ["deactivated", "Deactivated"]];
-const TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", verified: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", deactivated: "bg-slate-100 text-slate-600 border-slate-200" };
+const TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", verified: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", deactivated: "bg-slate-100 text-slate-600 border-slate-200", not_submitted: "bg-slate-50 text-slate-500 border-slate-200" };
+const STATUS_LABEL = { pending: "Pending", verified: "Approved", rejected: "Rejected", deactivated: "Deactivated", not_submitted: "KYC not submitted" };
 
 export default function AdminKyc() {
   const [tab, setTab] = useState("");
   const [list, setList] = useState([]);
   const [view, setView] = useState(null);
   const [edit, setEdit] = useState(null);
+  const [q, setQ] = useState("");
+  const [search, setSearch] = useState(null);
+  const [searching, setSearching] = useState(false);
 
   const load = () => api.get("/admin/kyc", { params: tab ? { status: tab } : {} }).then(({ data }) => setList(data));
   useEffect(() => { load(); }, [tab]);
 
+  const runSearch = async (e) => {
+    e?.preventDefault();
+    const term = q.trim();
+    if (term.length < 3) return toast.error("Enter at least 3 characters");
+    setSearching(true);
+    try { const { data } = await api.get("/admin/kyc/search", { params: { q: term } }); setSearch(data); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
+    finally { setSearching(false); }
+  };
+  const resetSearch = () => { setQ(""); setSearch(null); };
+  const rows = search ? search.results : list;
+
   const setStatus = async (u, status) => {
     let note = "";
     if (status === "rejected" || status === "deactivated") note = window.prompt(`Reason for ${status} (optional):`) || "";
-    try { await api.patch(`/admin/kyc/${u.id}`, { status, note }); toast.success(`KYC ${status}`); setView(null); load(); }
+    try { await api.patch(`/admin/kyc/${u.id}`, { status, note }); toast.success(`KYC ${status}`); setView(null); load(); if (search) runSearch(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
 
@@ -31,6 +47,28 @@ export default function AdminKyc() {
 
   return (
     <DashboardLayout nav={adminNav} title="KYC Management">
+      <form onSubmit={runSearch} className="mb-6 rounded-2xl border border-slate-200 bg-white p-4" data-testid="kyc-search-box">
+        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-600"><Search className="h-3.5 w-3.5" /> KYC Search</label>
+        <div className="flex flex-wrap gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} data-testid="kyc-search-input" placeholder="Paste PAN, Aadhaar, Client / Referral ID, Customer ID, mobile, email or name" autoComplete="off" spellCheck={false}
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono text-sm uppercase placeholder:font-sans placeholder:normal-case focus:border-red-400 focus:outline-none" />
+          <button type="submit" disabled={searching} data-testid="kyc-search-btn" className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">{searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search</button>
+          <button type="button" onClick={resetSearch} data-testid="kyc-search-reset" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-4 w-4" /> Reset</button>
+        </div>
+        {search && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" data-testid="kyc-search-summary">
+            {search.count > 0 ? (
+              <>
+                <span className="text-slate-600">{search.count} match{search.count > 1 ? "es" : ""} for <b className="font-mono">{search.query}</b></span>
+                {search.results.map((u) => <span key={u.id} data-testid={`kyc-search-status-${u.id}`} className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${TONE[u.kyc.status]}`}>{u.name}: {STATUS_LABEL[u.kyc.status]}</span>)}
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700" data-testid="kyc-search-notfound"><ShieldX className="h-3.5 w-3.5" /> Not Found — no customer matches "{search.query}"</span>
+            )}
+          </div>
+        )}
+      </form>
+      {!search && (<>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[["pending", "Pending", Clock], ["verified", "Verified", ShieldCheck], ["rejected", "Rejected", ShieldX], ["deactivated", "Deactivated", ShieldOff]].map(([k, l, I]) => (
           <div key={k} className={`rounded-2xl border p-4 ${TONE[k]}`} data-testid={`kyc-count-${k}`}><I className="h-4 w-4" /><div className="mt-1 font-mono text-2xl font-bold">{tab ? (tab === k ? list.length : "–") : counts[k] || 0}</div><div className="text-xs font-semibold">{l}</div></div>
@@ -39,26 +77,29 @@ export default function AdminKyc() {
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} data-testid={`kyc-tab-${k || "all"}`} className={`rounded-full px-4 py-1.5 text-xs font-bold ${tab === k ? "bg-red-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{l}</button>)}
       </div>
+      </>)}
       <div className="space-y-3">
-        {list.length === 0 && <p className="py-12 text-center text-sm text-slate-500" data-testid="kyc-empty">No KYC submissions here.</p>}
-        {list.map((u) => (
+        {rows.length === 0 && <p className="py-12 text-center text-sm text-slate-500" data-testid="kyc-empty">{search ? "No matching KYC record." : "No KYC submissions here."}</p>}
+        {rows.map((u) => (
           <div key={u.id} data-testid={`kyc-row-${u.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-900">{u.name}</span><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${TONE[u.kyc.status]}`}>{u.kyc.status}</span></div>
+              <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-900">{u.name}</span><span data-testid={`kyc-status-${u.id}`} className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${TONE[u.kyc.status]}`}>{STATUS_LABEL[u.kyc.status] || u.kyc.status}</span><span className="font-mono text-[11px] text-slate-400">Client ID {u.referral_code}</span><CopyValue value={u.referral_code} label="Client ID" testId={`kyc-copy-client-${u.id}`} /></div>
               <div className="mt-1.5 flex flex-wrap gap-1.5"><PhoneLink value={u.mobile} testId={`kyc-phone-${u.id}`} /><EmailLink value={u.email} testId={`kyc-email-${u.id}`} /></div>
               <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-slate-500" data-testid={`kyc-bank-${u.id}`}>
+                {u.kyc.status === "not_submitted" ? <span className="italic">Customer has not submitted KYC yet.</span> : <>
                 <span>PAN <b className="font-mono">{u.kyc.pan}</b></span><CopyValue value={u.kyc.pan} label="PAN" testId={`kyc-copy-pan-${u.id}`} />
                 <span>· A/C <b className="font-mono">{u.bank?.bank_account}</b></span><CopyValue value={u.bank?.bank_account} label="Account number" testId={`kyc-copy-account-${u.id}`} />
                 <span>· IFSC <b className="font-mono">{u.bank?.ifsc}</b></span><CopyValue value={u.bank?.ifsc} label="IFSC" testId={`kyc-copy-ifsc-${u.id}`} />
                 {u.bank?.bank_name && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700" data-testid={`kyc-bank-name-${u.id}`}>{u.bank.bank_name}{u.bank.branch ? ` · ${u.bank.branch}` : ""}</span>}
                 {u.bank?.upi && <><span>· UPI <b>{u.bank.upi}</b></span><CopyValue value={u.bank.upi} label="UPI ID" testId={`kyc-copy-upi-${u.id}`} /></>}
+                </>}
               </div>
               {u.kyc.admin_note && <div className="text-xs text-rose-500">Note: {u.kyc.admin_note}</div>}
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <button onClick={() => setView(u)} data-testid={`kyc-view-${u.id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700"><Eye className="h-3.5 w-3.5" /> View</button>
+              <button onClick={() => setView(u)} disabled={u.kyc.status === "not_submitted"} data-testid={`kyc-view-${u.id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-40"><Eye className="h-3.5 w-3.5" /> View</button>
               <button onClick={() => setEdit(u)} data-testid={`kyc-edit-${u.id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-              {u.kyc.status !== "verified" && <button onClick={() => setStatus(u, "verified")} data-testid={`kyc-verify-${u.id}`} className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Verify</button>}
+              {!["verified", "not_submitted"].includes(u.kyc.status) && <button onClick={() => setStatus(u, "verified")} data-testid={`kyc-verify-${u.id}`} className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Verify</button>}
               {u.kyc.status === "pending" && <button onClick={() => setStatus(u, "rejected")} data-testid={`kyc-reject-${u.id}`} className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject</button>}
               {u.kyc.status === "verified" && <button onClick={() => setStatus(u, "deactivated")} data-testid={`kyc-deactivate-${u.id}`} className="rounded-full bg-slate-700 px-3 py-1.5 text-xs font-bold text-white">Deactivate</button>}
               {u.kyc.status === "deactivated" && <button onClick={() => setStatus(u, "verified")} data-testid={`kyc-activate-${u.id}`} className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white">Activate</button>}

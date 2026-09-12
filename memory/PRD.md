@@ -233,3 +233,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Withdrawal celebration
 - Celebration.jsx: canvas flower/confetti burst (4.2s, z-200, pointer-events none) + WebAudio chime; CelebrationLayer mounted in App.js; `celebrate(key)` once-per-key via localStorage.
 - Triggers: customer submits withdrawal (congrats toast + burst); customer's withdrawal transitions to approved/paid (useWithdrawalCelebration, no retroactive fire); admin marks approved/paid. Nothing else triggers it.
+
+## 2026-06 — KYC Search
+- GET /api/admin/kyc/search?q= (admin only; 403 for customers; min 3 chars) matches PAN/Aadhaar/Client(referral) ID/Customer ID/mobile/email/name/account/UPI. Returns kyc status incl. not_submitted.
+- AdminKyc: dedicated search box (paste OK, Enter/Search/Reset), status chips Pending/Approved/Rejected/Deactivated/"KYC not submitted", "Not Found" state; results reuse existing rows + actions.
