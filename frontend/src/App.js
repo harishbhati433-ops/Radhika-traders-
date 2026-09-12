@@ -8,6 +8,7 @@ import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ShutdownGate } from "./components/ShutdownGate";
+import { CelebrationLayer } from "./components/Celebration";
 import MaintenancePage from "./pages/MaintenancePage";
 
 import Home from "./pages/Home";
@@ -116,6 +117,7 @@ function App() {
         </ShutdownGate>
         <WhatsAppFloat />
         <InstallPrompt />
+        <CelebrationLayer />
       </BrowserRouter>
     </AuthProvider>
   );

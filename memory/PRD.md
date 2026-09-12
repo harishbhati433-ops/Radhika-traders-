@@ -229,3 +229,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Deployment health check
 - Fixed: .gitignore no longer ignores .env; removed _purge_expired_reports() from startup (runs lazily on report listing). Deployment agent: PASS.
+
+## 2026-06 — Withdrawal celebration
+- Celebration.jsx: canvas flower/confetti burst (4.2s, z-200, pointer-events none) + WebAudio chime; CelebrationLayer mounted in App.js; `celebrate(key)` once-per-key via localStorage.
+- Triggers: customer submits withdrawal (congrats toast + burst); customer's withdrawal transitions to approved/paid (useWithdrawalCelebration, no retroactive fire); admin marks approved/paid. Nothing else triggers it.

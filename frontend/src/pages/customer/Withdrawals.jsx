@@ -9,6 +9,8 @@ import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Receipt, PauseCircle } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
+import { useLivePoll } from "../../lib/useLivePoll";
+import { useWithdrawalCelebration, celebrate } from "../../components/Celebration";
 
 const STATUS = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -34,7 +36,8 @@ export default function Withdrawals() {
     api.get("/withdrawals").then(({ data }) => setList(data));
     api.get("/settings/public").then(({ data }) => { setMinWd(data.min_withdrawal); setWdOpen({ enabled: data.withdrawals_open, message: data.withdrawals_open ? "" : (data.withdrawals_enabled ? data.withdrawals_closed_reason : data.withdrawals_paused_message) }); }).catch(() => {});
   };
-  useEffect(load, []);
+  useLivePoll(load, [], 15000);
+  useWithdrawalCelebration(list, user?.id);
 
   const kycDone = user?.kyc?.status === "verified";
   const kycState = user?.kyc?.status;
@@ -46,8 +49,9 @@ export default function Withdrawals() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post("/withdrawals", { amount: parseFloat(amount), method, details, transaction_password: txnPin });
-      toast.success("Withdrawal request submitted!");
+      const { data: created } = await api.post("/withdrawals", { amount: parseFloat(amount), method, details, transaction_password: txnPin });
+      celebrate(`request:${user?.id}:${created?.id || Date.now()}`);
+      toast.success("🎉 Congratulations! Your withdrawal request is submitted", { description: `₹${amount} will be transferred to your ${method} within 24–48 hours.`, duration: 6000 });
       setAmount(""); setDetails(""); setTxnPin("");
       load();
     } catch (err) {

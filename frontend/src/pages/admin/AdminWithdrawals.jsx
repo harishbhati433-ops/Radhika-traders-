@@ -4,6 +4,7 @@ import { adminNav } from "./nav";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { PayoutDetails } from "../../components/PayoutDetails";
 import { MarkPaidDialog } from "../../components/MarkPaidDialog";
+import { celebrate } from "../../components/Celebration";
 import { toast } from "sonner";
 import { Check, X, IndianRupee, Receipt } from "lucide-react";
 
@@ -26,7 +27,7 @@ export default function AdminWithdrawals() {
   const update = async (w, status, extra = {}) => {
     let note = "";
     if (status === "rejected") { note = window.prompt("Reason for rejection (optional):") || ""; }
-    try { await api.patch(`/admin/withdrawals/${w.id}`, { status, admin_note: note, ...extra }); toast.success(`Marked ${status}`); setPaying(null); load(); }
+    try { await api.patch(`/admin/withdrawals/${w.id}`, { status, admin_note: note, ...extra }); toast.success(`Marked ${status}`); setPaying(null); load(); if (["approved", "paid"].includes(status)) celebrate(`admin:${w.id}:${status}`); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
 
