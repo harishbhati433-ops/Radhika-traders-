@@ -49,6 +49,10 @@ const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
 const AdminSecurity = lazy(() => import("./pages/admin/AdminSecurity"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminDedicatedReferrals = lazy(() => import("./pages/admin/AdminDedicatedReferrals"));
+const AdminEmployees = lazy(() => import("./pages/admin/AdminEmployees"));
+const AdminActivityLogs = lazy(() => import("./pages/admin/AdminActivityLogs"));
+const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
+const EmployeeDashboard = lazy(() => import("./pages/employee/EmployeeDashboard"));
 
 const Fallback = () => (
   <div className="flex min-h-screen items-center justify-center" data-testid="route-loading">
@@ -63,7 +67,7 @@ function ChunkPrefetcher() {
   const { user } = useAuth();
   useEffect(() => {
     if (!user) return;
-    const list = user.role === "admin" ? ADMIN_CHUNKS : CUSTOMER_CHUNKS;
+    const list = user.role === "admin" || user.role === "employee" ? ADMIN_CHUNKS : CUSTOMER_CHUNKS;
     const run = () => list.forEach((l) => l().catch(() => {}));
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1200));
     const id = idle(run);
@@ -73,7 +77,8 @@ function ChunkPrefetcher() {
 }
 
 const C = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
-const A = (el) => <ProtectedRoute role="admin">{el}</ProtectedRoute>;
+const A = (el, perm) => <ProtectedRoute role="admin" perm={perm}>{el}</ProtectedRoute>;
+const E = (el) => <ProtectedRoute role="employee">{el}</ProtectedRoute>;
 
 function MaintenanceRoute() {
   const [state, setState] = useState(null);
@@ -105,6 +110,8 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/employee/login" element={<EmployeeLogin />} />
+            <Route path="/employee" element={E(<EmployeeDashboard />)} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/forgot-email" element={<ForgotEmail />} />
 
@@ -119,17 +126,19 @@ function App() {
             <Route path="/reports" element={C(<Reports />)} />
 
             <Route path="/admin" element={A(<AdminDashboard />)} />
-            <Route path="/admin/campaigns" element={A(<AdminCampaigns />)} />
-            <Route path="/admin/categories" element={A(<AdminCategories />)} />
-            <Route path="/admin/customers" element={A(<AdminCustomers />)} />
-            <Route path="/admin/withdrawals" element={A(<AdminWithdrawals />)} />
-            <Route path="/admin/banners" element={A(<AdminBanners />)} />
-            <Route path="/admin/kyc" element={A(<AdminKyc />)} />
-            <Route path="/admin/broadcast" element={A(<AdminBroadcast />)} />
-            <Route path="/admin/leads" element={A(<AdminLeads />)} />
+            <Route path="/admin/campaigns" element={A(<AdminCampaigns />, "campaigns")} />
+            <Route path="/admin/categories" element={A(<AdminCategories />, "campaigns")} />
+            <Route path="/admin/customers" element={A(<AdminCustomers />, "clients")} />
+            <Route path="/admin/withdrawals" element={A(<AdminWithdrawals />, "withdrawals")} />
+            <Route path="/admin/banners" element={A(<AdminBanners />, "campaigns")} />
+            <Route path="/admin/kyc" element={A(<AdminKyc />, "clients")} />
+            <Route path="/admin/broadcast" element={A(<AdminBroadcast />, "reports")} />
+            <Route path="/admin/leads" element={A(<AdminLeads />, "leads")} />
             <Route path="/admin/security" element={A(<AdminSecurity />)} />
-            <Route path="/admin/reports" element={A(<AdminReports />)} />
+            <Route path="/admin/reports" element={A(<AdminReports />, "reports")} />
             <Route path="/admin/dedicated-referrals" element={A(<AdminDedicatedReferrals />)} />
+            <Route path="/admin/employees" element={A(<AdminEmployees />)} />
+            <Route path="/admin/activity-logs" element={A(<AdminActivityLogs />)} />
           </Routes>
         </Suspense>
         </ShutdownGate>

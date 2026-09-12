@@ -28,10 +28,14 @@ from auth_utils import (
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
+from rbac import make_require_perm, make_log_activity
+from employee_routes import build_router as build_employee_router
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
+require_perm = make_require_perm(db)
+log_activity = make_log_activity(db)
 
 MIN_WITHDRAWAL = float(os.environ.get("MIN_WITHDRAWAL", "100"))
 
@@ -86,6 +90,8 @@ def public_user(u: dict) -> dict:
         "kyc": u.get("kyc", {"status": "not_submitted"}),
         "bank": u.get("bank", {}),
         "created_at": u.get("created_at"),
+        "username": u.get("username"),
+        "permissions": u.get("permissions") if u.get("role") == "employee" else None,
     }
 
 
@@ -664,6 +670,8 @@ async def login(body: LoginIn, request: Request):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if st in ACCOUNT_STATUS_MESSAGES:
         raise HTTPException(status_code=403, detail=ACCOUNT_STATUS_MESSAGES[st])
+    if user["role"] == "employee":
+        raise HTTPException(status_code=403, detail="Employees must log in from the Employee Login page.")
     if body.portal == "admin" and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="This login is for admin only. Please use the customer login.")
     if body.portal != "admin" and user["role"] == "admin":
@@ -849,26 +857,29 @@ async def list_categories(all: bool = False):
 
 
 @api.post("/categories")
-async def create_category(body: CategoryIn, admin: dict = Depends(require_admin)):
+async def create_category(body: CategoryIn, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     doc = {"name": body.name, "slug": slugify(body.name), "enabled": body.enabled,
            "is_deleted": False, "created_at": now_iso()}
     res = await db.categories.insert_one(doc)
+    await log_activity(admin, "category_created", request, entity_type="category", entity_id=str(res.inserted_id), entity_label=body.name, status="created")
     return {"id": str(res.inserted_id), **{k: doc[k] for k in ("name", "slug", "enabled")}}
 
 
 @api.put("/categories/{cat_id}")
-async def update_category(cat_id: str, body: CategoryUpdate, admin: dict = Depends(require_admin)):
+async def update_category(cat_id: str, body: CategoryUpdate, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
     if "name" in upd:
         upd["slug"] = slugify(upd["name"])
     await db.categories.update_one({"_id": ObjectId(cat_id)}, {"$set": upd})
     c = await db.categories.find_one({"_id": ObjectId(cat_id)})
+    await log_activity(admin, "category_updated", request, entity_type="category", entity_id=cat_id, entity_label=c["name"], status="updated")
     return {"id": str(c["_id"]), "name": c["name"], "slug": c["slug"], "enabled": c.get("enabled", True)}
 
 
 @api.delete("/categories/{cat_id}")
-async def delete_category(cat_id: str, admin: dict = Depends(require_admin)):
+async def delete_category(cat_id: str, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.categories.update_one({"_id": ObjectId(cat_id)}, {"$set": {"is_deleted": True}})
+    await log_activity(admin, "category_deleted", request, entity_type="category", entity_id=cat_id, status="deleted")
     return {"message": "Category deleted"}
 
 
@@ -899,7 +910,7 @@ async def list_campaigns(
 
 
 @api.get("/campaigns/archived")
-async def list_archived(admin: dict = Depends(require_admin)):
+async def list_archived(admin: dict = Depends(require_perm("campaigns", "view"))):
     items = await db.campaigns.find({"is_deleted": True}).sort("updated_at", -1).to_list(1000)
     return [campaign_out(c) for c in items]
 
@@ -1015,7 +1026,7 @@ async def my_leads(user: dict = Depends(get_current_user)):
 
 
 @api.get("/admin/leads/summary")
-async def admin_leads_summary(admin: dict = Depends(require_admin)):
+async def admin_leads_summary(admin: dict = Depends(require_perm("leads", "view"))):
     rows = await db.leads.aggregate([{"$group": {"_id": {"s": "$status", "a": "$account_status"}, "n": {"$sum": 1}}}]).to_list(50)
     total = sum(r["n"] for r in rows)
     by = lambda key, val: sum(r["n"] for r in rows if r["_id"][key] == val)
@@ -1026,7 +1037,7 @@ async def admin_leads_summary(admin: dict = Depends(require_admin)):
 @api.get("/admin/leads")
 async def admin_leads(campaign_id: Optional[str] = None, status: Optional[str] = None, account_status: Optional[str] = None,
                       ref: Optional[str] = None, search: Optional[str] = None, date_from: Optional[str] = None,
-                      date_to: Optional[str] = None, admin: dict = Depends(require_admin)):
+                      date_to: Optional[str] = None, admin: dict = Depends(require_perm("leads", "view"))):
     q = {}
     if campaign_id:
         q["campaign_id"] = campaign_id
@@ -1066,8 +1077,9 @@ def _lead_query(campaign_id, status, account_status, ref, search, date_from, dat
 @api.get("/admin/leads/export")
 async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = None, status: Optional[str] = None,
                              account_status: Optional[str] = None, ref: Optional[str] = None, search: Optional[str] = None,
-                             date_from: Optional[str] = None, date_to: Optional[str] = None, admin: dict = Depends(require_admin)):
+                             date_from: Optional[str] = None, date_to: Optional[str] = None, request: Request = None, admin: dict = Depends(require_perm("leads", "view"))):
     q = _lead_query(campaign_id, status, account_status, ref, search, date_from, date_to)
+    await log_activity(admin, "leads_exported", request, entity_type="leads", status="exported", detail=f"format={format} campaign={campaign_id or 'all'} {date_from or ''}..{date_to or ''}")
     items = await db.leads.find(q).sort("created_at", -1).to_list(50000)
     field_keys: list = []
     for l in items:
@@ -1111,11 +1123,11 @@ async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = 
 
 
 @api.patch("/admin/leads/{lid}")
-async def admin_update_lead(lid: str, body: LeadStatusIn, admin: dict = Depends(require_admin)):
+async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admin: dict = Depends(require_perm("leads", "edit"))):
     l = await db.leads.find_one({"_id": ObjectId(lid)})
     if not l:
         raise HTTPException(status_code=404, detail="Lead not found")
-    upd = {"updated_at": now_iso(), "reviewed_by": admin["email"]}
+    upd = {"updated_at": now_iso(), "reviewed_by": admin.get("username") or admin["email"]}
     if body.status:
         if body.status not in ("pending", "approved", "rejected"):
             raise HTTPException(status_code=400, detail="Invalid status")
@@ -1134,11 +1146,14 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, admin: dict = Depends(
         await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
                                            "body": f"{l.get('customer_name') or 'Customer'} · {l['campaign_name']}" + (f" · {body.reject_reason}" if body.reject_reason else ""),
                                            "link": "/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
+    await log_activity(admin, "lead_status_updated", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
+                       campaign_id=l.get("campaign_id", ""), campaign_name=l.get("campaign_name", ""), client_id=l.get("partner_id", ""), client_name=l.get("partner_name", ""),
+                       status=body.account_status or body.status or "", detail=body.reject_reason or "")
     return lead_out(await db.leads.find_one({"_id": l["_id"]}))
 
 
 @api.post("/admin/leads/{lid}/fund")
-async def admin_fund_lead(lid: str, body: LeadFundIn, admin: dict = Depends(require_admin)):
+async def admin_fund_lead(lid: str, body: LeadFundIn, request: Request, admin: dict = Depends(require_perm("payments", "edit"))):
     l = await db.leads.find_one({"_id": ObjectId(lid)}) if ObjectId.is_valid(lid) else None
     if not l:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1161,6 +1176,9 @@ async def admin_fund_lead(lid: str, body: LeadFundIn, admin: dict = Depends(requ
                                        "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/wallet",
                                        "type": "wallet", "read": False, "created_at": now_iso()})
     wallet = await compute_wallet(l["partner_id"])
+    await log_activity(admin, "lead_fund_added", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
+                       campaign_id=l.get("campaign_id", ""), campaign_name=l.get("campaign_name", ""), client_id=l["partner_id"], client_name=partner.get("name", ""),
+                       status="credited", amount=amount, detail=f"{ref_id} {body.note.strip()}")
     return {"message": f"₹{amount:g} added to {partner.get('name')}'s wallet", "lead": lead_out(await db.leads.find_one({"_id": l["_id"]})), "wallet": wallet}
 
 
@@ -1192,7 +1210,7 @@ async def get_campaign(cid: str):
 
 
 @api.post("/campaigns")
-async def create_campaign(body: CampaignIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
+async def create_campaign(body: CampaignIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_perm("campaigns", "edit"))):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
@@ -1204,11 +1222,13 @@ async def create_campaign(body: CampaignIn, request: Request, background: Backgr
     c = await db.campaigns.find_one({"_id": res.inserted_id})
     if c.get("status") == "live" and c.get("offer_enabled", True):
         background.add_task(announce_campaign_live, c, _origin(request))
+    await log_activity(admin, "campaign_created", request, entity_type="campaign", entity_id=str(c["_id"]), entity_label=c["offer_name"],
+                       campaign_id=str(c["_id"]), campaign_name=c["offer_name"], status=c.get("status", ""), amount=c.get("payout_amount"))
     return campaign_out(c)
 
 
 @api.put("/campaigns/{cid}")
-async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(require_admin)):
+async def update_campaign(cid: str, body: CampaignIn, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
@@ -1218,11 +1238,13 @@ async def update_campaign(cid: str, body: CampaignIn, admin: dict = Depends(requ
         doc["slug"] = await unique_slug(body.offer_name, exclude_id=cid)
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": doc})
     c = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    await log_activity(admin, "campaign_updated", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
+                       campaign_id=cid, campaign_name=c["offer_name"], status=c.get("status", ""), amount=c.get("payout_amount"))
     return campaign_out(c)
 
 
 @api.patch("/campaigns/{cid}/status")
-async def update_campaign_status(cid: str, request: Request, background: BackgroundTasks, status: str = Query(...), admin: dict = Depends(require_admin)):
+async def update_campaign_status(cid: str, request: Request, background: BackgroundTasks, status: str = Query(...), admin: dict = Depends(require_perm("campaigns", "edit"))):
     if status not in ("live", "paused", "closed"):
         raise HTTPException(status_code=400, detail="Invalid status")
     c = await db.campaigns.find_one({"_id": ObjectId(cid)})
@@ -1231,6 +1253,8 @@ async def update_campaign_status(cid: str, request: Request, background: Backgro
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
     if status == "live" and c.get("status") != "live":
         background.add_task(announce_campaign_live, c, _origin(request))
+    await log_activity(admin, "campaign_status_changed", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
+                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{c.get('status')} -> {status}")
     return {"message": "Status updated"}
 
 
@@ -1263,13 +1287,16 @@ async def announce_campaign_live(c: dict, origin: str):
 
 
 @api.patch("/campaigns/{cid}/toggle-offer")
-async def toggle_offer(cid: str, enabled: bool = Query(...), admin: dict = Depends(require_admin)):
+async def toggle_offer(cid: str, request: Request, enabled: bool = Query(...), admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"offer_enabled": enabled, "updated_at": now_iso()}})
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)}, {"offer_name": 1}) or {}
+    await log_activity(admin, "campaign_offer_toggled", request, entity_type="campaign", entity_id=cid, entity_label=c.get("offer_name", ""),
+                       campaign_id=cid, campaign_name=c.get("offer_name", ""), status="enabled" if enabled else "disabled")
     return {"message": "Offer updated"}
 
 
 @api.patch("/admin/campaigns/{cid}/slider")
-async def update_slider_settings(cid: str, body: SliderSettingsIn, admin: dict = Depends(require_admin)):
+async def update_slider_settings(cid: str, body: SliderSettingsIn, admin: dict = Depends(require_perm("campaigns", "edit"))):
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
     if not upd or not ObjectId.is_valid(cid):
         raise HTTPException(status_code=400, detail="Nothing to update")
@@ -1284,14 +1311,18 @@ async def update_slider_settings(cid: str, body: SliderSettingsIn, admin: dict =
 
 
 @api.delete("/campaigns/{cid}")
-async def archive_campaign(cid: str, admin: dict = Depends(require_admin)):
+async def archive_campaign(cid: str, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"is_deleted": True, "updated_at": now_iso()}})
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)}, {"offer_name": 1}) or {}
+    await log_activity(admin, "campaign_archived", request, entity_type="campaign", entity_id=cid, entity_label=c.get("offer_name", ""), campaign_id=cid, campaign_name=c.get("offer_name", ""), status="archived")
     return {"message": "Campaign archived"}
 
 
 @api.post("/campaigns/{cid}/restore")
-async def restore_campaign(cid: str, admin: dict = Depends(require_admin)):
+async def restore_campaign(cid: str, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"is_deleted": False, "updated_at": now_iso()}})
+    c = await db.campaigns.find_one({"_id": ObjectId(cid)}, {"offer_name": 1}) or {}
+    await log_activity(admin, "campaign_restored", request, entity_type="campaign", entity_id=cid, entity_label=c.get("offer_name", ""), campaign_id=cid, campaign_name=c.get("offer_name", ""), status="restored")
     return {"message": "Campaign restored"}
 
 
@@ -1431,7 +1462,7 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
 
 
 @api.get("/admin/withdrawals")
-async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(require_perm("withdrawals", "view"))):
     q = {}
     if status:
         q["status"] = status
@@ -1453,7 +1484,7 @@ async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(re
 
 
 @api.patch("/admin/withdrawals/{wid}")
-async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, admin: dict = Depends(require_admin)):
+async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, admin: dict = Depends(require_perm("withdrawals", "edit"))):
     if body.status not in ("pending", "approved", "paid", "rejected"):
         raise HTTPException(status_code=400, detail="Invalid status")
     w = await db.withdrawals.find_one({"_id": ObjectId(wid)})
@@ -1473,6 +1504,9 @@ async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, 
         proof_link = f"{base}{body.proof_url}" if body.proof_url and body.proof_url.startswith("/") else (body.proof_url or "")
         await send_payment_email(w.get("user_email", ""), w.get("user_name", ""), w["amount"], w["method"],
                                  w.get("details", ""), body.utr or "", proof_link)
+    await log_activity(admin, "withdrawal_status_updated", request, entity_type="withdrawal", entity_id=f"WD-{wid[:8]}", entity_label=w.get("user_name", ""),
+                       client_id=w["user_id"], client_name=w.get("user_name", ""), status=body.status, amount=w["amount"],
+                       detail=f"{w.get('status')} -> {body.status}" + (f" UTR {body.utr}" if body.utr else "") + (f" · {body.admin_note}" if body.admin_note else ""))
     return {"message": "Withdrawal updated"}
 
 
@@ -1495,7 +1529,7 @@ def _auto_banner(c: dict) -> dict:
 
 @api.get("/banners")
 async def list_banners(all: bool = False, user: dict = Depends(get_current_user)):
-    admin_all = all and user.get("role") == "admin"
+    admin_all = all and user.get("role") in ("admin", "employee")
     q = {} if admin_all else {"enabled": True}
     items = await db.banners.find(q).sort([("order", 1), ("created_at", -1)]).to_list(100)
     out = []
@@ -1522,24 +1556,27 @@ async def list_banners(all: bool = False, user: dict = Depends(get_current_user)
 
 
 @api.post("/admin/banners")
-async def create_banner(body: BannerIn, admin: dict = Depends(require_admin)):
+async def create_banner(body: BannerIn, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     doc = {**body.model_dump(), "created_at": now_iso()}
     res = await db.banners.insert_one(doc)
+    await log_activity(admin, "banner_created", request, entity_type="banner", entity_id=str(res.inserted_id), entity_label=body.title, campaign_id=body.campaign_id or "", status="created")
     return banner_out(await db.banners.find_one({"_id": res.inserted_id}))
 
 
 @api.put("/admin/banners/{bid}")
-async def update_banner(bid: str, body: BannerIn, admin: dict = Depends(require_admin)):
+async def update_banner(bid: str, body: BannerIn, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.banners.update_one({"_id": ObjectId(bid)}, {"$set": body.model_dump()})
     b = await db.banners.find_one({"_id": ObjectId(bid)})
     if not b:
         raise HTTPException(status_code=404, detail="Banner not found")
+    await log_activity(admin, "banner_updated", request, entity_type="banner", entity_id=bid, entity_label=body.title, campaign_id=body.campaign_id or "", status="updated")
     return banner_out(b)
 
 
 @api.delete("/admin/banners/{bid}")
-async def delete_banner(bid: str, admin: dict = Depends(require_admin)):
+async def delete_banner(bid: str, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
     await db.banners.delete_one({"_id": ObjectId(bid)})
+    await log_activity(admin, "banner_deleted", request, entity_type="banner", entity_id=bid, status="deleted")
     return {"message": "Banner deleted"}
 
 
@@ -1721,7 +1758,7 @@ async def mark_notifications_read(ids: List[str] = [], user: dict = Depends(get_
 
 
 @api.get("/admin/kyc/search")
-async def admin_search_kyc(q: str, admin: dict = Depends(require_admin)):
+async def admin_search_kyc(q: str, admin: dict = Depends(require_perm("clients", "view"))):
     term = (q or "").strip()
     if len(term) < 3:
         raise HTTPException(status_code=400, detail="Enter at least 3 characters (PAN, Aadhaar, Client/Referral ID, mobile, email or name)")
@@ -1741,7 +1778,7 @@ async def admin_search_kyc(q: str, admin: dict = Depends(require_admin)):
 
 
 @api.get("/admin/kyc")
-async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_perm("clients", "view"))):
     q = {"role": "customer", "email_verified": True}
     if status:
         q["kyc.status"] = status
@@ -1758,7 +1795,7 @@ async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(req
 
 
 @api.patch("/admin/kyc/{uid}")
-async def admin_update_kyc(uid: str, body: KycStatusIn, admin: dict = Depends(require_admin)):
+async def admin_update_kyc(uid: str, body: KycStatusIn, request: Request, admin: dict = Depends(require_perm("clients", "edit"))):
     if body.status not in ("pending", "verified", "rejected", "deactivated"):
         raise HTTPException(status_code=400, detail="Invalid KYC status")
     u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"})
@@ -1772,11 +1809,13 @@ async def admin_update_kyc(uid: str, body: KycStatusIn, admin: dict = Depends(re
            "pending": "Your KYC is under review."}[body.status]
     await db.notifications.insert_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/profile",
                                        "type": "kyc", "read": False, "created_at": now_iso()})
+    await log_activity(admin, "kyc_status_updated", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""),
+                       client_id=uid, client_name=u.get("name", ""), status=body.status, detail=body.note or "")
     return {"message": "KYC updated", "status": body.status}
 
 
 @api.post("/admin/broadcast")
-async def admin_broadcast(body: BroadcastIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
+async def admin_broadcast(body: BroadcastIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_perm("reports", "edit"))):
     if not body.subject.strip() or not body.message.strip():
         raise HTTPException(status_code=400, detail="Subject and message are required")
     q = {"role": "customer", "email_verified": True}
@@ -1791,6 +1830,8 @@ async def admin_broadcast(body: BroadcastIn, request: Request, background: Backg
                                           "campaign_id": body.campaign_id or "", "channels": body.channels, "recipients": len(users),
                                           "sent": 0, "failed": 0, "status": "sending", "created_by": admin["email"], "created_at": now_iso()})
     background.add_task(run_broadcast, res.inserted_id, users, body, c, link, _origin(request))
+    await log_activity(admin, "broadcast_sent", request, entity_type="broadcast", entity_id=str(res.inserted_id), entity_label=body.subject[:80],
+                       campaign_id=body.campaign_id or "", campaign_name=c["offer_name"] if c else "", status="sending", amount=len(users), detail=f"{body.audience} · {','.join(body.channels)}")
     return {"message": f"Sending to {len(users)} customers", "id": str(res.inserted_id), "recipients": len(users)}
 
 
@@ -1808,7 +1849,7 @@ async def run_broadcast(bid, users: list, body: BroadcastIn, c: dict | None, lin
 
 
 @api.get("/admin/broadcasts")
-async def admin_broadcasts(admin: dict = Depends(require_admin)):
+async def admin_broadcasts(admin: dict = Depends(require_perm("reports", "view"))):
     items = await db.broadcasts.find().sort("created_at", -1).to_list(200)
     return [notif_out(b) for b in items]
 
@@ -1831,7 +1872,7 @@ async def admin_delete_notifications(title: str = Query(...), created_at: str = 
 
 # ----------------------------- Admin: customers & credit -----------------------------
 @api.get("/admin/customers")
-async def list_customers(include_deleted: bool = False, admin: dict = Depends(require_admin)):
+async def list_customers(include_deleted: bool = False, admin: dict = Depends(require_perm("clients", "view"))):
     q = {"role": "customer", "email_verified": True}
     if not include_deleted:
         q["account_status"] = {"$ne": "deleted"}
@@ -1877,7 +1918,7 @@ class AccountStatusIn(BaseModel):
 
 
 @api.patch("/admin/customers/{uid}/status")
-async def admin_set_account_status(uid: str, body: AccountStatusIn, request: Request, admin: dict = Depends(require_admin)):
+async def admin_set_account_status(uid: str, body: AccountStatusIn, request: Request, admin: dict = Depends(require_perm("clients", "edit"))):
     if body.status not in ("active", "deactivated", "disabled", "deleted", "purge"):
         raise HTTPException(status_code=400, detail="Invalid status")
     if not ObjectId.is_valid(uid):
@@ -1895,31 +1936,35 @@ async def admin_set_account_status(uid: str, body: AccountStatusIn, request: Req
         await db.notifications.delete_many({"user_id": uid})
         await db.leads.update_many({"partner_id": uid}, {"$set": {"partner_deleted": True}})
         await _log_security(admin["id"], "customer_purged", request, f"{u.get('email')} — {reason}")
+        await log_activity(admin, "customer_purged", request, entity_type="customer", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="purged", detail=reason)
         return {"message": f"{u.get('name')} permanently deleted"}
     upd = {"account_status": body.status, "account_status_reason": "" if body.status == "active" else reason,
            "account_status_at": now_iso(), "account_status_by": admin["id"]}
     await db.users.update_one({"_id": u["_id"]}, {"$set": upd, "$push": {"account_status_history": {"status": body.status, "reason": reason, "at": now_iso(), "by": admin.get("email")}}})
     await _log_security(admin["id"], f"customer_{body.status}", request, f"{u.get('email')} — {reason}")
+    await log_activity(admin, "customer_status_changed", request, entity_type="customer", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status=body.status, detail=reason)
     return {"message": f"{u.get('name')} is now {'paused' if body.status == 'deactivated' else body.status}", "account_status": body.status}
 
 
 
 @api.post("/admin/credit")
-async def credit_wallet(body: CreditIn, admin: dict = Depends(require_admin)):
+async def credit_wallet(body: CreditIn, request: Request, admin: dict = Depends(require_perm("payments", "edit"))):
     u = await db.users.find_one({"_id": ObjectId(body.user_id)})
     if not u:
         raise HTTPException(status_code=404, detail="Customer not found")
     doc = {
         "user_id": body.user_id, "amount": abs(body.amount), "type": "credit",
         "description": body.description, "ref_id": body.ref_id or f"CR-{uuid.uuid4().hex[:8].upper()}",
-        "campaign_id": body.campaign_id, "status": "completed", "created_at": now_iso(),
+        "campaign_id": body.campaign_id, "status": "completed", "created_by": admin.get("username") or admin.get("email"), "created_at": now_iso(),
     }
     await db.transactions.insert_one(doc)
+    await log_activity(admin, "wallet_credited", request, entity_type="wallet", entity_id=doc["ref_id"], entity_label=u.get("name", ""), client_id=body.user_id,
+                       client_name=u.get("name", ""), campaign_id=body.campaign_id or "", status="credited", amount=abs(body.amount), detail=body.description)
     return {"message": "Wallet credited"}
 
 
 @api.post("/admin/wallet/adjust")
-async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dict = Depends(require_admin)):
+async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dict = Depends(require_perm("payments", "edit"))):
     if body.mode not in ("add", "deduct", "zero"):
         raise HTTPException(status_code=400, detail="Invalid mode")
     reason = (body.reason or "").strip()
@@ -1951,13 +1996,15 @@ async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dic
                                             "ref_id": ref_id, "balance_before": before["balance"], "balance_after": after["balance"],
                                             "admin_id": admin["id"], "admin_email": admin["email"], "created_at": now_iso()})
     await _log_security(admin["id"], f"wallet_{body.mode}", request, f"{u.get('email')} ₹{amount:g} — {reason}")
+    await log_activity(admin, "wallet_adjusted", request, entity_type="wallet", entity_id=ref_id, entity_label=u.get("name", ""), client_id=body.user_id,
+                       client_name=u.get("name", ""), status=body.mode, amount=amount, detail=f"{reason} · ₹{before['balance']:g} → ₹{after['balance']:g}")
     await db.notifications.insert_one({"user_id": body.user_id, "title": f"Wallet {'credited' if ttype == 'credit' else 'debited'} ₹{amount:g}",
                                        "body": f"{label}. Reason: {reason}", "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return {"message": f"{u.get('name')}: ₹{before['balance']:g} → ₹{after['balance']:g}", "ref_id": ref_id, "wallet": after}
 
 
 @api.get("/admin/customers/{uid}/detail")
-async def admin_customer_detail(uid: str, admin: dict = Depends(require_admin)):
+async def admin_customer_detail(uid: str, admin: dict = Depends(require_perm("clients", "view"))):
     u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
     if not u:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -1973,22 +2020,24 @@ async def admin_customer_detail(uid: str, admin: dict = Depends(require_admin)):
 
 
 @api.put("/admin/customers/{uid}/profile")
-async def admin_update_profile(uid: str, body: ProfileIn, admin: dict = Depends(require_admin)):
+async def admin_update_profile(uid: str, body: ProfileIn, request: Request, admin: dict = Depends(require_perm("clients", "edit"))):
     if not ObjectId.is_valid(uid):
         raise HTTPException(status_code=404, detail="Customer not found")
-    full = await _apply_profile_update(uid, body, admin["email"])
+    full = await _apply_profile_update(uid, body, admin.get("username") or admin["email"])
+    await log_activity(admin, "customer_profile_edited", request, entity_type="customer", entity_id=full.get("referral_code", uid), entity_label=full.get("name", ""), client_id=uid, client_name=full.get("name", ""), status="updated")
     return public_user(full)
 
 
 @api.put("/admin/customers/{uid}/kyc")
-async def admin_edit_kyc(uid: str, body: KycIn, admin: dict = Depends(require_admin)):
+async def admin_edit_kyc(uid: str, body: KycIn, request: Request, admin: dict = Depends(require_perm("clients", "edit"))):
     u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
     if not u:
         raise HTTPException(status_code=404, detail="Customer not found")
     cur_status = u.get("kyc", {}).get("status", "not_submitted")
-    full = await _apply_kyc(uid, body, admin["email"], keep_status="verified" if cur_status in ("not_submitted", "pending", "rejected", "verified") else cur_status)
+    full = await _apply_kyc(uid, body, admin.get("username") or admin["email"], keep_status="verified" if cur_status in ("not_submitted", "pending", "rejected", "verified") else cur_status)
     await db.notifications.insert_one({"user_id": uid, "title": "KYC details updated", "body": "Radhika Traders updated your KYC / bank details. Check your profile.",
                                        "link": "/profile", "type": "kyc", "read": False, "created_at": now_iso()})
+    await log_activity(admin, "customer_kyc_edited", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="updated")
     return public_user(full)
 
 
@@ -2112,7 +2161,7 @@ def _report_out(r: dict, user_id: Optional[str] = None) -> dict:
 
 @api.post("/admin/reports")
 async def admin_send_report(request: Request, background: BackgroundTasks, file: UploadFile = File(...), title: str = Form(...), note: str = Form(""),
-                            audience: str = Form("all"), user_ids: str = Form(""), send_email: bool = Form(True), admin: dict = Depends(require_admin)):
+                            audience: str = Form("all"), user_ids: str = Form(""), send_email: bool = Form(True), admin: dict = Depends(require_perm("reports", "edit"))):
     title = title.strip()[:120]
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
@@ -2147,24 +2196,26 @@ async def admin_send_report(request: Request, background: BackgroundTasks, file:
         for u in users:
             background.add_task(send_report_email, u.get("email", ""), u.get("name", ""), title, note.strip(), f"{origin}/reports", expires_on)
     await _log_security(admin["id"], "report_sent", request, f"{title} -> {len(users)} publishers")
+    await log_activity(admin, "report_sent", request, entity_type="report", entity_id=str(res.inserted_id), entity_label=title, status="sent", amount=len(users), detail=f"{audience} · {file.filename}")
     return {"message": f"Report sent to {len(users)} publisher{'s' if len(users) != 1 else ''}", "id": str(res.inserted_id), "recipients": len(users), "expires_at": expires}
 
 
 @api.get("/admin/reports")
-async def admin_list_reports(admin: dict = Depends(require_admin)):
+async def admin_list_reports(admin: dict = Depends(require_perm("reports", "view"))):
     await _purge_expired_reports()
     items = await db.reports.find({}).sort("created_at", -1).to_list(500)
     return [_report_out(r) for r in items]
 
 
 @api.delete("/admin/reports/{rid}")
-async def admin_delete_report(rid: str, admin: dict = Depends(require_admin)):
+async def admin_delete_report(rid: str, request: Request, admin: dict = Depends(require_perm("reports", "edit"))):
     r = await db.reports.find_one({"_id": ObjectId(rid)}) if ObjectId.is_valid(rid) else None
     if not r:
         raise HTTPException(status_code=404, detail="Report not found")
     await db.files.update_one({"storage_path": r["file_path"]}, {"$set": {"is_deleted": True}})
     await db.reports.delete_one({"_id": r["_id"]})
     await db.notifications.delete_many({"type": "report", "report_id": rid})
+    await log_activity(admin, "report_deleted", request, entity_type="report", entity_id=rid, entity_label=r.get("title", ""), status="deleted")
     return {"message": "Report deleted"}
 
 
@@ -2390,6 +2441,7 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
                            "eligible": bool(r.get("dedicated_referral_paid")), "kyc_status": r.get("kyc", {}).get("status", "not_submitted")} for r in referred]}
 
 
+api.include_router(build_employee_router(db, require_admin, log_activity, public_user))
 app.include_router(api)
 
 app.add_middleware(
@@ -2411,8 +2463,10 @@ async def startup():
         await db.campaigns.create_index("slug")
         for coll, key in (("users", "referral_code"), ("users", "mobile"), ("leads", "partner_id"), ("leads", "created_at"), ("leads", "campaign_id"),
                           ("transactions", "user_id"), ("withdrawals", "user_id"), ("notifications", "user_id"), ("clicks", "user_id"),
-                          ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id")):
+                          ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id"),
+                          ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id")):
             await db[coll].create_index(key)
+        await db.users.create_index("username", unique=True, partialFilterExpression={"username": {"$type": "string"}})
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin

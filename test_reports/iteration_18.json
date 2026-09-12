@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 18 — Employee Management System (RBAC, employee login, activity logs). Backend: 43/43 pytest tests passed covering admin regression, employee CRUD + validation (bad username, short pw, duplicate), employee login flows (success, wrong-pw attempts-left, cannot use admin login, disable/enable), RBAC matrix (leads=edit → 200 PATCH; withdrawals=view → GET 200, PATCH 403; POST /categories, /admin/broadcast, /admin/leads/{id}/fund, /admin/kyc, /admin/credit → 403; admin-only routes /admin/dashboard,/admin/employees,/admin/activity-logs,/admin/settings,/admin/dedicated-referrals → 403 for employee; customer → 403 on employees/activity-logs), employee self-service (wrong current pw 400, change → login with new works, admin reset back), activity-logs read-only (contains employee_login/employee_created/lead_status_updated with actor_username/ip/created_at; filters by action/role/status/employee_id/date_range work; meta returns actions/actors/campaigns; PATCH/DELETE not exposed), delete employee soft-deletes and username becomes reusable. Frontend: admin sees Employees + Activity Logs in sidebar, can create employee (row appears with perms chips), Activity Logs table shows 19 rows and all filters (employee/action/role/reset) render; employee rahul.k logs in and lands on /employee showing only 4 tiles (Customers, Leads/Reports, KYC, Withdrawals) and matching sidebar (no Dashboard/Employees/Campaigns/Broadcast/etc links); direct navigation to /admin, /admin/employees, /admin/campaigns all redirect to /employee; /admin/withdrawals shows view-only-banner and NO wd-approve/wd-paid/wd-reject; on lead detail approve/reject present but lead-fund-section absent; logout → /employee/login. Customer flow untouched (login works, /api/admin/employees & /api/admin/activity-logs both 403).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminActivityLogs", "issues": ["React hydration warning: <span> inserted inside <option> by ve tooling (harmless but pollutes console)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_18_employees.py",
+    "/app/test_reports/pytest/iter18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "employee_routes.py logs correctly to immutable activity_logs; no PATCH/DELETE endpoints exposed (verified 405).",
+    "rbac.require_perm returns 403 with clear per-module message; admin bypass works.",
+    "Duplicate username check also considers the deleted-suffix (username renamed with __deleted_<ts>), so reuse works — verified by test.",
+    "Consider server-side rate-limit on /auth/employee/login already present (5 attempts / 30 min lock).",
+    "Password minimum is 6 chars — matches admin/customer flows."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_18_employees.py"],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "100% of scripted flows"},
+  "test_credentials": "Admin bhatiharish276@gmail.com/Radhika@2023, Employee rahul.k/Emp@1234, Customer testcust@example.com/Test@1234",
+  "seed_data_creation": "Two test employees created and cleaned up (ui_emp_195981, test_emp_195947). rahul.k preserved.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend suite at /app/backend/tests/test_iteration_18_employees.py — run with `pytest -o addopts='' backend/tests/test_iteration_18_employees.py` to bypass xdist. The perm-leads/perm-withdrawals selects on AdminEmployees dialog are native <select> elements — use page.select_option(), not shadcn dropdown patterns."
+}

@@ -5,6 +5,14 @@ import { useAuth } from "../context/AuthContext";
 import { Menu, X, LogOut, Download } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
+import { canUser } from "../lib/perm";
+import { ROUTE_PERM } from "../pages/admin/nav";
+import { Eye, LayoutDashboard } from "lucide-react";
+
+function navForUser(nav, user) {
+  if (user?.role !== "employee") return nav.filter((n) => !n.employeeOnly);
+  return [{ to: "/employee", label: "My Workspace", icon: LayoutDashboard }, ...nav.filter((n) => n.perm && canUser(user, n.perm, "view"))];
+}
 
 function InstallButton() {
   const [avail, setAvail] = useState(!!window.__rtInstallPrompt && !isStandalone());
@@ -26,12 +34,16 @@ export function DashboardLayout({ nav, children, title }) {
   const loc = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const isEmp = user?.role === "employee";
+  const items = navForUser(nav, user);
+  const routePerm = ROUTE_PERM[loc.pathname];
+  const viewOnly = isEmp && routePerm && !canUser(user, routePerm, "edit");
 
-  const doLogout = () => { logout(); navigate("/login", { replace: true }); };
+  const doLogout = () => { logout(); navigate(isEmp ? "/employee/login" : user?.role === "admin" ? "/admin/login" : "/login", { replace: true }); };
 
   const SideLinks = () => (
     <nav className="flex flex-col gap-1">
-      {nav.map((n) => {
+      {items.map((n) => {
         const active = loc.pathname === n.to;
         const Icon = n.icon;
         return (
@@ -62,9 +74,9 @@ export function DashboardLayout({ nav, children, title }) {
           <div className="mx-4 lg:mx-0 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-4 hidden lg:block"><Link to="/"><Logo size="sm" /></Link></div>
             <div className="mb-4 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-4 text-white">
-              <div className="text-xs text-red-100">Signed in as</div>
+              <div className="text-xs text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
               <div className="truncate font-display font-bold">{user?.name}</div>
-              <div className="truncate text-xs text-red-200">{user?.email}</div>
+              <div className="truncate text-xs text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
             </div>
             <SideLinks />
             <button onClick={doLogout} data-testid="dash-logout" className="mt-2 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">
@@ -80,6 +92,11 @@ export function DashboardLayout({ nav, children, title }) {
             {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             {user?.role === "customer" && <NotificationBell />}
           </div>
+          {viewOnly && (
+            <div data-testid="view-only-banner" className="mb-4 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs font-semibold text-sky-800">
+              <Eye className="h-4 w-4" /> View-only access — you can see this module but cannot make changes. Ask the Super Admin for edit permission.
+            </div>
+          )}
           {children}
         </main>
       </div>

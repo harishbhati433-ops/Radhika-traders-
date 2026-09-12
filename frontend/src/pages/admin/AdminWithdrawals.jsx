@@ -8,6 +8,7 @@ import { MarkPaidDialog } from "../../components/MarkPaidDialog";
 import { celebrate } from "../../components/Celebration";
 import { toast } from "sonner";
 import { Check, X, IndianRupee, Receipt } from "lucide-react";
+import { useCan } from "../../lib/perm";
 
 const TABS = ["all", "pending", "approved", "paid", "rejected"];
 const STATUS = {
@@ -21,6 +22,7 @@ export default function AdminWithdrawals() {
   const [tab, setTab] = useState("all");
   const [list, setList] = useState([]);
   const [paying, setPaying] = useState(null);
+  const can = useCan("withdrawals");
   const [params] = useSearchParams();
   const highlight = params.get("highlight");
 
@@ -68,11 +70,11 @@ export default function AdminWithdrawals() {
               )}
               <PayoutDetails w={w} />
             </div>
-            <div className="flex flex-wrap gap-2">
+            {can.edit && <div className="flex flex-wrap gap-2">
               {w.status === "pending" && <button onClick={() => update(w, "approved")} data-testid={`wd-approve-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Approve</button>}
               {(w.status === "pending" || w.status === "approved") && <button onClick={() => setPaying(w)} data-testid={`wd-paid-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Mark Paid</button>}
               {w.status !== "paid" && w.status !== "rejected" && <button onClick={() => update(w, "rejected")} data-testid={`wd-reject-${w.id}`} className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white"><X className="h-3.5 w-3.5" /> Reject</button>}
-            </div>
+            </div>}
           </div>
         ))}
       </div>

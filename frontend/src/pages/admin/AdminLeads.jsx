@@ -10,6 +10,7 @@ import { LeadFundDialog } from "../../components/LeadFundDialog";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
 import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2, Wallet, CalendarDays } from "lucide-react";
+import { useCan } from "../../lib/perm";
 
 const S_TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", approved: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", account_opened: "bg-sky-50 text-sky-700 border-sky-200" };
 const Badge = ({ s, testId }) => <span data-testid={testId} className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${S_TONE[s] || "bg-slate-100 text-slate-600"}`}>{(s || "").replace("_", " ")}</span>;
@@ -23,6 +24,8 @@ export default function AdminLeads() {
   const [view, setView] = useState(null);
   const [fundOpen, setFundOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
+  const can = useCan("leads");
+  const canPay = useCan("payments");
   const payoutFor = (cid) => campaigns.find((c) => c.id === cid)?.payout_amount || "";
   const pickPreset = (k) => {
     if (k === "custom") { setCustomOpen(true); setFlt({ ...flt, preset: "custom" }); return; }
@@ -126,16 +129,16 @@ export default function AdminLeads() {
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
               <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold uppercase tracking-wider text-red-600">Lead Status</span><Badge s={view.status} /><span className="ml-2 text-[11px] font-bold uppercase tracking-wider text-red-600">Account</span><Badge s={view.account_status} /></div>
               {view.reject_reason && <div className="mt-2 text-xs text-rose-600">Reason: {view.reject_reason}</div>}
-              <div className="mt-3 flex flex-wrap gap-2">
+              {can.edit && <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => update(view, { status: "pending" })} data-testid="lead-set-pending" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Pending</button>
                 <button onClick={() => update(view, { status: "approved" })} data-testid="lead-approve" className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Approve Lead</button>
                 <button onClick={() => update(view, { status: "rejected" })} data-testid="lead-reject" className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject Lead</button>
                 <span className="mx-1 border-l border-slate-200" />
                 <button onClick={() => update(view, { account_status: "account_opened", status: "approved" })} data-testid="lead-account-opened" className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white">Account Opened</button>
                 <button onClick={() => update(view, { account_status: "rejected" })} data-testid="lead-account-rejected" className="rounded-full bg-slate-700 px-3 py-1.5 text-xs font-bold text-white">Account Rejected</button>
-              </div>
+              </div>}
             </div>
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4" data-testid="lead-fund-section">
+            {canPay.edit && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4" data-testid="lead-fund-section">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Publisher Wallet Fund</div>
@@ -148,7 +151,7 @@ export default function AdminLeads() {
                   {[...view.fund_history].reverse().map((f, i) => <div key={i} className="flex flex-wrap justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-xs"><span><b className="font-mono text-emerald-700">+₹{f.amount}</b> {f.note && <span className="text-slate-500">· {f.note}</span>} <span className="font-mono text-slate-400">{f.ref_id}</span></span><span className="text-slate-400">{(f.at || "").slice(0, 16).replace("T", " ")} · {f.by}</span></div>)}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}
