@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
@@ -20,9 +21,16 @@ export default function AdminWithdrawals() {
   const [tab, setTab] = useState("all");
   const [list, setList] = useState([]);
   const [paying, setPaying] = useState(null);
+  const [params] = useSearchParams();
+  const highlight = params.get("highlight");
 
   const load = () => api.get("/admin/withdrawals", { params: tab === "all" ? {} : { status: tab } }).then(({ data }) => setList(data));
   useEffect(() => { load(); }, [tab]);
+  useEffect(() => {
+    if (!highlight || !list.length) return;
+    const el = document.querySelector(`[data-testid="wd-row-${highlight}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlight, list]);
 
   const update = async (w, status, extra = {}) => {
     let note = "";
@@ -42,8 +50,9 @@ export default function AdminWithdrawals() {
 
       <div className="space-y-3">
         {list.length === 0 ? <p className="py-12 text-center text-slate-500" data-testid="wd-empty">No requests.</p> : list.map((w) => (
-          <div key={w.id} data-testid={`wd-row-${w.id}`} className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+          <div key={w.id} data-testid={`wd-row-${w.id}`} className={`flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-white p-5 ${highlight === w.id ? "border-amber-400 ring-2 ring-amber-300 shadow-lg" : "border-slate-200"}`}>
             <div className="min-w-0 flex-1">
+              {highlight === w.id && <div className="mb-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800" data-testid="wd-highlighted">From email alert</div>}
               <div className="flex items-center gap-2">
                 <span className="font-mono text-lg font-bold text-slate-900 flex items-center"><IndianRupee className="h-4 w-4" />{w.amount}</span>
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>

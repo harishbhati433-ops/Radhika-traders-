@@ -237,3 +237,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — KYC Search
 - GET /api/admin/kyc/search?q= (admin only; 403 for customers; min 3 chars) matches PAN/Aadhaar/Client(referral) ID/Customer ID/mobile/email/name/account/UPI. Returns kyc status incl. not_submitted.
 - AdminKyc: dedicated search box (paste OK, Enter/Search/Reset), status chips Pending/Approved/Rejected/Deactivated/"KYC not submitted", "Not Found" state; results reuse existing rows + actions.
+
+## 2026-06 — Admin email alert on new withdrawal
+- POST /api/withdrawals → BackgroundTask _notify_admin_withdrawal: email (send_admin_withdrawal_alert: customer, Client ID, amount, IST date/time, method, status Pending, "Open & review" link → /admin/withdrawals?highlight=<id>) to all admin users + ADMIN_EMAIL, plus admin bell notification.
+- AdminWithdrawals reads ?highlight= → scrolls to and outlines that request ("From email alert").

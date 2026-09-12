@@ -275,3 +275,22 @@ async def send_report_email(to: str, name: str, title: str, note: str, link: str
         f'{_signature()}'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_admin_withdrawal_alert(to: str, w: dict, customer_id: str, when_ist: str, review_link: str) -> str | None:
+    if not to:
+        return None
+    amount = f"₹{w.get('amount', 0):,.0f}" if float(w.get("amount", 0)).is_integer() else f"₹{w.get('amount', 0):,.2f}"
+    subject = f"New withdrawal request — {w.get('user_name', 'Customer')} · {amount}"
+    rows = [("Customer", w.get("user_name", "")), ("Customer ID", customer_id), ("Withdrawal Amount", amount), ("Date & Time", when_ist),
+            ("Method", f"{w.get('method', '')} · {w.get('details', '')}"), ("Status", "Pending")]
+    table = "".join(f'<tr><td style="padding:5px 12px 5px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
+                    f'<td style="padding:5px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">🔔 <b>New Withdrawal Request</b></p>'
+        f'<table style="border-collapse:collapse;margin:6px 0 14px">{table}</table>'
+        f'<p style="margin:14px 0 6px"><a href="{escape(review_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;'
+        f'border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open &amp; review in Admin Panel</a></p>'
+        f'<p style="font-size:12px;color:#64748b">Admin Panel → Withdrawals → Pending. This request is waiting for your approval.</p>'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))

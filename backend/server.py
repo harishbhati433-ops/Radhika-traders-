@@ -25,7 +25,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp, needs_rehash,
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 
@@ -1371,7 +1371,7 @@ async def leaderboard(user: dict = Depends(get_current_user)):
 
 # ----------------------------- Withdrawals -----------------------------
 @api.post("/withdrawals")
-async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = Depends(get_current_user)):
+async def request_withdrawal(body: WithdrawIn, request: Request, background: BackgroundTasks, user: dict = Depends(get_current_user)):
     settings = await get_settings()
     is_open, reason = withdrawals_open(settings)
     if not is_open:
@@ -1405,7 +1405,22 @@ async def request_withdrawal(body: WithdrawIn, request: Request, user: dict = De
         "status": "pending", "admin_note": "", "created_at": now_iso(), "updated_at": now_iso(),
     }
     res = await db.withdrawals.insert_one(doc)
-    return {**{k: v for k, v in doc.items() if k != "_id"}, "id": str(res.inserted_id)}
+    wid = str(res.inserted_id)
+    background.add_task(_notify_admin_withdrawal, {**doc, "id": wid}, full.get("referral_code", ""), _origin(request))
+    return {**{k: v for k, v in doc.items() if k != "_id"}, "id": wid}
+
+
+async def _notify_admin_withdrawal(w: dict, customer_id: str, origin: str):
+    when = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %B %Y, %I:%M %p IST")
+    link = f"{origin}/admin/withdrawals?highlight={w['id']}"
+    admins = await db.users.find({"role": "admin"}, {"email": 1, "_id": 1}).to_list(10)
+    emails = {a["email"] for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower()} - {""}
+    for email in emails:
+        await send_admin_withdrawal_alert(email, w, customer_id, when, link)
+    if admins:
+        await db.notifications.insert_many([{"user_id": str(a["_id"]), "title": f"New withdrawal request ₹{w['amount']:g}",
+                                             "body": f"{w.get('user_name')} ({customer_id}) · {w.get('method')} · Pending", "link": "/admin/withdrawals",
+                                             "type": "withdrawal", "read": False, "created_at": now_iso()} for a in admins])
 
 
 @api.get("/withdrawals")
