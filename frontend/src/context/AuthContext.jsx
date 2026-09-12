@@ -3,9 +3,13 @@ import api from "../lib/api";
 
 const AuthContext = createContext(null);
 
+const CACHED_USER = "rt_user";
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const cached = (() => { try { return localStorage.getItem("rt_token") ? JSON.parse(localStorage.getItem(CACHED_USER) || "null") : null; } catch { return null; } })();
+  const [user, setUserState] = useState(cached);
+  const [loading, setLoading] = useState(!cached);
+  const setUser = (u) => { setUserState(u); if (u) localStorage.setItem(CACHED_USER, JSON.stringify(u)); else localStorage.removeItem(CACHED_USER); };
 
   const refresh = async () => {
     const token = localStorage.getItem("rt_token");
@@ -13,9 +17,8 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
-    } catch {
-      localStorage.removeItem("rt_token");
-      setUser(null);
+    } catch (e) {
+      if (e.response?.status === 401 || e.response?.status === 403) { localStorage.removeItem("rt_token"); setUser(null); }
     } finally {
       setLoading(false);
     }
@@ -30,12 +33,13 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem("rt_token");
+    localStorage.removeItem(CACHED_USER);
     sessionStorage.clear();
-    setUser(null);
+    setUserState(null);
   };
 
   useEffect(() => {
-    const onLogout = () => { setUser(null); setLoading(false); };
+    const onLogout = () => { localStorage.removeItem(CACHED_USER); setUserState(null); setLoading(false); };
     window.addEventListener("rt:logout", onLogout);
     return () => window.removeEventListener("rt:logout", onLogout);
   }, []);

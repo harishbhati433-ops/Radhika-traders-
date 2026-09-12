@@ -484,6 +484,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
     await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
     user = await db.users.find_one({"email": email})
     await pay_referral_bonus(user)
+    await pay_dedicated_referral(user)
     if user["role"] == "customer":
         s = await get_settings()
         bonus = s["signup_bonus"] if user.get("referred_by_code") else 0
@@ -2268,6 +2269,125 @@ async def download_statement(format: str = "csv", user: dict = Depends(get_curre
 @api.get("/")
 async def root():
     return {"message": "Radhika Traders API"}
+
+
+# ----------------------------- Dedicated Customer Referral (separate from standard referral) -----------------------------
+class DedicatedIn(BaseModel):
+    user_id: str
+    payout: float
+    enabled: bool = True
+    note: str = ""
+
+
+class DedicatedPatch(BaseModel):
+    payout: Optional[float] = None
+    enabled: Optional[bool] = None
+    note: str = ""
+
+
+async def _ded_log(user_id: str, action: str, detail: str, by: str, amount: Optional[float] = None, extra: Optional[dict] = None):
+    await db.dedicated_referral_log.insert_one({"user_id": user_id, "action": action, "detail": detail, "by": by, "amount": amount,
+                                                **(extra or {}), "created_at": now_iso()})
+
+
+async def pay_dedicated_referral(new_user: dict):
+    code = new_user.get("referred_by_code")
+    if not code or new_user.get("dedicated_referral_paid"):
+        return
+    referrer = await db.users.find_one({"referral_code": code, "role": "customer"}, {"_id": 1, "name": 1})
+    if not referrer or str(referrer["_id"]) == str(new_user["_id"]):
+        return
+    rid = str(referrer["_id"])
+    ded = await db.dedicated_referrals.find_one({"user_id": rid, "enabled": True})
+    if not ded or float(ded.get("payout", 0)) <= 0:
+        return
+    claimed = await db.users.update_one({"_id": new_user["_id"], "dedicated_referral_paid": {"$ne": True}}, {"$set": {"dedicated_referral_paid": True}})
+    if not claimed.modified_count:
+        return
+    amount = round(float(ded["payout"]), 2)
+    ref_id = f"DREF-{uuid.uuid4().hex[:8].upper()}"
+    await db.transactions.insert_one({"user_id": rid, "amount": amount, "type": "credit", "source": "dedicated_referral",
+                                      "description": f"Dedicated referral payout - {new_user.get('name', 'new partner')} joined", "ref_id": ref_id,
+                                      "campaign_id": None, "status": "completed", "created_at": now_iso()})
+    await db.dedicated_referrals.update_one({"_id": ded["_id"]}, {"$inc": {"eligible_count": 1, "total_earned": amount}, "$set": {"last_referral_at": now_iso()}})
+    await _ded_log(rid, "referral_paid", f"{new_user.get('name', '')} ({new_user.get('email', '')}) joined via referral", "system", amount,
+                   {"referred_user_id": str(new_user["_id"]), "ref_id": ref_id})
+    await db.notifications.insert_one({"user_id": rid, "title": f"₹{amount:g} dedicated referral bonus", "body": f"{new_user.get('name', 'A new partner')} joined with your link.",
+                                       "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+
+
+async def _ded_out(d: dict) -> dict:
+    u = await db.users.find_one({"_id": ObjectId(d["user_id"])}, {"name": 1, "referral_code": 1, "mobile": 1, "email": 1, "account_status": 1})
+    referral_count = await db.users.count_documents({"referred_by_user_id": d["user_id"]})
+    return {"id": str(d["_id"]), "user_id": d["user_id"], "name": (u or {}).get("name", "—"), "customer_id": (u or {}).get("referral_code", ""),
+            "mobile": (u or {}).get("mobile", ""), "email": (u or {}).get("email", ""), "account_status": (u or {}).get("account_status", "active"),
+            "payout": d.get("payout", 0), "enabled": d.get("enabled", False), "referral_count": referral_count,
+            "eligible_count": d.get("eligible_count", 0), "total_earned": round(d.get("total_earned", 0), 2),
+            "created_at": d.get("created_at"), "updated_at": d.get("updated_at"), "last_referral_at": d.get("last_referral_at", "")}
+
+
+@api.get("/admin/dedicated-referrals")
+async def ded_list(admin: dict = Depends(require_admin)):
+    items = await db.dedicated_referrals.find().sort("updated_at", -1).to_list(500)
+    return [await _ded_out(d) for d in items]
+
+
+@api.get("/admin/dedicated-referrals/search")
+async def ded_search(q: str, admin: dict = Depends(require_admin)):
+    term = (q or "").strip()
+    if len(term) < 2:
+        raise HTTPException(status_code=400, detail="Enter at least 2 characters (name, Customer ID or mobile)")
+    rx = {"$regex": re.escape(term), "$options": "i"}
+    users = await db.users.find({"role": "customer", "account_status": {"$ne": "deleted"}, "$or": [{"name": rx}, {"referral_code": term.upper()}, {"mobile": rx}, {"email": rx}]},
+                                {"name": 1, "referral_code": 1, "mobile": 1, "email": 1}).limit(15).to_list(15)
+    existing = {d["user_id"]: d for d in await db.dedicated_referrals.find({"user_id": {"$in": [str(u["_id"]) for u in users]}}).to_list(15)}
+    return [{"user_id": str(u["_id"]), "name": u.get("name"), "customer_id": u.get("referral_code"), "mobile": u.get("mobile"), "email": u.get("email"),
+             "dedicated": {"enabled": existing[str(u["_id"])].get("enabled"), "payout": existing[str(u["_id"])].get("payout")} if str(u["_id"]) in existing else None} for u in users]
+
+
+@api.post("/admin/dedicated-referrals")
+async def ded_create(body: DedicatedIn, admin: dict = Depends(require_admin)):
+    if body.payout < 0:
+        raise HTTPException(status_code=400, detail="Payout cannot be negative")
+    u = await db.users.find_one({"_id": ObjectId(body.user_id), "role": "customer"}) if ObjectId.is_valid(body.user_id) else None
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    existing = await db.dedicated_referrals.find_one({"user_id": body.user_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Dedicated referral already exists for this customer — edit it instead")
+    doc = {"user_id": body.user_id, "payout": round(body.payout, 2), "enabled": body.enabled, "eligible_count": 0, "total_earned": 0.0,
+           "created_by": admin["email"], "created_at": now_iso(), "updated_at": now_iso()}
+    res = await db.dedicated_referrals.insert_one(doc)
+    await _ded_log(body.user_id, "enabled" if body.enabled else "created_disabled", f"Dedicated referral set at ₹{body.payout:g}" + (f" · {body.note}" if body.note else ""), admin["email"], body.payout)
+    return await _ded_out(await db.dedicated_referrals.find_one({"_id": res.inserted_id}))
+
+
+@api.patch("/admin/dedicated-referrals/{uid}")
+async def ded_update(uid: str, body: DedicatedPatch, admin: dict = Depends(require_admin)):
+    d = await db.dedicated_referrals.find_one({"user_id": uid})
+    if not d:
+        raise HTTPException(status_code=404, detail="Dedicated referral not found")
+    upd = {"updated_at": now_iso(), "updated_by": admin["email"]}
+    if body.payout is not None:
+        if body.payout < 0:
+            raise HTTPException(status_code=400, detail="Payout cannot be negative")
+        upd["payout"] = round(body.payout, 2)
+        if upd["payout"] != d.get("payout"):
+            await _ded_log(uid, "payout_changed", f"Payout ₹{d.get('payout', 0):g} → ₹{upd['payout']:g}" + (f" · {body.note}" if body.note else ""), admin["email"], upd["payout"])
+    if body.enabled is not None and body.enabled != d.get("enabled"):
+        upd["enabled"] = body.enabled
+        await _ded_log(uid, "enabled" if body.enabled else "disabled", ("Enabled" if body.enabled else "Disabled") + (f" · {body.note}" if body.note else ""), admin["email"])
+    await db.dedicated_referrals.update_one({"_id": d["_id"]}, {"$set": upd})
+    return await _ded_out(await db.dedicated_referrals.find_one({"_id": d["_id"]}))
+
+
+@api.get("/admin/dedicated-referrals/{uid}/log")
+async def ded_log(uid: str, admin: dict = Depends(require_admin)):
+    items = await db.dedicated_referral_log.find({"user_id": uid}).sort("created_at", -1).to_list(200)
+    referred = await db.users.find({"referred_by_user_id": uid}, {"name": 1, "email": 1, "created_at": 1, "dedicated_referral_paid": 1, "kyc.status": 1}).sort("created_at", -1).to_list(200)
+    return {"log": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items],
+            "referrals": [{"id": str(r["_id"]), "name": r.get("name"), "email": r.get("email"), "joined_at": r.get("created_at"),
+                           "eligible": bool(r.get("dedicated_referral_paid")), "kyc_status": r.get("kyc", {}).get("status", "not_submitted")} for r in referred]}
 
 
 app.include_router(api)

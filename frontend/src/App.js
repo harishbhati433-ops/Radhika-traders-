@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import api from "./lib/api";
 import { Toaster } from "sonner";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -48,12 +48,29 @@ const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
 const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
 const AdminSecurity = lazy(() => import("./pages/admin/AdminSecurity"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
+const AdminDedicatedReferrals = lazy(() => import("./pages/admin/AdminDedicatedReferrals"));
 
 const Fallback = () => (
   <div className="flex min-h-screen items-center justify-center" data-testid="route-loading">
     <div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
   </div>
 );
+
+// Warm all route chunks while the browser is idle so the first click on any menu item is instant.
+const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
+const ADMIN_CHUNKS = [() => import("./pages/admin/AdminDashboard"), () => import("./pages/admin/AdminCampaigns"), () => import("./pages/admin/AdminCustomers"), () => import("./pages/admin/AdminLeads"), () => import("./pages/admin/AdminKyc"), () => import("./pages/admin/AdminWithdrawals"), () => import("./pages/admin/AdminBanners"), () => import("./pages/admin/AdminBroadcast"), () => import("./pages/admin/AdminReports"), () => import("./pages/admin/AdminSecurity"), () => import("./pages/admin/AdminCategories"), () => import("./pages/admin/AdminDedicatedReferrals")];
+function ChunkPrefetcher() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    const list = user.role === "admin" ? ADMIN_CHUNKS : CUSTOMER_CHUNKS;
+    const run = () => list.forEach((l) => l().catch(() => {}));
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1200));
+    const id = idle(run);
+    return () => (window.cancelIdleCallback || clearTimeout)(id);
+  }, [user?.id, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
 
 const C = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
 const A = (el) => <ProtectedRoute role="admin">{el}</ProtectedRoute>;
@@ -112,12 +129,14 @@ function App() {
             <Route path="/admin/leads" element={A(<AdminLeads />)} />
             <Route path="/admin/security" element={A(<AdminSecurity />)} />
             <Route path="/admin/reports" element={A(<AdminReports />)} />
+            <Route path="/admin/dedicated-referrals" element={A(<AdminDedicatedReferrals />)} />
           </Routes>
         </Suspense>
         </ShutdownGate>
         <WhatsAppFloat />
         <InstallPrompt />
         <CelebrationLayer />
+        <ChunkPrefetcher />
       </BrowserRouter>
     </AuthProvider>
   );

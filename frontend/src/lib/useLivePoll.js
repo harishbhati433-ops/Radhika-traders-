@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 // Re-runs `fn` every `ms` and whenever the tab regains focus, so admin changes reflect without a manual refresh.
-export function useLivePoll(fn, deps = [], ms = 10000) {
+export function useLivePoll(fn, deps = [], ms = 20000) {
   const ref = useRef(fn);
   ref.current = fn;
   useEffect(() => {

@@ -244,3 +244,15 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Admin Leads filter: closed/archived campaigns
 - Campaign dropdown now lists live + paused/closed (status label) + archived campaigns (via /campaigns/archived) so old leads stay filterable; labels "All campaigns (incl. closed/archived)", "All lead statuses", "All account statuses". Leads are never deleted with campaigns (soft-archive only).
+
+## 2026-06 — Dedicated Customer Referral (admin-only, separate from standard referral)
+- Collections: dedicated_referrals {user_id, payout, enabled, eligible_count, total_earned}, dedicated_referral_log (admin changes + referral_paid events).
+- pay_dedicated_referral(new_user) called right after pay_referral_bonus on OTP verify; pays extra payout only if referrer enabled; once per referred user (dedicated_referral_paid flag); txn source dedicated_referral. Standard referral code untouched.
+- API (admin): GET /admin/dedicated-referrals, GET .../search?q=, POST, PATCH /{uid}, GET /{uid}/log. Page /admin/dedicated-referrals (nav "Dedicated Referral"): search by name/Customer ID/mobile, quick payouts ₹5/10/15/20 + custom, enable/disable, edit payout, stats, activity log modal.
+- NOTE: routes must be defined BEFORE app.include_router(api) (block placed above it).
+
+## 2026-06 — Speed pass 2 (perceived UI lag)
+- AuthContext caches user in localStorage (rt_user) → ProtectedRoute renders instantly on reload, /auth/me revalidates in background (only 401/403 clears session).
+- ChunkPrefetcher in App.js warms all route chunks on idle after login (role-based) → menu clicks ~100–220ms.
+- Polling reduced: useLivePoll default 10s→20s, NotificationBell 15s→30s (visible tab only).
+- Measured (dev preview): login→dashboard ~1.0s, page clicks 106–220ms, reload→content ~0.8s. Backend APIs ~100–150ms (network floor).
