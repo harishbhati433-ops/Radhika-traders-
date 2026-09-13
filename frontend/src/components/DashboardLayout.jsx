@@ -7,7 +7,27 @@ import { NotificationBell } from "./NotificationBell";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
 import { canUser } from "../lib/perm";
 import { ROUTE_PERM } from "../pages/admin/nav";
-import { Eye, LayoutDashboard } from "lucide-react";
+import { getTheme, setTheme, applyTheme } from "../lib/theme";
+import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
+
+function ThemeToggle({ compact }) {
+  const [theme, setT] = useState(getTheme());
+  useEffect(() => {
+    applyTheme(theme);
+    const sync = () => setT(getTheme());
+    window.addEventListener("rt:theme", sync);
+    return () => { window.removeEventListener("rt:theme", sync); applyTheme("light"); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const flip = () => { const n = theme === "dark" ? "light" : "dark"; setTheme(n); };
+  const dark = theme === "dark";
+  return (
+    <button onClick={flip} data-testid={compact ? "theme-toggle-mobile" : "theme-toggle"} title={dark ? "Switch to Light mode" : "Switch to Dark mode"} aria-label="Toggle dark mode"
+      className={`inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 ${compact ? "p-2" : "px-3 py-1.5"}`}>
+      {dark ? <Sun style={{ width: 16, height: 16 }} className="text-amber-400" /> : <Moon style={{ width: 16, height: 16 }} />}
+      {!compact && <span>{dark ? "Light mode" : "Dark mode"}</span>}
+    </button>
+  );
+}
 
 function navForUser(nav, user) {
   if (user?.role !== "employee") return nav.filter((n) => !n.employeeOnly);
@@ -63,9 +83,12 @@ export function DashboardLayout({ nav, children, title }) {
       {/* Top bar (mobile) */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <Link to="/"><Logo size="sm" /></Link>
-        <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" className="rounded-lg p-2 text-slate-700">
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle compact />
+          <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" className="rounded-lg p-2 text-slate-700">
+            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
@@ -90,7 +113,10 @@ export function DashboardLayout({ nav, children, title }) {
         <main className="min-w-0 flex-1">
           <div className="mb-6 flex items-start justify-between gap-4">
             {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
-            {user?.role === "customer" && <NotificationBell />}
+            <div className="flex items-center gap-2">
+              <span className="hidden lg:block"><ThemeToggle /></span>
+              {user?.role === "customer" && <NotificationBell />}
+            </div>
           </div>
           {viewOnly && (
             <div data-testid="view-only-banner" className="mb-4 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs font-semibold text-sky-800">

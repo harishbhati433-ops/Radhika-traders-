@@ -94,3 +94,63 @@ h1, h2, h3, h4, .font-display { font-family: 'Outfit', system-ui, -apple-system,
 
 .rt-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
 .rt-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+/* ---------- Dark mode (panels only: <html class="dark"> is set by DashboardLayout) ---------- */
+.dark { color-scheme: dark; }
+.dark body { background: #0B0F17; color: #E2E8F0; }
+.dark .bg-slate-50, .dark .bg-slate-50\/60, .dark .bg-slate-50\/40, .dark .bg-slate-50\/50 { background-color: #0F172A; }
+.dark .bg-white { background-color: #111827; }
+.dark .bg-white\/80, .dark .bg-white\/90 { background-color: rgba(17,24,39,.9); }
+.dark .bg-slate-100, .dark .hover\:bg-slate-100:hover, .dark .hover\:bg-slate-50:hover { background-color: #1E293B; }
+.dark .bg-slate-200 { background-color: #334155; }
+.dark .border-slate-200, .dark .border-slate-100, .dark .border-slate-300, .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]), .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #1F2937; }
+.dark .ring-slate-200, .dark .ring-slate-100 { --tw-ring-color: #1F2937; }
+.dark .text-slate-950, .dark .text-slate-900, .dark .text-slate-800 { color: #F1F5F9; }
+.dark .text-slate-700 { color: #CBD5E1; }
+.dark .text-slate-600 { color: #A3B1C6; }
+.dark .text-slate-500 { color: #94A3B8; }
+.dark .text-slate-400 { color: #7C8BA1; }
+.dark .text-slate-300 { color: #CBD5E1; }
+.dark .hover\:text-slate-900:hover { color: #FFFFFF; }
+.dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg, .dark .shadow-xl, .dark .shadow-2xl { --tw-shadow-color: rgba(0,0,0,.6); --tw-shadow: var(--tw-shadow-colored); }
+/* Soft tinted surfaces */
+.dark .bg-emerald-50, .dark .bg-emerald-50\/40, .dark .bg-emerald-50\/60, .dark .hover\:bg-emerald-100:hover { background-color: rgba(16,185,129,.12); }
+.dark .bg-amber-50, .dark .bg-amber-50\/60 { background-color: rgba(245,158,11,.12); }
+.dark .bg-rose-50, .dark .bg-rose-50\/40, .dark .hover\:bg-rose-50:hover { background-color: rgba(244,63,94,.12); }
+.dark .bg-sky-50 { background-color: rgba(14,165,233,.12); }
+.dark .bg-red-50, .dark .hover\:bg-red-50:hover, .dark .hover\:bg-red-100:hover { background-color: rgba(220,38,38,.14); }
+.dark .bg-violet-50 { background-color: rgba(139,92,246,.14); }
+.dark .bg-emerald-100 { background-color: rgba(16,185,129,.2); }
+.dark .bg-amber-100 { background-color: rgba(245,158,11,.2); }
+.dark .bg-rose-100 { background-color: rgba(244,63,94,.2); }
+.dark .bg-red-100 { background-color: rgba(220,38,38,.22); }
+.dark .border-emerald-200 { border-color: rgba(16,185,129,.35); }
+.dark .border-amber-200 { border-color: rgba(245,158,11,.35); }
+.dark .border-rose-200 { border-color: rgba(244,63,94,.35); }
+.dark .border-sky-200 { border-color: rgba(14,165,233,.35); }
+.dark .border-red-200, .dark .border-red-300 { border-color: rgba(220,38,38,.4); }
+.dark .border-violet-200 { border-color: rgba(139,92,246,.4); }
+.dark .text-emerald-700, .dark .text-emerald-800 { color: #34D399; }
+.dark .text-amber-700, .dark .text-amber-800 { color: #FBBF24; }
+.dark .text-rose-700 { color: #FB7185; }
+.dark .text-red-700, .dark .text-red-800 { color: #F87171; }
+.dark .text-sky-700, .dark .text-sky-800 { color: #38BDF8; }
+.dark .text-violet-700 { color: #A78BFA; }
+.dark .text-emerald-900, .dark .text-amber-900 { color: #E2E8F0; }
+.dark .from-amber-50, .dark .from-emerald-50, .dark .from-slate-50 { --tw-gradient-from: #111827 var(--tw-gradient-from-position); --tw-gradient-to: rgba(17,24,39,0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-white { --tw-gradient-to: #0F172A var(--tw-gradient-to-position); }
+/* Form controls */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .dark select, .dark textarea { background-color: #0F172A; color: #F1F5F9; border-color: #334155; }
+.dark input::placeholder, .dark textarea::placeholder { color: #64748B; }
+.dark option { background-color: #0F172A; color: #F1F5F9; }
+.dark .rt-scroll::-webkit-scrollbar-thumb { background: #334155; }
+.dark ::selection { background: var(--rt-gold-accent); color: #0B0F17; }
+/* shadcn tokens */
+.dark {
+  --background: 222 47% 7%; --foreground: 210 40% 96%;
+  --card: 221 39% 11%; --card-foreground: 210 40% 96%;
+  --popover: 221 39% 11%; --popover-foreground: 210 40% 96%;
+  --muted: 217 33% 17%; --muted-foreground: 215 20% 65%;
+  --border: 215 28% 17%; --input: 215 28% 17%;
+  --accent: 217 33% 17%; --accent-foreground: 210 40% 96%;
+}

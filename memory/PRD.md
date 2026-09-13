@@ -283,3 +283,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - GET /api/admin/wallets?show=holding|all (perm payments:view): per-customer balance, pending withdrawal, total due, earned/paid, bank/UPI, KYC, last credit/paid; summary totals (liability). Aggregation-based (no per-user loop).
 - GET /api/admin/customers/{uid}/statement (JSON ledger w/ running balance + withdrawals) and /statement/download?format=pdf|excel|csv (shared `_statement_file`, PDF header now includes mobile/ID/withdrawn/pending).
 - Frontend: /admin/wallets (AdminWallets.jsx: stats, search, show/sort, CSV export, Statement button) + CustomerStatementDialog.jsx (used in Wallet Balances and Customers page "Statement" button). Nav item "Wallet Balances" (perm payments).
+
+## 2026-06 — Dark / Light mode (panels)
+- lib/theme.js (localStorage rt_theme, toggles <html class="dark">, theme-color meta). ThemeToggle in DashboardLayout header (desktop: theme-toggle, mobile: theme-toggle-mobile); dark class applied only while a DashboardLayout page is mounted (customer/admin/employee panels), public site stays light.
+- index.css: `.dark` overrides for the common Tailwind utilities (bg-white/slate, text-slate-*, borders, tinted badges, inputs, gradients) + shadcn dark tokens.
