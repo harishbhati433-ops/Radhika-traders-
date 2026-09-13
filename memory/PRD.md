@@ -272,3 +272,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Dedicated payout visible to customer
 - GET /my-referrals now returns `dedicated: {enabled, payout, eligible_count, total_earned, since}` (null if not enabled).
 - ReferEarnCard.jsx: dark "Dedicated Referral Partner · Active" banner (refer-dedicated-banner) with ₹payout, paid-referral count and dedicated earnings; headline shows combined total (₹bonus + ₹dedicated); "earned" pill includes dedicated earnings.
+
+## 2026-06 — First-load speed pass
+- index.html: Google Fonts moved from CSS @import (render-blocking) to non-blocking preload→stylesheet; unused Inter removed; weights trimmed; emergent script `defer`; inline CSS spinner shown while JS loads; system font fallbacks.
+- App.js: Login / LeadForm / OfferEnded / CustomerDashboard now lazy (main bundle 548KB → 410KB); likely-next chunk prefetched immediately based on URL / stored token.
+- Images recompressed & resized (logo-full 129→28KB, logo-mark 70→18KB, hero/team ~45% smaller); hero img fetchpriority=high, below-fold imgs loading=lazy. SW cache bumped to rt-pwa-v2.

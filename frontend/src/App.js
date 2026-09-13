@@ -12,10 +12,22 @@ import { CelebrationLayer } from "./components/Celebration";
 import MaintenancePage from "./pages/MaintenancePage";
 
 import Home from "./pages/Home";
-import Login from "./pages/auth/Login";
-import LeadForm from "./pages/LeadForm";
-import OfferEnded from "./pages/OfferEnded";
-import CustomerDashboard from "./pages/customer/CustomerDashboard";
+
+const loadLogin = () => import("./pages/auth/Login");
+const loadLeadForm = () => import("./pages/LeadForm");
+const loadDashboard = () => import("./pages/customer/CustomerDashboard");
+const Login = lazy(loadLogin);
+const LeadForm = lazy(loadLeadForm);
+const OfferEnded = lazy(() => import("./pages/OfferEnded"));
+const CustomerDashboard = lazy(loadDashboard);
+
+// Kick off the most likely next chunk immediately, in parallel with the auth check.
+try {
+  const p = window.location.pathname;
+  if (p.startsWith("/dashboard") || (localStorage.getItem("rt_token") && p === "/")) loadDashboard();
+  else if (p.startsWith("/join/")) loadLeadForm();
+  else if (p === "/login") loadLogin();
+} catch {}
 
 const About = lazy(() => import("./pages/About"));
 const Services = lazy(() => import("./pages/Services"));

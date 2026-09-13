@@ -1,4 +1,4 @@
-const CACHE = "rt-pwa-v1";
+const CACHE = "rt-pwa-v2";
 const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-mark.jpeg"];
 
 self.addEventListener("install", (e) => {

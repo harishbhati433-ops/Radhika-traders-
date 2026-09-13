@@ -89,10 +89,10 @@ export default function Home() {
           </div>
           <div className="relative rt-fade-up" style={{ animationDelay: "120ms" }}>
             <div className="grid grid-cols-3 gap-3">
-              <img src="/images/hero-team.jpg" alt="Radhika Traders style team working together on laptops"
+              <img src="/images/hero-team.jpg" alt="Radhika Traders style team working together on laptops" fetchpriority="high" decoding="async" width="640" height="420"
                 className="col-span-2 h-[420px] w-full rounded-3xl object-cover shadow-2xl ring-1 ring-white/10" data-testid="hero-visual-main" />
               <div className="flex flex-col gap-3">
-                <img src="/images/hero-wfh.jpg" alt="Partner working from home on laptop"
+                <img src="/images/hero-wfh.jpg" alt="Partner working from home on laptop" loading="lazy" decoding="async" width="320" height="200"
                   className="h-[200px] w-full rounded-3xl object-cover shadow-2xl ring-1 ring-white/10" data-testid="hero-visual-2" />
                 <div className="flex flex-1 flex-col justify-center rounded-3xl bg-gradient-to-br from-red-600 to-red-800 p-4 text-white shadow-2xl">
                   <div className="font-display text-3xl font-extrabold text-amber-300">₹300+</div>
@@ -190,13 +190,13 @@ export default function Home() {
           <p className="mt-2 max-w-xl text-sm text-slate-600">The team behind every campaign, payout and celebration at our Agar (M.P.) office.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-3 md:grid-rows-2">
-          <img src="/images/team-1.jpeg" alt="Radhika Traders team" data-testid="team-photo-1"
+          <img src="/images/team-1.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-1"
             className="h-64 w-full rounded-3xl object-cover shadow-lg md:col-span-2 md:row-span-2 md:h-full" style={{ objectPosition: "50% 30%" }} />
-          <img src="/images/team-2.jpeg" alt="Radhika Traders anniversary celebration" data-testid="team-photo-2"
+          <img src="/images/team-2.jpeg" alt="Radhika Traders anniversary celebration" loading="lazy" decoding="async" data-testid="team-photo-2"
             className="h-64 w-full rounded-3xl object-cover shadow-lg" />
           <div className="grid grid-cols-2 gap-4">
-            <img src="/images/team-3.jpeg" alt="Radhika Traders team" data-testid="team-photo-3" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
-            <img src="/images/team-4.jpeg" alt="Radhika Traders team" data-testid="team-photo-4" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
+            <img src="/images/team-3.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-3" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
+            <img src="/images/team-4.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-4" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
           </div>
         </div>
       </section>
