@@ -278,3 +278,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - App.js: Login / LeadForm / OfferEnded / CustomerDashboard now lazy (main bundle 548KB → 410KB); likely-next chunk prefetched immediately based on URL / stored token.
 - Images recompressed & resized (logo-full 129→28KB, logo-mark 70→18KB, hero/team ~45% smaller); hero img fetchpriority=high, below-fold imgs loading=lazy. SW cache bumped to rt-pwa-v2.
 - Cold-load pass 2: removed unused @tanstack/react-query provider from index.js (main 410→381KB); PWA service worker now registers on idle after load; PostHog analytics init deferred to idle after load (no longer competes with first paint). Cold home load ~0.9s on preview.
+
+## 2026-06 — Admin Wallet Balances + Customer Statement
+- GET /api/admin/wallets?show=holding|all (perm payments:view): per-customer balance, pending withdrawal, total due, earned/paid, bank/UPI, KYC, last credit/paid; summary totals (liability). Aggregation-based (no per-user loop).
+- GET /api/admin/customers/{uid}/statement (JSON ledger w/ running balance + withdrawals) and /statement/download?format=pdf|excel|csv (shared `_statement_file`, PDF header now includes mobile/ID/withdrawn/pending).
+- Frontend: /admin/wallets (AdminWallets.jsx: stats, search, show/sort, CSV export, Statement button) + CustomerStatementDialog.jsx (used in Wallet Balances and Customers page "Statement" button). Nav item "Wallet Balances" (perm payments).

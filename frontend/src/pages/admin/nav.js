@@ -1,4 +1,4 @@
-import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History } from "lucide-react";
+import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History, Wallet } from "lucide-react";
 
 export const adminNav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
@@ -10,6 +10,7 @@ export const adminNav = [
   { to: "/admin/leads", label: "Leads / Reports", icon: ClipboardList, perm: "leads" },
   { to: "/admin/kyc", label: "KYC Management", icon: ShieldCheck, perm: "clients" },
   { to: "/admin/withdrawals", label: "Withdrawals", icon: ArrowDownToLine, perm: "withdrawals" },
+  { to: "/admin/wallets", label: "Wallet Balances", icon: Wallet, perm: "payments" },
   { to: "/admin/broadcast", label: "Broadcast", icon: Send, perm: "reports" },
   { to: "/admin/reports", label: "Send Reports", icon: FolderUp, perm: "reports" },
   { to: "/admin/employees", label: "Employees", icon: UserCog, adminOnly: true },

@@ -1371,6 +1371,48 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     return await compute_wallet(user["id"])
 
 
+@api.get("/admin/wallets")
+async def admin_wallets(show: str = "holding", admin: dict = Depends(require_perm("payments", "view"))):
+    tx = await db.transactions.aggregate([{"$group": {"_id": {"u": "$user_id", "t": "$type"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
+    wd = await db.withdrawals.aggregate([{"$group": {"_id": {"u": "$user_id", "s": "$status"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
+    agg: dict = {}
+    for r in tx:
+        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
+        if r["_id"]["t"] in ("credit", "debit"):
+            a[r["_id"]["t"]] += r["s"]
+        if r["_id"]["t"] == "credit":
+            a["last_credit"] = max(a["last_credit"], r["last"] or "")
+    for r in wd:
+        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
+        if r["_id"]["s"] in ("pending", "approved"):
+            a["pending"] += r["s"]
+        if r["_id"]["s"] == "paid":
+            a["paid"] += r["s"]
+            a["last_wd"] = max(a["last_wd"], r["last"] or "")
+    ids = [ObjectId(u) for u in agg if ObjectId.is_valid(u)]
+    users = {str(u["_id"]): u for u in await db.users.find({"_id": {"$in": ids}, "role": "customer"},
+                                                            {"name": 1, "mobile": 1, "email": 1, "referral_code": 1, "kyc": 1, "account_status": 1}).to_list(100000)}
+    rows = []
+    for uid, a in agg.items():
+        u = users.get(uid)
+        if not u:
+            continue
+        balance = round(a["credit"] - a["debit"] - a["pending"], 2)
+        pending = round(a["pending"], 2)
+        if show == "holding" and balance <= 0 and pending <= 0:
+            continue
+        k = u.get("kyc") or {}
+        rows.append({"user_id": uid, "name": u.get("name"), "mobile": u.get("mobile", ""), "email": u.get("email", ""), "customer_id": u.get("referral_code", ""),
+                     "account_status": u.get("account_status", "active"), "kyc_status": k.get("status", "not_submitted"),
+                     "bank_account": k.get("bank_account", ""), "ifsc": k.get("ifsc", ""), "account_holder": k.get("account_holder", ""), "upi": k.get("upi", ""),
+                     "balance": balance, "pending_withdrawal": pending, "total_earned": round(a["credit"], 2), "total_withdrawn": round(a["paid"], 2),
+                     "last_credit_at": a["last_credit"], "last_paid_at": a["last_wd"]})
+    rows.sort(key=lambda r: (r["balance"] + r["pending_withdrawal"]), reverse=True)
+    return {"items": rows, "summary": {"customers": len(rows), "total_balance": round(sum(r["balance"] for r in rows), 2),
+                                       "total_pending": round(sum(r["pending_withdrawal"] for r in rows), 2),
+                                       "total_liability": round(sum(r["balance"] + r["pending_withdrawal"] for r in rows), 2)}}
+
+
 @api.get("/wallet/transactions")
 async def get_transactions(user: dict = Depends(get_current_user)):
     txns = await db.transactions.find({"user_id": user["id"]}).sort("created_at", -1).to_list(5000)
@@ -2264,9 +2306,46 @@ async def _statement_rows(user_id: str):
 
 @api.get("/statement")
 async def download_statement(format: str = "csv", user: dict = Depends(get_current_user)):
+    return await _statement_file(user, format)
+
+
+@api.get("/admin/customers/{uid}/statement")
+async def admin_customer_statement(uid: str, admin: dict = Depends(require_perm("payments", "view"))):
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    txns = await db.transactions.find({"user_id": uid}).sort("created_at", 1).to_list(5000)
+    wds = await db.withdrawals.find({"user_id": uid}).sort("created_at", -1).to_list(5000)
+    running, rows = 0.0, []
+    for t in txns:
+        amt = float(t.get("amount", 0))
+        if t.get("type") == "credit":
+            running += amt
+        elif t.get("type") == "debit":
+            running -= amt
+        rows.append({"id": str(t["_id"]), "date": t.get("created_at"), "description": t.get("description", ""), "type": t.get("type", ""),
+                     "amount": amt, "ref_id": t.get("ref_id", ""), "status": t.get("status", ""), "campaign_id": t.get("campaign_id"),
+                     "created_by": t.get("created_by", ""), "running_balance": round(running, 2)})
+    rows.reverse()
+    k = u.get("kyc") or {}
+    return {"customer": {**public_user(u), "bank_account": k.get("bank_account", ""), "ifsc": k.get("ifsc", ""), "account_holder": k.get("account_holder", ""), "upi": k.get("upi", "")},
+            "wallet": await compute_wallet(uid), "transactions": rows,
+            "withdrawals": [{"id": str(w["_id"]), "date": w.get("created_at"), "amount": w.get("amount"), "status": w.get("status"), "method": w.get("method", ""),
+                             "details": w.get("details", ""), "utr": w.get("utr", ""), "admin_note": w.get("admin_note", ""), "paid_at": w.get("paid_at") or w.get("updated_at", "")} for w in wds]}
+
+
+@api.get("/admin/customers/{uid}/statement/download")
+async def admin_customer_statement_download(uid: str, format: str = "pdf", admin: dict = Depends(require_perm("payments", "view"))):
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return await _statement_file(public_user(u), format)
+
+
+async def _statement_file(user: dict, format: str):
     rows = await _statement_rows(user["id"])
     wallet = await compute_wallet(user["id"])
-    fname = f"radhika_statement_{datetime.now().strftime('%Y%m%d')}"
+    fname = f"radhika_statement_{re.sub(r'[^a-z0-9]+', '_', (user.get('name') or '').lower()).strip('_') or 'customer'}_{datetime.now().strftime('%Y%m%d')}"
     if format == "csv":
         import csv
         buf = io.StringIO()
@@ -2297,8 +2376,8 @@ async def download_statement(format: str = "csv", user: dict = Depends(get_curre
         elems = [Paragraph("RADHIKA TRADERS", title),
                  Paragraph("Wallet Statement · Trusted Partner for Financial Growth", styles["Normal"]),
                  Spacer(1, 10),
-                 Paragraph(f"Account: {user.get('name')} ({user.get('email')})", styles["Normal"]),
-                 Paragraph(f"Available Balance: Rs. {wallet['balance']} | Total Earnings: Rs. {wallet['total_earnings']}", styles["Normal"]),
+                 Paragraph(f"Account: {user.get('name')} ({user.get('email')})" + (f" · Mobile: {user.get('mobile')}" if user.get("mobile") else "") + (f" · ID: {user.get('referral_code')}" if user.get("referral_code") else ""), styles["Normal"]),
+                 Paragraph(f"Available Balance: Rs. {wallet['balance']} | Total Earnings: Rs. {wallet['total_earnings']} | Withdrawn: Rs. {wallet['total_withdrawn']} | Pending Withdrawal: Rs. {wallet['pending_withdrawal']}", styles["Normal"]),
                  Spacer(1, 14)]
         data = [["Date", "Description", "Type", "Amount", "Reference", "Status"]]
         for r in rows:
