@@ -287,3 +287,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Dark / Light mode (panels)
 - lib/theme.js (localStorage rt_theme, toggles <html class="dark">, theme-color meta). ThemeToggle in DashboardLayout header (desktop: theme-toggle, mobile: theme-toggle-mobile); dark class applied only while a DashboardLayout page is mounted (customer/admin/employee panels), public site stays light.
 - index.css: `.dark` overrides for the common Tailwind utilities (bg-white/slate, text-slate-*, borders, tinted badges, inputs, gradients) + shadcn dark tokens.
+
+## 2026-06 — Strict Aadhaar + IFSC validation
+- Backend `aadhaar_error()` (12 digits, cannot start 0/1, not all-same, Verhoeff checksum) used in _validate_kyc (customer + admin KYC edits) and lead form dynamic `aadhaar` field.
+- IFSC now verified against Razorpay IFSC list in `_apply_kyc` and lead-form `ifsc` field: invalid_format/not_found → 400 rejected; lookup_unavailable (network) → allowed.
+- Frontend validators.js aadhaarError has Verhoeff; IfscBankInfo shows red "Invalid IFSC" for not_found.

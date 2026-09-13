@@ -755,6 +755,27 @@ async def update_profile(body: ProfileIn, user: dict = Depends(get_current_user)
     return public_user(await _apply_profile_update(user["id"], body, "self"))
 
 
+_VERHOEFF_D = [[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],
+               [5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]]
+_VERHOEFF_P = [[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],
+               [4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]]
+
+
+def aadhaar_error(value: str) -> str:
+    """Return '' if the Aadhaar number is structurally valid (12 digits, starts 2-9, Verhoeff checksum), else a message."""
+    a = re.sub(r"\s", "", value or "")
+    if not re.fullmatch(r"\d{12}", a):
+        return "Aadhaar must be exactly 12 digits (numbers only)"
+    if a[0] in "01":
+        return "Invalid Aadhaar number — it cannot start with 0 or 1"
+    if len(set(a)) == 1:
+        return "Invalid Aadhaar number"
+    c = 0
+    for i, ch in enumerate(reversed(a)):
+        c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(ch)]]
+    return "" if c == 0 else "Invalid Aadhaar number — please check the digits and try again"
+
+
 def _validate_kyc(body: KycIn) -> tuple[str, str, str]:
     pan = body.pan.strip().upper()
     ifsc = body.ifsc.strip().upper()
@@ -767,8 +788,8 @@ def _validate_kyc(body: KycIn) -> tuple[str, str, str]:
         raise HTTPException(status_code=400, detail="Invalid IFSC code (e.g. HDFC0001234)")
     if not re.fullmatch(r"\d{9,18}", acct):
         raise HTTPException(status_code=400, detail="Bank account number must be 9–18 digits")
-    if body.aadhaar and not re.fullmatch(r"\d{12}", re.sub(r"\s", "", body.aadhaar)):
-        raise HTTPException(status_code=400, detail="Aadhaar must be exactly 12 digits (numbers only)")
+    if body.aadhaar and aadhaar_error(body.aadhaar):
+        raise HTTPException(status_code=400, detail=aadhaar_error(body.aadhaar))
     if body.upi and not re.fullmatch(r"[\w.\-]{2,}@[A-Za-z]{2,}", body.upi.strip()):
         raise HTTPException(status_code=400, detail="Invalid UPI ID (e.g. name@upi)")
     if not body.account_holder.strip():
@@ -813,6 +834,9 @@ async def ifsc_lookup(code: str, user: dict = Depends(get_current_user)):
 
 async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] = None) -> dict:
     pan, ifsc, acct = _validate_kyc(body)
+    ifsc_info = await lookup_ifsc_info(ifsc)
+    if not ifsc_info.get("available") and ifsc_info.get("reason") in ("invalid_format", "not_found"):
+        raise HTTPException(status_code=400, detail=f"IFSC {ifsc} is not a valid bank branch code. Please check your passbook / cheque and enter the correct IFSC.")
     dup = await db.users.find_one({"kyc.pan": pan, "_id": {"$ne": ObjectId(uid)}})
     if dup:
         raise HTTPException(status_code=400, detail="This PAN is already registered with another account")
@@ -998,8 +1022,13 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
             raise HTTPException(status_code=400, detail="Invalid PAN. Format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)")
     if data.get("aadhaar"):
         data["aadhaar"] = re.sub(r"\s", "", data["aadhaar"])
-        if not re.fullmatch(r"\d{12}", data["aadhaar"]):
-            raise HTTPException(status_code=400, detail="Aadhaar must be exactly 12 digits (numbers only)")
+        if aadhaar_error(data["aadhaar"]):
+            raise HTTPException(status_code=400, detail=aadhaar_error(data["aadhaar"]))
+    if data.get("ifsc"):
+        data["ifsc"] = re.sub(r"\s", "", str(data["ifsc"])).upper()
+        info = await lookup_ifsc_info(data["ifsc"])
+        if not info.get("available") and info.get("reason") in ("invalid_format", "not_found"):
+            raise HTTPException(status_code=400, detail=f"IFSC {data['ifsc']} is not a valid bank branch code. Please check and enter the correct IFSC.")
     ref = (body.ref or "").upper()
     partner = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
