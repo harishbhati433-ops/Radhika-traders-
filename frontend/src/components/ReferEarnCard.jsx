@@ -3,7 +3,7 @@ import api from "../lib/api";
 import { ShareButtons } from "./ShareButtons";
 import { useBlobUrl } from "./ShareKit";
 import { useAuth } from "../context/AuthContext";
-import { Gift, Users, Copy, ChevronDown, MessageSquareText, QrCode, Download } from "lucide-react";
+import { Gift, Users, Copy, ChevronDown, MessageSquareText, QrCode, Download, Crown } from "lucide-react";
 import { toast } from "sonner";
 
 export function ReferEarnCard({ code }) {
@@ -30,17 +30,35 @@ export function ReferEarnCard({ code }) {
   const copy = () => { navigator.clipboard.writeText(inviteMessage); toast.success("Invite message with your link copied — paste it anywhere"); };
   const copyLinkOnly = () => { navigator.clipboard.writeText(link); toast.success("Link copied"); };
 
+  const ded = stats?.dedicated;
+  const totalPer = (Number(bonus) || 0) + (ded ? Number(ded.payout) || 0 : 0);
+
   return (
     <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6" data-testid="refer-earn-card">
+      {ded && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-3 text-white" data-testid="refer-dedicated-banner">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-400 p-2 text-slate-950"><Crown className="h-4 w-4" /></div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Dedicated Referral Partner · Active</div>
+              <div className="text-sm">You earn <span className="font-mono text-lg font-bold text-amber-300" data-testid="refer-dedicated-payout">₹{ded.payout}</span> extra on every eligible referral{bonus > 0 && <span className="text-slate-300"> — in addition to the ₹{bonus} standard bonus (total ₹{totalPer} per referral)</span>}.</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 rounded-lg bg-white/10 px-3 py-1.5 text-xs">
+            <span><span className="font-mono text-base font-bold" data-testid="refer-dedicated-count">{ded.eligible_count}</span> <span className="text-slate-300">paid referrals</span></span>
+            <span><span className="font-mono text-base font-bold text-emerald-300" data-testid="refer-dedicated-earned">₹{ded.total_earned}</span> <span className="text-slate-300">dedicated earnings</span></span>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-amber-400 p-2.5 text-slate-950"><Gift className="h-5 w-5" /></div>
           <div>
             <h2 className="font-display text-lg font-bold text-slate-900">
-              {bonus > 0 ? <>Refer a friend, earn <span className="text-red-600">₹{bonus}</span></> : "Invite friends to Radhika Traders"}
+              {totalPer > 0 ? <>Refer a friend, earn <span className="text-red-600">₹{totalPer}</span>{ded && bonus > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">(₹{bonus} + ₹{ded.payout} dedicated)</span>}</> : "Invite friends to Radhika Traders"}
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
-              {bonus > 0 ? `Share your invite link. When a friend signs up and verifies their email, ₹${bonus} is added to your wallet instantly.` : "Share your invite link and grow the Radhika Traders partner network."}
+              {totalPer > 0 ? `Share your invite link. When a friend signs up and verifies their email, ₹${totalPer} is added to your wallet.` : "Share your invite link and grow the Radhika Traders partner network."}
               {signupBonus > 0 && <span className="mt-1 block font-semibold text-violet-700" data-testid="refer-signup-bonus-note">🎁 Your friend also gets ₹{signupBonus} signup bonus (unlocked after their first approved lead).</span>}
             </p>
           </div>
@@ -49,7 +67,7 @@ export function ReferEarnCard({ code }) {
           <Users className="h-4 w-4 text-slate-400" />
           <span className="font-mono font-bold text-slate-900" data-testid="refer-count">{stats?.count ?? 0}</span>
           <span className="text-xs text-slate-500">joined ·</span>
-          <span className="font-mono font-bold text-emerald-600" data-testid="refer-earned">₹{stats?.earned ?? 0}</span>
+          <span className="font-mono font-bold text-emerald-600" data-testid="refer-earned">₹{(Number(stats?.earned) || 0) + (Number(ded?.total_earned) || 0)}</span>
           <span className="text-xs text-slate-500">earned</span>
         </div>
       </div>

@@ -268,3 +268,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Dedicated Referral: all customers listed
 - GET /admin/dedicated-referrals/search now accepts empty q → returns ALL verified, non-disabled customers (name-sorted, up to 1000) with kyc_status; non-empty q filters server-side.
 - AdminDedicatedReferrals.jsx: loads full customer list on page open (ded-customer-count "x / y customers"), live client-side filter (name/ID/mobile/email), per-row "Add" button (ded-select-{uid}) → inline payout picker → enable. Already-added rows show badge.
+
+## 2026-06 — Dedicated payout visible to customer
+- GET /my-referrals now returns `dedicated: {enabled, payout, eligible_count, total_earned, since}` (null if not enabled).
+- ReferEarnCard.jsx: dark "Dedicated Referral Partner · Active" banner (refer-dedicated-banner) with ₹payout, paid-referral count and dedicated earnings; headline shows combined total (₹bonus + ₹dedicated); "earned" pill includes dedicated earnings.

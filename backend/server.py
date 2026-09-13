@@ -601,7 +601,12 @@ async def my_referrals(user: dict = Depends(get_current_user)):
         {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
     usage = await referral_usage(user.get("referral_code", ""))
     s = await get_settings()
-    return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0,
+    ded = await db.dedicated_referrals.find_one({"user_id": user["id"]})
+    ded_out = None
+    if ded and ded.get("enabled"):
+        ded_out = {"enabled": True, "payout": ded.get("payout", 0), "eligible_count": ded.get("eligible_count", 0),
+                   "total_earned": round(ded.get("total_earned", 0), 2), "since": ded.get("created_at")}
+    return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0, "dedicated": ded_out,
             "today": usage["today"], "month": usage["month"], "daily_limit": s["referral_daily_limit"], "monthly_limit": s["referral_monthly_limit"],
             "recent": [{"name": j.get("name"), "joined_at": j.get("created_at"), "kyc": j.get("kyc", {}).get("status", "not_submitted")} for j in joined[:50]]}
 
