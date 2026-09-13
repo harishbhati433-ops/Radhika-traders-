@@ -277,3 +277,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - index.html: Google Fonts moved from CSS @import (render-blocking) to non-blocking preload→stylesheet; unused Inter removed; weights trimmed; emergent script `defer`; inline CSS spinner shown while JS loads; system font fallbacks.
 - App.js: Login / LeadForm / OfferEnded / CustomerDashboard now lazy (main bundle 548KB → 410KB); likely-next chunk prefetched immediately based on URL / stored token.
 - Images recompressed & resized (logo-full 129→28KB, logo-mark 70→18KB, hero/team ~45% smaller); hero img fetchpriority=high, below-fold imgs loading=lazy. SW cache bumped to rt-pwa-v2.
+- Cold-load pass 2: removed unused @tanstack/react-query provider from index.js (main 410→381KB); PWA service worker now registers on idle after load; PostHog analytics init deferred to idle after load (no longer competes with first paint). Cold home load ~0.9s on preview.
