@@ -3,13 +3,15 @@ import api, { formatApiErrorDetail } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
-import { KeyRound, Lock, Loader2, ShieldCheck, MonitorSmartphone } from "lucide-react";
+import { KeyRound, Lock, Loader2, ShieldCheck, MonitorSmartphone, LogOut } from "lucide-react";
 import { PasswordInput } from "./PasswordInput";
 import { OtpPasswordReset } from "./OtpPasswordReset";
+import { useAuth } from "../context/AuthContext";
 
 const dt = (iso) => iso ? new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export function SecuritySettings({ showTxn = true }) {
+  const { loginWithToken } = useAuth();
   const [st, setSt] = useState({ has_txn_password: false, logs: [] });
   const [lp, setLp] = useState({ current_password: "", new_password: "" });
   const [tp, setTp] = useState({ login_password: "", otp: "", new_password: "" });
@@ -32,6 +34,13 @@ export function SecuritySettings({ showTxn = true }) {
   const saveTxn = async (e) => {
     e.preventDefault(); setBusy("tp");
     try { await api.post("/security/transaction-password", tp); toast.success(st.has_txn_password ? "Transaction password reset" : "Transaction password set"); setTp({ login_password: "", otp: "", new_password: "" }); setOtpSent(false); load(); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(""); }
+  };
+
+  const logoutAll = async () => {
+    if (!window.confirm("Log out from ALL other devices?\n\nEvery other phone/browser signed into this account is logged out immediately. Only this session stays logged in.")) return;
+    setBusy("all");
+    try { const { data } = await api.post("/security/logout-all"); loginWithToken(data.token, data.user); toast.success(data.message, { duration: 7000 }); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(""); }
   };
 
@@ -70,8 +79,11 @@ export function SecuritySettings({ showTxn = true }) {
 
       {st.devices && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2" data-testid="sec-devices">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><MonitorSmartphone className="h-4 w-4 text-sky-600" /> Admin login devices <span className="text-xs font-semibold text-slate-400">({st.devices.length})</span></div>
-          <p className="mt-1 text-xs text-slate-500">You get a Gmail alert the first time the Admin Panel is opened from a new device or IP. Don't recognise one? Reset your password via OTP above — every device is logged out.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><MonitorSmartphone className="h-4 w-4 text-sky-600" /> Admin login devices <span className="text-xs font-semibold text-slate-400">({st.devices.length})</span></div>
+            <button type="button" onClick={logoutAll} disabled={busy === "all"} data-testid="sec-logout-all" className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-60">{busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />} Log out from all devices</button>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">You get a Gmail alert the first time the Admin Panel is opened from a new device or IP. Don't recognise one? Tap <b>Log out from all devices</b> — every other session is signed out instantly and only this one stays logged in.</p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2">Device</th><th className="p-2">IP</th><th className="p-2">First login</th><th className="p-2">Last login</th><th className="p-2 text-right">Logins</th></tr></thead>

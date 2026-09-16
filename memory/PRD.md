@@ -343,3 +343,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - `login_alerts.py` `record_admin_login` runs in background on successful admin login: fingerprint = sha256(ip|browser|os) stored in `admin_devices` (per admin). First time seen → Gmail alert (`send_login_alert_email`, to admin email + Contact & Support owner_email) with time IST, device, IP, "Reset admin password" button (→ /admin/forgot-password), admin bell notification (type security), security log `admin_login_new_device`.
 - `GET /api/security/status` now returns `devices` (admin only) + detail/ip on logs; Security page shows "Admin login devices" table (`sec-devices`).
 - Tested via curl with 3 logins (2 same UA → one alert, 1 new UA → second alert), emails sent without error, screenshot of table.
+
+## 2026-06 — Log out from all devices
+- POST /api/security/logout-all (any logged-in user): bumps users.token_version → every other JWT 401; returns a fresh token so the current session continues. Security log `logout_all_devices`.
+- Security page (admin): red "Log out from all devices" button in the Admin login devices card (confirm dialog). Tested via curl (A,B → 401, NEW → 200) + UI click.

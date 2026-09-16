@@ -154,4 +154,15 @@ def build_router(db, get_current_user, log_security, public_user) -> APIRouter:
         out = await _verify_and_reset(full["email"], body.code, body.new_password, request, full)
         return {"message": "Password changed. All other devices have been logged out.", **out}
 
+    @r.post("/security/logout-all")
+    async def logout_all(request: Request, user: dict = Depends(get_current_user)):
+        from bson import ObjectId
+        full = await db.users.find_one({"_id": ObjectId(user["id"])})
+        tv = int(full.get("token_version", 0)) + 1
+        await db.users.update_one({"_id": full["_id"]}, {"$set": {"token_version": tv, "sessions_revoked_at": _iso(_now())}})
+        await log_security(str(full["_id"]), "logout_all_devices", request, "all other sessions revoked")
+        fresh = await db.users.find_one({"_id": full["_id"]})
+        return {"message": "Logged out from all other devices. Only this session stays signed in.",
+                "token": create_access_token(str(fresh["_id"]), fresh["email"], fresh["role"], tv), "user": public_user(fresh)}
+
     return r
