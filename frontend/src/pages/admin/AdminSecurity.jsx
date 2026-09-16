@@ -13,7 +13,7 @@ export default function AdminSecurity() {
         <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
         <div>
           <div className="font-bold">Admin account: {user?.email}</div>
-          <p className="mt-1 text-xs">Use a strong, unique password (min 8 chars, mix of letters, numbers & symbols). Never share it. If forgotten, use “Forgot Password” on the Admin Login page — an OTP will be sent to this email.</p>
+          <p className="mt-1 text-xs">Use a strong, unique password (min 8 chars, mix of letters, numbers & symbols). Never share it. Forgot it? Use “Reset via OTP” below, or “Forgot password?” on the Admin Login page — a 5-minute OTP is sent to this Gmail and all other devices are logged out after reset.</p>
         </div>
       </div>
       <div className="mb-6"><ShutdownControl /></div>

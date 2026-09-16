@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 
 const ENV_URL = process.env.REACT_APP_BACKEND_URL;
 const sameHost = (() => {
@@ -18,6 +19,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((r) => r, (err) => {
   if (err.response?.status === 401 && localStorage.getItem("rt_token")) {
     localStorage.removeItem("rt_token");
+    const d = err.response?.data?.detail;
+    if (typeof d === "string" && /password was changed/i.test(d)) toast.error(d, { duration: 8000 });
     window.dispatchEvent(new Event("rt:logout"));
   }
   if (err.response?.status === 503 && err.response?.data?.detail?.code === "shutdown") {

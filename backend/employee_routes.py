@@ -97,7 +97,7 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
         if st != "active":
             raise HTTPException(status_code=403, detail="Your employee account is disabled. Contact the Super Admin.")
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"last_login_at": now, "last_login_ip": ip}})
-        token = create_access_token(str(user["_id"]), user["email"], "employee")
+        token = create_access_token(str(user["_id"]), user["email"], "employee", user.get("token_version", 0))
         pu = public_user(user)
         await log_activity({"id": pu["id"], "name": pu["name"], "role": "employee", "username": username}, "employee_login", request,
                            entity_type="employee", entity_id=pu["id"], status="success")

@@ -330,3 +330,11 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - UI: shared `BonusWalletCard` on customer Dashboard (5th stat card, always visible) and Wallet page.
 - Admin: "Give to existing customers" button (POST /api/admin/signup-bonus/backfill) — locks for verified customers without bonus, credits immediately if they already have an approved lead, skips duplicates, idempotent, activity-logged. USER MUST CLICK THIS ONCE ON PRODUCTION.
 - Tested: tests/sim_locked_signup_bonus.py (lock→exists, unlock→credited→none, fallback no double credit, dup→duplicate), backfill idempotent via curl, dashboard/wallet screenshots.
+
+## 2026-06 — Secure password reset via email OTP (admin + customers)
+- New `password_reset.py` router: POST /api/auth/forgot-password {email, portal} & /api/auth/reset-password {email, code, new_password, portal}; in-panel POST /api/security/reset-password/otp & /api/security/reset-password {code,new_password} (returns fresh token).
+- Rules: OTP 6-digit, HMAC-hashed at rest (`pwd_reset_otps`), 5-min TTL, resend cooldown 60s, max 5 sends/15 min → lock, 5 wrong OTPs → 15-min lock (`otp_locks`), new OTP invalidates old, single-use. portal=admin only serves admin accounts (generic response otherwise).
+- All-device logout: `users.token_version` bumped on reset; JWT carries `tv`; `get_current_user_from_db` rejects mismatched tokens with 401 "session expired because the password was changed" → frontend interceptor toasts + logs out. Login/verify/employee-login tokens carry current tv.
+- Password-changed confirmation email (`send_password_changed_email`). Security logs: password_reset_otp_sent / password_reset_locked / password_reset_via_otp.
+- UI: /admin/forgot-password (AdminLogin "Forgot password?" link), ForgotPassword page w/ 5-min countdown + resend timer (portal prop), `OtpPasswordReset` card in SecuritySettings (admin + customer Security pages).
+- Tested: tests/sim_password_reset.py (all rules), UI screenshot, real OTP delivered to admin Gmail.

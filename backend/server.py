@@ -34,6 +34,7 @@ from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
 from contact_routes import build_router as build_contact_router
+from password_reset import build_router as build_password_reset_router
 import contact_settings
 
 mongo_url = os.environ["MONGO_URL"]
@@ -504,7 +505,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
         await lock_signup_bonus(user)
         origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
         background.add_task(send_welcome_email, email, user.get("name", ""), user.get("referral_code", ""), bonus, f"{origin}/dashboard")
-    token = create_access_token(str(user["_id"]), email, user["role"])
+    token = create_access_token(str(user["_id"]), email, user["role"], user.get("token_version", 0))
     return {"token": token, "user": public_user(user)}
 
 
@@ -685,41 +686,11 @@ async def login(body: LoginIn, request: Request):
         raise HTTPException(status_code=403, detail="Admin accounts cannot log in here. Please use the Admin Login page.")
     if user["role"] == "customer" and not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="Please verify your email first")
-    token = create_access_token(str(user["_id"]), email, user["role"])
+    token = create_access_token(str(user["_id"]), email, user["role"], user.get("token_version", 0))
     if needs_rehash(user.get("password_hash", "")):
         new_hash = await asyncio.to_thread(hash_password, body.password)
         await db.users.update_one({"_id": user["_id"], "password_hash": user["password_hash"]}, {"$set": {"password_hash": new_hash}})
     return {"token": token, "user": public_user(user)}
-
-
-@api.post("/auth/forgot-password")
-async def forgot_password(body: ForgotIn):
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-    if user:
-        code = generate_otp()
-        await db.otp_codes.delete_many({"email": email, "purpose": "reset"})
-        await db.otp_codes.insert_one({
-            "email": email, "code": code, "purpose": "reset",
-            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
-            "used": False, "created_at": now_iso(),
-        })
-        await send_otp_email(email, user.get("name", ""), code, "reset")
-        logger.info(f"[OTP reset] {email} -> {code}")
-    return {"message": "If the email exists, an OTP has been sent"}
-
-
-@api.post("/auth/reset-password")
-async def reset_password(body: ResetIn):
-    email = body.email.lower()
-    rec = await db.otp_codes.find_one({"email": email, "purpose": "reset", "used": False})
-    if not rec or rec["code"] != body.code:
-        raise HTTPException(status_code=400, detail="Invalid OTP code")
-    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
-    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
-    await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(body.new_password)}})
-    return {"message": "Password reset successful. Please login."}
 
 
 @api.get("/auth/me")
@@ -2884,6 +2855,7 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 
 api.include_router(build_employee_router(db, require_admin, log_activity, public_user))
 api.include_router(build_contact_router(db, require_admin, log_activity))
+api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 app.include_router(api)
 
 app.add_middleware(
@@ -2919,6 +2891,8 @@ async def startup():
         await db.leads.create_index("submit_key", unique=True, partialFilterExpression={"submit_key": {"$type": "string"}})
         await db.transactions.create_index("signup_bonus_for", unique=True, partialFilterExpression={"signup_bonus_for": {"$type": "string"}})
         await db.signup_bonus_log.create_index("user_id")
+        await db.pwd_reset_otps.create_index("email")
+        await db.otp_locks.create_index("identifier", unique=True)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

@@ -5,6 +5,7 @@ import { Label } from "./ui/label";
 import { toast } from "sonner";
 import { KeyRound, Lock, Loader2, ShieldCheck } from "lucide-react";
 import { PasswordInput } from "./PasswordInput";
+import { OtpPasswordReset } from "./OtpPasswordReset";
 
 export function SecuritySettings({ showTxn = true }) {
   const [st, setSt] = useState({ has_txn_password: false, logs: [] });
@@ -42,6 +43,8 @@ export function SecuritySettings({ showTxn = true }) {
         </div>
         <button type="submit" disabled={busy === "lp"} data-testid="sec-change-password" className="rt-gradient-btn mt-4 inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold disabled:opacity-60">{busy === "lp" && <Loader2 className="h-4 w-4 animate-spin" />} Update Password</button>
       </form>
+
+      <OtpPasswordReset />
 
       {showTxn && <form onSubmit={saveTxn} className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6">
         <div className="flex items-center justify-between gap-2">

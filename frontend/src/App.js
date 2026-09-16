@@ -127,6 +127,7 @@ function App() {
             <Route path="/employee/login" element={<EmployeeLogin />} />
             <Route path="/employee" element={E(<EmployeeDashboard />)} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/admin/forgot-password" element={<ForgotPassword portal="admin" />} />
             <Route path="/forgot-email" element={<ForgotEmail />} />
 
             <Route path="/dashboard" element={C(<CustomerDashboard />)} />

@@ -51,11 +51,12 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, token_version: int = 0) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "role": role,
+        "tv": int(token_version or 0),
         "exp": datetime.now(timezone.utc) + timedelta(days=7),
         "type": "access",
     }
@@ -99,6 +100,8 @@ async def get_current_user_from_db(request: Request, db) -> dict:
             raise HTTPException(status_code=401, detail="User not found")
         if st in ("deactivated", "disabled"):
             raise HTTPException(status_code=403, detail=ACCOUNT_STATUS_MESSAGES[st])
+        if int(payload.get("tv", 0) or 0) != int(user.get("token_version", 0) or 0):
+            raise HTTPException(status_code=401, detail="Your session has expired because the password was changed. Please login again.")
         user["id"] = str(user["_id"])
         user.pop("_id", None)
         user.pop("password_hash", None)

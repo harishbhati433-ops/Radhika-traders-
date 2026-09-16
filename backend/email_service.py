@@ -136,8 +136,22 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
         f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "there")},</p>'
         f'<p style="font-size:14px;color:#334155">You requested to {reason}. Your one-time code is:</p>'
         f'<div style="margin:20px 0"><span style="font-size:30px;font-weight:bold;letter-spacing:6px;color:#0B0F17">{escape(code)}</span></div>'
-        f'<p style="font-size:14px;color:#334155">This code is valid for 10 minutes. Please do not share it with anyone.</p>'
+        f'<p style="font-size:14px;color:#334155">This code is valid for {"5" if purpose == "reset" else "10"} minutes. Please do not share it with anyone — Radhika Traders will never ask for it.</p>'
         f'<p style="font-size:12px;color:#94a3b8">If you did not request this, you can ignore this email.</p>'
+        f'<p style="font-size:13px;color:#334155;margin-top:20px">Regards,<br>Team Radhika Traders</p>'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_password_changed_email(to: str, name: str, when_ist: str, ip: str) -> str | None:
+    if not to:
+        return None
+    subject = "Your Radhika Traders password was changed"
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+        f'<p style="font-size:14px;color:#334155">The login password for your Radhika Traders account was changed on <b>{escape(when_ist)}</b>'
+        f'{f" from IP {escape(ip)}" if ip else ""}. For your security, all other logged-in devices have been signed out.</p>'
+        f'<p style="font-size:14px;color:#334155">If this was you, no action is needed. If you did not do this, contact us immediately on WhatsApp {wa_number()}.</p>'
         f'<p style="font-size:13px;color:#334155;margin-top:20px">Regards,<br>Team Radhika Traders</p>'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
