@@ -3,7 +3,7 @@ import api, { formatApiErrorDetail } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
-import { KeyRound, Lock, Loader2, ShieldCheck, MonitorSmartphone, LogOut } from "lucide-react";
+import { KeyRound, Lock, Loader2, ShieldCheck, MonitorSmartphone, LogOut, Trash2 } from "lucide-react";
 import { PasswordInput } from "./PasswordInput";
 import { OtpPasswordReset } from "./OtpPasswordReset";
 import { useAuth } from "../context/AuthContext";
@@ -41,6 +41,13 @@ export function SecuritySettings({ showTxn = true }) {
     if (!window.confirm("Log out from ALL other devices?\n\nEvery other phone/browser signed into this account is logged out immediately. Only this session stays logged in.")) return;
     setBusy("all");
     try { const { data } = await api.post("/security/logout-all"); loginWithToken(data.token, data.user); toast.success(data.message, { duration: 7000 }); load(); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(""); }
+  };
+
+  const removeDevice = async (d) => {
+    if (!window.confirm(`Remove "${d.browser} on ${d.os}" (IP ${d.ip}) from known devices?\n\nIf this device logs in again you will get a fresh Gmail alert.`)) return;
+    setBusy(`dev-${d.fingerprint}`);
+    try { const { data } = await api.delete(`/security/devices/${d.fingerprint}`); toast.success(data.message); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(""); }
   };
 
@@ -86,9 +93,9 @@ export function SecuritySettings({ showTxn = true }) {
           <p className="mt-1 text-xs text-slate-500">You get a Gmail alert the first time the Admin Panel is opened from a new device or IP. Don't recognise one? Tap <b>Log out from all devices</b> — every other session is signed out instantly and only this one stays logged in.</p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2">Device</th><th className="p-2">IP</th><th className="p-2">First login</th><th className="p-2">Last login</th><th className="p-2 text-right">Logins</th></tr></thead>
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2">Device</th><th className="p-2">IP</th><th className="p-2">First login</th><th className="p-2">Last login</th><th className="p-2 text-right">Logins</th><th className="p-2"></th></tr></thead>
               <tbody>
-                {st.devices.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-slate-400">No logins recorded yet.</td></tr>}
+                {st.devices.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-slate-400">No logins recorded yet.</td></tr>}
                 {st.devices.map((d) => (
                   <tr key={d.fingerprint} className="border-t border-slate-100" data-testid={`sec-device-${d.fingerprint}`}>
                     <td className="p-2 font-semibold text-slate-900">{d.browser} on {d.os}</td>
@@ -96,6 +103,7 @@ export function SecuritySettings({ showTxn = true }) {
                     <td className="whitespace-nowrap p-2 font-mono text-slate-500">{dt(d.first_seen)}</td>
                     <td className="whitespace-nowrap p-2 font-mono text-slate-500">{dt(d.last_seen)}</td>
                     <td className="p-2 text-right font-mono text-slate-700">{d.logins}</td>
+                    <td className="p-2 text-right"><button type="button" onClick={() => removeDevice(d)} disabled={busy === `dev-${d.fingerprint}`} data-testid={`sec-device-remove-${d.fingerprint}`} title="Remove this device" className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50">{busy === `dev-${d.fingerprint}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Remove</button></td>
                   </tr>
                 ))}
               </tbody>

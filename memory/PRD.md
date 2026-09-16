@@ -347,3 +347,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Log out from all devices
 - POST /api/security/logout-all (any logged-in user): bumps users.token_version → every other JWT 401; returns a fresh token so the current session continues. Security log `logout_all_devices`.
 - Security page (admin): red "Log out from all devices" button in the Admin login devices card (confirm dialog). Tested via curl (A,B → 401, NEW → 200) + UI click.
+
+## 2026-06 — Remove single device
+- DELETE /api/security/devices/{fingerprint} (own devices only; 404 otherwise) → removes from `admin_devices`, security log `device_removed`; next login from that device triggers a fresh alert. "Remove" button per row in Security → Admin login devices (confirm). Tested via curl (delete, 404, re-login → alert count +1) + UI click.

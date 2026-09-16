@@ -165,4 +165,13 @@ def build_router(db, get_current_user, log_security, public_user) -> APIRouter:
         return {"message": "Logged out from all other devices. Only this session stays signed in.",
                 "token": create_access_token(str(fresh["_id"]), fresh["email"], fresh["role"], tv), "user": public_user(fresh)}
 
+    @r.delete("/security/devices/{fingerprint}")
+    async def remove_device(fingerprint: str, request: Request, user: dict = Depends(get_current_user)):
+        dev = await db.admin_devices.find_one({"user_id": user["id"], "fingerprint": fingerprint})
+        if not dev:
+            raise HTTPException(status_code=404, detail="Device not found")
+        await db.admin_devices.delete_one({"_id": dev["_id"]})
+        await log_security(user["id"], "device_removed", request, f"{dev.get('browser')} on {dev.get('os')} · IP {dev.get('ip')}")
+        return {"message": f"{dev.get('browser')} on {dev.get('os')} removed — you will get a fresh alert if it logs in again."}
+
     return r
