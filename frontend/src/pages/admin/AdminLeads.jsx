@@ -28,6 +28,11 @@ export default function AdminLeads() {
   const [customOpen, setCustomOpen] = useState(false);
   const can = useCan("leads");
   const canPay = useCan("payments");
+  const rescan = async () => {
+    if (!window.confirm("Re-check all existing leads campaign-wise and mark same-person repeat submissions as Duplicate (Approved leads are not touched)?")) return;
+    try { const { data } = await api.post("/admin/leads/rescan-duplicates"); toast.success(data.message); load(); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Re-scan failed"); }
+  };
   const payoutFor = (cid) => campaigns.find((c) => c.id === cid)?.payout_amount || "";
   const pickPreset = (k) => {
     if (k === "custom") { setCustomOpen(true); setFlt({ ...flt, preset: "custom" }); return; }
@@ -97,6 +102,7 @@ export default function AdminLeads() {
           </div>
         )}
         <LeadExport filters={{ campaign_id: flt.campaign_id, status: flt.status, account_status: flt.account_status, ref: flt.ref, search: flt.search, date_from: flt.date_from, date_to: flt.date_to }} count={list.length} />
+        {can.isAdmin && <button onClick={rescan} data-testid="lead-rescan-duplicates" className="inline-flex items-center gap-1.5 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-100"><Copy className="h-3.5 w-3.5" /> Re-scan old leads for duplicates</button>}
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white rt-scroll">

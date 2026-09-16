@@ -1004,8 +1004,8 @@ def lead_out(l: dict) -> dict:
     return {**{k: v for k, v in l.items() if k not in ("_id", "dup_keys", "submit_key")}, "id": str(l["_id"])}
 
 
-DUP_FIELDS = (("pan", "PAN"), ("mobile", "Mobile"), ("email", "Email"), ("dob", "DOB"), ("name", "Name"))
-DUP_STRONG = {"pan", "mobile", "email"}
+DUP_FIELDS = (("pan", "PAN"), ("mobile", "Mobile"), ("email", "Email"), ("aadhaar", "Aadhaar"), ("dob", "DOB"), ("name", "Name"))
+DUP_STRONG = {"pan", "mobile", "email", "aadhaar"}
 
 
 def lead_dup_keys(data: dict) -> dict:
@@ -1017,27 +1017,46 @@ def lead_dup_keys(data: dict) -> dict:
     return {"pan": re.sub(r"\s", "", str(data.get("pan") or "")).upper(),
             "mobile": mob,
             "email": re.sub(r"\s", "", str(data.get("email") or "")).lower(),
+            "aadhaar": re.sub(r"\D", "", str(data.get("aadhaar") or "")),
             "dob": dob,
             "name": re.sub(r"\s+", " ", str(data.get("name") or "")).strip().lower()}
 
 
-async def find_duplicate_lead(campaign_id: str, keys: dict):
+def _dup_match(keys: dict, ck: dict) -> list:
+    """Any ONE identity field (mobile / PAN / email / Aadhaar) matching = same person; name alone only counts together with DOB."""
+    matched = [(k, label) for k, label in DUP_FIELDS if keys.get(k) and ck.get(k) == keys[k]]
+    strong = [k for k, _ in matched if k in DUP_STRONG]
+    weak = {k for k, _ in matched if k not in DUP_STRONG}
+    if strong or {"name", "dob"} <= weak:
+        return matched
+    return []
+
+
+async def find_duplicate_lead(campaign_id: str, keys: dict, exclude_id=None, before: Optional[str] = None):
     """Return (original_lead, matched_field_labels) if an earlier lead in the SAME campaign belongs to the same person."""
     ors = [{f"dup_keys.{k}": keys[k]} for k in DUP_STRONG if keys.get(k)]
+    if keys.get("name") and keys.get("dob"):
+        ors.append({"dup_keys.name": keys["name"], "dup_keys.dob": keys["dob"]})
     if not ors:
         return None, []
-    cands = await db.leads.find({"campaign_id": campaign_id, "$or": ors}).sort("created_at", 1).to_list(200)
-    best, best_fields = None, []
+    q: dict = {"campaign_id": campaign_id, "$or": ors, "status": {"$ne": "duplicate"}}
+    if exclude_id is not None:
+        q["_id"] = {"$ne": exclude_id}
+    if before:
+        q["created_at"] = {"$lt": before}
+    cands = await db.leads.find(q).sort("created_at", 1).to_list(200)
     for c in cands:
-        ck = c.get("dup_keys") or lead_dup_keys(c.get("data") or {})
-        matched = [(k, label) for k, label in DUP_FIELDS if keys.get(k) and ck.get(k) == keys[k]]
-        strong = [k for k, _ in matched if k in DUP_STRONG]
-        if strong and len(matched) >= 2 and len(matched) > len(best_fields):
-            best, best_fields = c, matched
-    if best and best.get("status") == "duplicate" and best.get("duplicate_of_id"):
-        orig = await db.leads.find_one({"_id": ObjectId(best["duplicate_of_id"])}) if ObjectId.is_valid(best["duplicate_of_id"]) else None
-        best = orig or best
-    return best, [label for _, label in best_fields]
+        matched = _dup_match(keys, c.get("dup_keys") or lead_dup_keys(c.get("data") or {}))
+        if matched:
+            return c, [label for _, label in matched]
+    return None, []
+
+
+def _dup_fields(original: dict, matched: list) -> dict:
+    return {"status": "duplicate", "account_status": "rejected", "duplicate_of_id": str(original["_id"]), "duplicate_of": original["lead_id"],
+            "duplicate_fields": matched, "duplicate_reason": "Duplicate Match: " + " + ".join(matched),
+            "reject_reason": f"Duplicate of {original['lead_id']} (same person already submitted in this campaign)",
+            "duplicate_original_partner": original.get("partner_name") or "", "duplicate_original_at": original.get("created_at")}
 
 
 @api.get("/join/{slug}")
@@ -1103,9 +1122,7 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
            "reject_reason": "", "ip": request.headers.get("x-forwarded-for", ""), "created_at": now_iso(), "updated_at": now_iso(),
            "dup_keys": keys, "submit_key": submit_key}
     if original is not None:
-        doc.update({"status": "duplicate", "account_status": "rejected", "duplicate_of_id": str(original["_id"]), "duplicate_of": original["lead_id"],
-                    "duplicate_fields": matched, "duplicate_reason": "Duplicate Match: " + " + ".join(matched), "reject_reason": f"Duplicate of {original['lead_id']} (same person already submitted in this campaign)",
-                    "duplicate_original_partner": original.get("partner_name") or "", "duplicate_original_at": original.get("created_at")})
+        doc.update(_dup_fields(original, matched))
     try:
         res = await db.leads.insert_one(doc)
     except DuplicateKeyError:
@@ -1131,6 +1148,29 @@ async def my_leads(user: dict = Depends(get_current_user)):
         o["details"] = [{"key": k, "label": lm.get(k, k.replace("_", " ").title()), "value": v} for k, v in (l.get("data") or {}).items() if v]
         out.append(o)
     return out
+
+
+async def rescan_duplicates(include_approved: bool = False):
+    """Re-check every campaign's existing leads (oldest first) and mark later same-person submissions as duplicate."""
+    marked, checked = 0, 0
+    async for l in db.leads.find({"status": {"$ne": "duplicate"}}).sort("created_at", 1):
+        if not include_approved and l.get("status") == "approved":
+            continue
+        keys = l.get("dup_keys") or lead_dup_keys(l.get("data") or {})
+        checked += 1
+        original, matched = await find_duplicate_lead(l["campaign_id"], keys, exclude_id=l["_id"], before=l["created_at"])
+        if original is not None:
+            await db.leads.update_one({"_id": l["_id"]}, {"$set": {**_dup_fields(original, matched), "dup_keys": keys, "updated_at": now_iso(),
+                                                                  "duplicate_marked_by": "rescan", "previous_status": l.get("status"), "previous_account_status": l.get("account_status")}})
+            marked += 1
+    return {"checked": checked, "marked": marked}
+
+
+@api.post("/admin/leads/rescan-duplicates")
+async def admin_rescan_duplicates(request: Request, include_approved: bool = False, admin: dict = Depends(require_admin)):
+    result = await rescan_duplicates(include_approved)
+    await log_activity(admin, "leads_duplicate_rescan", request, entity_type="leads", status="done", amount=result["marked"], detail=f"checked {result['checked']}, include_approved={include_approved}")
+    return {"message": f"Re-scan complete: {result['marked']} lead(s) marked duplicate out of {result['checked']} checked.", **result}
 
 
 @api.get("/admin/leads/summary")
