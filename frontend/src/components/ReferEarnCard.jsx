@@ -31,7 +31,7 @@ export function ReferEarnCard({ code }) {
   const copyLinkOnly = () => { navigator.clipboard.writeText(link); toast.success("Link copied"); };
 
   const ded = stats?.dedicated;
-  const totalPer = (Number(bonus) || 0) + (ded ? Number(ded.payout) || 0 : 0);
+  const totalPer = ded ? Number(ded.payout) || 0 : Number(bonus) || 0;
 
   return (
     <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6" data-testid="refer-earn-card">
@@ -41,7 +41,7 @@ export function ReferEarnCard({ code }) {
             <div className="rounded-lg bg-amber-400 p-2 text-slate-950"><Crown className="h-4 w-4" /></div>
             <div>
               <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Dedicated Referral Partner · Active</div>
-              <div className="text-sm">You earn <span className="font-mono text-lg font-bold text-amber-300" data-testid="refer-dedicated-payout">₹{ded.payout}</span> extra on every eligible referral{bonus > 0 && <span className="text-slate-300"> — in addition to the ₹{bonus} standard bonus (total ₹{totalPer} per referral)</span>}.</div>
+              <div className="text-sm">You earn <span className="font-mono text-lg font-bold text-amber-300" data-testid="refer-dedicated-payout">₹{ded.payout}</span> on every eligible referral{bonus > 0 && <span className="text-slate-300"> — your special rate (replaces the standard ₹{bonus} bonus)</span>}.</div>
             </div>
           </div>
           <div className="flex items-center gap-4 rounded-lg bg-white/10 px-3 py-1.5 text-xs">
@@ -55,7 +55,7 @@ export function ReferEarnCard({ code }) {
           <div className="rounded-xl bg-amber-400 p-2.5 text-slate-950"><Gift className="h-5 w-5" /></div>
           <div>
             <h2 className="font-display text-lg font-bold text-slate-900">
-              {totalPer > 0 ? <>Refer a friend, earn <span className="text-red-600">₹{totalPer}</span>{ded && bonus > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">(₹{bonus} + ₹{ded.payout} dedicated)</span>}</> : "Invite friends to Radhika Traders"}
+              {totalPer > 0 ? <>Refer a friend, earn <span className="text-red-600">₹{totalPer}</span>{ded && <span className="ml-1 text-xs font-semibold text-slate-500">(dedicated rate)</span>}</> : "Invite friends to Radhika Traders"}
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
               {totalPer > 0 ? `Share your invite link. When a friend signs up and verifies their email, ₹${totalPer} is added to your wallet.` : "Share your invite link and grow the Radhika Traders partner network."}

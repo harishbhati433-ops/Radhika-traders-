@@ -545,6 +545,9 @@ async def pay_referral_bonus(new_user: dict):
                                            "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     if amount <= 0:
         return
+    ded = await db.dedicated_referrals.find_one({"user_id": str(referrer["_id"]), "enabled": True}, {"payout": 1})
+    if ded and float(ded.get("payout", 0)) > 0:
+        return  # dedicated referral payout replaces the standard referral bonus — never pay both
     await db.transactions.insert_one({
         "user_id": str(referrer["_id"]), "amount": amount, "type": "credit",
         "description": f"Referral bonus - {new_user.get('name', 'new partner')} joined", "ref_id": f"REF-{uuid.uuid4().hex[:8].upper()}",
