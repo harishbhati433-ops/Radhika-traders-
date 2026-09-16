@@ -1581,8 +1581,7 @@ async def admin_reverse_double_payouts(request: Request, admin: dict = Depends(r
             "reversed": len(done), "partial": len(partial), "skipped": len(skipped)}
 
 
-@api.get("/admin/wallets")
-async def admin_wallets(show: str = "holding", admin: dict = Depends(require_perm("payments", "view"))):
+async def wallet_rows(show: str = "holding") -> dict:
     tx = await db.transactions.aggregate([{"$group": {"_id": {"u": "$user_id", "t": "$type"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
     wd = await db.withdrawals.aggregate([{"$group": {"_id": {"u": "$user_id", "s": "$status"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
     agg: dict = {}
@@ -1621,6 +1620,11 @@ async def admin_wallets(show: str = "holding", admin: dict = Depends(require_per
     return {"items": rows, "summary": {"customers": len(rows), "total_balance": round(sum(r["balance"] for r in rows), 2),
                                        "total_pending": round(sum(r["pending_withdrawal"] for r in rows), 2),
                                        "total_liability": round(sum(r["balance"] + r["pending_withdrawal"] for r in rows), 2)}}
+
+
+@api.get("/admin/wallets")
+async def admin_wallets(show: str = "holding", admin: dict = Depends(require_perm("payments", "view"))):
+    return await wallet_rows(show)
 
 
 @api.get("/wallet/transactions")
@@ -2309,20 +2313,23 @@ async def admin_dashboard(admin: dict = Depends(require_admin)):
     total_customers = await db.users.count_documents({"role": "customer", "email_verified": True})
     all_txns = await db.transactions.find({}).to_list(20000)
     total_earnings = sum(t["amount"] for t in all_txns if t["type"] == "credit")
-    all_wds = await db.withdrawals.find({}).to_list(20000)
+    cust_ids = {str(i) for i in await db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}})}
+    all_wds = [w for w in await db.withdrawals.find({}).to_list(20000) if w.get("user_id") in cust_ids]
     total_paid = sum(w["amount"] for w in all_wds if w["status"] == "paid")
-    total_pending_amt = sum(w["amount"] for w in all_wds if w["status"] in ("pending", "approved"))
-    total_wallet = total_earnings - total_paid - total_pending_amt - \
-        sum(t["amount"] for t in all_txns if t["type"] == "debit" and not t.get("ref_id", "").startswith("WD"))
+    money = (await wallet_rows("holding"))["summary"]
     recent = sorted(campaigns, key=lambda c: c.get("updated_at", ""), reverse=True)[:5]
     return {
         "total_campaigns": total_campaigns, "live": live, "paused": paused, "closed": closed,
         "enabled_offers": enabled, "disabled_offers": total_campaigns - enabled,
         "total_customers": total_customers,
-        "total_wallet_balance": round(total_earnings - total_paid - total_pending_amt, 2),
+        "total_wallet_balance": money["total_balance"],
+        "total_pending_withdrawal_amount": money["total_pending"],
+        "total_paid_amount": round(total_paid, 2),
+        "total_payable": money["total_liability"],
+        "customers_holding_money": money["customers"],
         "total_earnings": round(total_earnings, 2),
         "withdrawals_total": len(all_wds),
-        "withdrawals_pending": sum(1 for w in all_wds if w["status"] == "pending"),
+        "withdrawals_pending": sum(1 for w in all_wds if w["status"] in ("pending", "approved")),
         "withdrawals_paid": sum(1 for w in all_wds if w["status"] == "paid"),
         "recent_campaigns": [campaign_out(c) for c in recent],
     }
