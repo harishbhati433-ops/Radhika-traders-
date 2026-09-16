@@ -4,7 +4,9 @@ import { adminNav } from "./nav";
 import api from "../../lib/api";
 import { CopyValue } from "../../components/CopyValue";
 import { CustomerStatementDialog } from "../../components/CustomerStatementDialog";
-import { Search, Wallet, Clock, IndianRupee, Download, Loader2, Phone, FileText } from "lucide-react";
+import { DoublePayoutDialog } from "../../components/DoublePayoutDialog";
+import { useCan } from "../../lib/perm";
+import { Search, Wallet, Clock, IndianRupee, Download, Loader2, Phone, FileText, AlertTriangle } from "lucide-react";
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -15,6 +17,9 @@ export default function AdminWallets() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("total");
   const [stmt, setStmt] = useState(null);
+  const [dp, setDp] = useState(false);
+  const can = useCan("payments");
+  const reload = () => api.get("/admin/wallets", { params: { show } }).then(({ data }) => setData(data));
 
   useEffect(() => { setData(null); api.get("/admin/wallets", { params: { show } }).then(({ data }) => setData(data)); }, [show]);
 
@@ -52,6 +57,7 @@ export default function AdminWallets() {
         <select value={show} onChange={(e) => setShow(e.target.value)} data-testid="wal-show" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"><option value="holding">Only customers with money due</option><option value="all">All customers with any transaction</option></select>
         <select value={sort} onChange={(e) => setSort(e.target.value)} data-testid="wal-sort" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"><option value="total">Sort: Total due (high → low)</option><option value="balance">Sort: Wallet balance</option><option value="pending">Sort: Pending withdrawal</option><option value="name">Sort: Name</option></select>
         <button onClick={exportCsv} disabled={!rows.length} data-testid="wal-export" className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Export CSV</button>
+        {can.isAdmin && <button onClick={() => setDp(true)} data-testid="wal-scan-double" className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100"><AlertTriangle className="h-3.5 w-3.5" /> Scan extra / double payouts</button>}
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm" data-testid="wal-table">
@@ -79,6 +85,7 @@ export default function AdminWallets() {
         </table>
       </div>
       <CustomerStatementDialog userId={stmt} onClose={() => setStmt(null)} />
+      <DoublePayoutDialog open={dp} onClose={() => setDp(false)} onDone={reload} />
     </DashboardLayout>
   );
 }

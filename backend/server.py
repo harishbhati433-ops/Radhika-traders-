@@ -1520,6 +1520,67 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     return await compute_wallet(user["id"])
 
 
+async def _scan_double_payouts():
+    """Find joins where the referrer got BOTH the standard referral bonus (REF-) and the dedicated payout (DREF-)."""
+    refs = await db.transactions.find({"type": "credit", "ref_id": {"$regex": "^REF-"}, "description": {"$regex": "^Referral bonus - "}}).to_list(100000)
+    drefs = await db.transactions.find({"type": "credit", "ref_id": {"$regex": "^DREF-"}}).to_list(100000)
+    reversed_ids = {t.get("reverses") for t in await db.transactions.find({"reverses": {"$exists": True}}, {"reverses": 1}).to_list(100000)}
+    dmap: dict = {}
+    for d in drefs:
+        joiner = d.get("description", "").replace("Dedicated referral payout - ", "").replace(" joined", "").strip().lower()
+        dmap.setdefault((d["user_id"], joiner), []).append(d)
+    rows = []
+    for r in refs:
+        joiner = r.get("description", "").replace("Referral bonus - ", "").replace(" joined", "").strip().lower()
+        matches = [d for d in dmap.get((r["user_id"], joiner), []) if abs((datetime.fromisoformat(d["created_at"]) - datetime.fromisoformat(r["created_at"])).total_seconds()) < 3600]
+        if not matches:
+            continue
+        rows.append({"user_id": r["user_id"], "joiner": joiner.title(), "ref_id": r["ref_id"], "ref_amount": float(r["amount"]), "dref_id": matches[0]["ref_id"],
+                     "dref_amount": float(matches[0]["amount"]), "paid_at": r["created_at"], "already_reversed": r["ref_id"] in reversed_ids})
+    users = {str(u["_id"]): u for u in await db.users.find({"_id": {"$in": [ObjectId(x["user_id"]) for x in rows if ObjectId.is_valid(x["user_id"])]}}, {"name": 1, "mobile": 1, "referral_code": 1}).to_list(10000)}
+    wallets = {}
+    for x in rows:
+        u = users.get(x["user_id"], {})
+        if x["user_id"] not in wallets:
+            wallets[x["user_id"]] = await compute_wallet(x["user_id"])
+        w = wallets[x["user_id"]]
+        x.update({"name": u.get("name", ""), "mobile": u.get("mobile", ""), "customer_id": u.get("referral_code", ""), "balance": w["balance"], "pending_withdrawal": w["pending_withdrawal"]})
+    rows.sort(key=lambda x: x["paid_at"], reverse=True)
+    return rows
+
+
+@api.get("/admin/wallets/double-payouts")
+async def admin_double_payouts(admin: dict = Depends(require_admin)):
+    rows = await _scan_double_payouts()
+    open_rows = [r for r in rows if not r["already_reversed"]]
+    return {"items": rows, "open_count": len(open_rows), "open_total": round(sum(r["ref_amount"] for r in open_rows), 2)}
+
+
+@api.post("/admin/wallets/double-payouts/reverse")
+async def admin_reverse_double_payouts(request: Request, admin: dict = Depends(require_admin)):
+    rows = [r for r in await _scan_double_payouts() if not r["already_reversed"]]
+    done, partial, skipped = [], [], []
+    for r in rows:
+        w = await compute_wallet(r["user_id"])
+        avail = max(w["balance"], 0)  # pending withdrawals are already excluded from balance — never touched
+        amt = round(min(r["ref_amount"], avail), 2)
+        if amt <= 0:
+            skipped.append(r["ref_id"])
+            continue
+        ref_id = f"RVS-{uuid.uuid4().hex[:8].upper()}"
+        await db.transactions.insert_one({"user_id": r["user_id"], "amount": amt, "type": "debit", "status": "completed", "source": "admin_adjust", "mode": "deduct",
+                                          "description": f"Wallet adjustment (deducted) · Reversal of double referral payout {r['ref_id']} ({r['joiner']} joined — dedicated payout {r['dref_id']} already paid)",
+                                          "ref_id": ref_id, "reverses": r["ref_id"], "campaign_id": None, "created_by": admin.get("username") or admin["email"], "created_at": now_iso()})
+        after = await compute_wallet(r["user_id"])
+        await db.wallet_adjustments.insert_one({"user_id": r["user_id"], "customer_name": r["name"], "mode": "deduct", "amount": amt, "reason": f"Double referral payout reversal ({r['ref_id']})",
+                                                "ref_id": ref_id, "balance_before": w["balance"], "balance_after": after["balance"], "admin_id": admin["id"], "admin_email": admin["email"], "created_at": now_iso()})
+        await log_activity(admin, "double_payout_reversed", request, entity_type="wallet", entity_id=ref_id, entity_label=r["name"], client_id=r["user_id"], client_name=r["name"],
+                           status="deduct", amount=amt, detail=f"{r['ref_id']} for {r['joiner']} · ₹{w['balance']:g} → ₹{after['balance']:g}")
+        (done if amt >= r["ref_amount"] - 0.001 else partial).append(ref_id)
+    return {"message": f"Reversed {len(done)} extra payout(s)" + (f", {len(partial)} partially (low balance)" if partial else "") + (f", {len(skipped)} skipped (no available balance — pending withdrawal untouched)" if skipped else "") + ".",
+            "reversed": len(done), "partial": len(partial), "skipped": len(skipped)}
+
+
 @api.get("/admin/wallets")
 async def admin_wallets(show: str = "holding", admin: dict = Depends(require_perm("payments", "view"))):
     tx = await db.transactions.aggregate([{"$group": {"_id": {"u": "$user_id", "t": "$type"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
