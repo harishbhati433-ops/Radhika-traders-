@@ -362,3 +362,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Admin pagination & dashboard aggregation
 - `/admin/dashboard` now uses count_documents + aggregations (no full transactions/withdrawals scans). `/admin/leads`, `/admin/customers` (+ server-side `search`), `/admin/withdrawals` accept `page` & `limit` (10–200, default 50) and return `{items,total,page,limit,pages}`; without `page` they keep the legacy array response.
 - Frontend: shared `Pager` component (testids leads-pager / customers-pager / withdrawals-pager with -info/-prev/-next/-page) wired into AdminLeads, AdminCustomers (server search, debounced), AdminWithdrawals. Export count uses total.
+
+## 2026-06 — Home page testimonials slider (customer website only)
+- `components/Testimonials.jsx` (12 static Hinglish/English reviews, initials avatars, 4–5 stars, Verified chip) inserted in Home.jsx between Team and CTA. Auto-slides every 3s, pauses on hover/touch, prev/next arrows + dots, responsive 1/2/3 cards. NOT in admin panel, not on other pages. Verified: desktop 4 pages auto-slid after 3.4s, mobile 12 pages, absent on /campaigns.

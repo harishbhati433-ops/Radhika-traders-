@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { CampaignCard } from "../components/CampaignCard";
+import { Testimonials } from "../components/Testimonials";
 import api from "../lib/api";
 import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee, Megaphone, MousePointerClick, Target, Link2, ClipboardList, BarChart3, Handshake } from "lucide-react";
 
@@ -200,6 +201,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <Testimonials />
 
       {/* CTA */}
       <section className="mx-auto max-w-7xl px-6 py-16">
