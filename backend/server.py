@@ -2805,6 +2805,12 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def _fresh_contact(request: Request, call_next):
+    await contact_settings.refresh_if_stale(db)
+    return await call_next(request)
+
+
 @app.on_event("startup")
 async def startup():
     await contact_settings.load_contact(db)

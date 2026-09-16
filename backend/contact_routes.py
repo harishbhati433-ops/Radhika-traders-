@@ -1,6 +1,6 @@
 """Admin-only Contact & Support settings + public read endpoint."""
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 import contact_settings as cs
@@ -18,11 +18,16 @@ def build_router(db, require_admin, log_activity) -> APIRouter:
     r = APIRouter()
 
     @r.get("/contact/public")
-    async def contact_public():
+    async def contact_public(response: Response):
+        await cs.load_contact(db)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
         return {k: cs.CONTACT[k] for k in cs.PUBLIC_FIELDS}
 
     @r.get("/admin/contact")
-    async def admin_contact(admin: dict = Depends(require_admin)):
+    async def admin_contact(response: Response, admin: dict = Depends(require_admin)):
+        await cs.load_contact(db)
+        response.headers["Cache-Control"] = "no-store"
         doc = await db.settings.find_one({"key": "contact"}, {"_id": 0, "updated_at": 1, "updated_by": 1}) or {}
         return {**cs.CONTACT, "updated_at": doc.get("updated_at", ""), "updated_by": doc.get("updated_by", ""),
                 "fields": [{"key": f, "label": l, "kind": k} for f, l, k in cs.FIELDS]}
@@ -33,6 +38,7 @@ def build_router(db, require_admin, log_activity) -> APIRouter:
             new = {f: cs.validate(f, k, getattr(body, f)) for f, _, k in cs.FIELDS}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        await cs.load_contact(db)
         changes = [(f, l, cs.CONTACT[f], new[f]) for f, l, _ in cs.FIELDS if new[f] != cs.CONTACT[f]]
         if not changes:
             raise HTTPException(status_code=400, detail="No changes to save — all details are the same as before")

@@ -1,5 +1,6 @@
 """Owner / Customer-care contact details — DB-backed, cached in memory for sync template builders."""
 import re
+import time
 
 FIELDS = [
     ("owner_mobile", "Owner Mobile Number", "mobile"),
@@ -34,11 +35,21 @@ def validate(field: str, kind: str, v: str) -> str:
     return v
 
 
+_loaded_at = 0.0
+
+
 async def load_contact(db) -> dict:
+    global _loaded_at
     doc = await db.settings.find_one({"key": "contact"}) or {}
     for k in DEFAULTS:
         CONTACT[k] = doc.get(k) or DEFAULTS[k]
+    _loaded_at = time.monotonic()
     return dict(CONTACT)
+
+
+async def refresh_if_stale(db, ttl: float = 2.0) -> None:
+    if time.monotonic() - _loaded_at > ttl:
+        await load_contact(db)
 
 
 def wa_number() -> str:
