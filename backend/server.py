@@ -1091,7 +1091,7 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
     ref = (body.ref or "").upper()
     partner = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     keys = lead_dup_keys(data)
-    submit_key = f"{c['_id']}:{hashlib.sha1(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:16]}:{now_iso()[:16]}"
+    submit_key = f"{c['_id']}:{hashlib.sha1(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:16]}:{int(datetime.now(timezone.utc).timestamp() // 5)}"
     existing = await db.leads.find_one({"submit_key": submit_key})
     if existing:
         return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
@@ -1103,8 +1103,8 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
            "reject_reason": "", "ip": request.headers.get("x-forwarded-for", ""), "created_at": now_iso(), "updated_at": now_iso(),
            "dup_keys": keys, "submit_key": submit_key}
     if original is not None:
-        doc.update({"status": "duplicate", "duplicate_of_id": str(original["_id"]), "duplicate_of": original["lead_id"],
-                    "duplicate_fields": matched, "duplicate_reason": "Duplicate Match: " + " + ".join(matched),
+        doc.update({"status": "duplicate", "account_status": "rejected", "duplicate_of_id": str(original["_id"]), "duplicate_of": original["lead_id"],
+                    "duplicate_fields": matched, "duplicate_reason": "Duplicate Match: " + " + ".join(matched), "reject_reason": f"Duplicate of {original['lead_id']} (same person already submitted in this campaign)",
                     "duplicate_original_partner": original.get("partner_name") or "", "duplicate_original_at": original.get("created_at")})
     try:
         res = await db.leads.insert_one(doc)
@@ -1237,11 +1237,11 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
     if not l:
         raise HTTPException(status_code=404, detail="Lead not found")
     upd = {"updated_at": now_iso(), "reviewed_by": admin.get("username") or admin["email"]}
+    if l.get("status") == "duplicate" and (body.status or body.account_status):
+        raise HTTPException(status_code=400, detail=f"This lead is a system-detected DUPLICATE of {l.get('duplicate_of', 'an earlier lead')}. Its status is locked and cannot be changed.")
     if body.status:
         if body.status not in ("pending", "approved", "rejected"):
             raise HTTPException(status_code=400, detail="Invalid status")
-        if l.get("status") == "duplicate":
-            raise HTTPException(status_code=400, detail=f"This lead is a system-detected DUPLICATE of {l.get('duplicate_of', 'an earlier lead')} and cannot be approved or rejected.")
         upd["status"] = body.status
     if body.account_status:
         if body.account_status not in ("pending", "account_opened", "trade_done", "rejected"):

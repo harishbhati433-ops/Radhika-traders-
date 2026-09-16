@@ -140,16 +140,16 @@ export default function AdminLeads() {
                   <div className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> System-detected duplicate — same person already submitted in this campaign</div>
                   <div className="mt-1"><b>{view.duplicate_reason}</b></div>
                   <div className="mt-1">Original lead: <span className="font-mono font-bold">{view.duplicate_of}</span>{view.duplicate_original_partner && <> · referred by {view.duplicate_original_partner}</>}{view.duplicate_original_at && <> · {(view.duplicate_original_at || "").slice(0, 10)}</>}</div>
-                  <div className="mt-1 text-violet-700">Duplicate status is controlled by the system — Approve / Reject are not available. Account Open / Trade Done can still be tracked.</div>
+                  <div className="mt-1 text-violet-700">Duplicate leads are locked by the system — status cannot be changed. Account status is auto-set to Rejected.</div>
                 </div>
               )}
-              {can.edit && <div className="mt-3 flex flex-wrap gap-2">
-                {view.status !== "duplicate" && <>
+              {can.edit && view.status !== "duplicate" && <div className="mt-3 flex flex-wrap gap-2">
+                <>
                   <button onClick={() => update(view, { status: "pending" })} data-testid="lead-set-pending" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Pending</button>
                   <button onClick={() => update(view, { status: "approved" })} data-testid="lead-approve" className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Approve Lead</button>
                   <button onClick={() => update(view, { status: "rejected" })} data-testid="lead-reject" className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject Lead</button>
                   <span className="mx-1 border-l border-slate-200" />
-                </>}
+                </>
                 <button onClick={() => update(view, { account_status: "account_opened" })} data-testid="lead-account-opened" className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white">Account Open</button>
                 <button onClick={() => update(view, { account_status: "trade_done" })} data-testid="lead-trade-done" className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">Trade Done</button>
                 <button onClick={() => update(view, { account_status: "pending" })} data-testid="lead-account-reset" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Not Started</button>
