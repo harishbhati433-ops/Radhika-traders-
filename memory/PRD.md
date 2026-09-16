@@ -350,3 +350,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Remove single device
 - DELETE /api/security/devices/{fingerprint} (own devices only; 404 otherwise) → removes from `admin_devices`, security log `device_removed`; next login from that device triggers a fresh alert. "Remove" button per row in Security → Admin login devices (confirm). Tested via curl (delete, 404, re-login → alert count +1) + UI click.
+
+## 2026-06 — Signup Bonus amount frozen per customer
+- Bug: changing the setting (e.g. 50→100) changed what EXISTING customers saw/received. Fix: `_promised_bonus(u, s)` uses `users.welcome.signup_bonus` (frozen at OTP-verify time) for lock/grant/backfill and the wallet card; current setting applies only to new signups (and legacy accounts with no frozen value). Locked/credited txns always keep their own amount.
+- Tested: tests/sim_bonus_amount_frozen.py (old pending 50, old locked 50, new 100; approval credits 50 not 100). Setting restored to 20.

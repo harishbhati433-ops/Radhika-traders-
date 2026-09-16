@@ -1479,13 +1479,21 @@ async def _has_signup_bonus(user_id: str) -> bool:
     return bool(await db.transactions.find_one({"user_id": user_id, "$or": [{"signup_bonus_for": user_id}, {"type": "bonus"}, {"ref_id": {"$regex": "^SB-"}}]}))
 
 
+def _promised_bonus(u: dict, s: dict) -> float:
+    """Amount promised to THIS customer at signup time (frozen in users.welcome); falls back to current setting for older accounts."""
+    w = u.get("welcome") or {}
+    if "signup_bonus" in w:
+        return float(w.get("signup_bonus") or 0)
+    return float(s["signup_bonus"] or 0) if s["signup_bonus_enabled"] else 0.0
+
+
 async def lock_signup_bonus(u: dict) -> str:
     """Show the Signup Bonus in the customer's Bonus Wallet (locked, not withdrawable) right after signup. Returns locked|exists|off|duplicate."""
     if not u or u.get("role") != "customer":
         return "off"
     s = await get_settings()
-    amount = float(s["signup_bonus"] or 0)
-    if not s["signup_bonus_enabled"] or amount <= 0:
+    amount = _promised_bonus(u, s)
+    if amount <= 0:
         return "off"
     uid = str(u["_id"])
     if u.get("signup_bonus_paid") or await _has_signup_bonus(uid):
@@ -1507,9 +1515,9 @@ async def grant_signup_bonus(user_id: str, lead: dict) -> None:
     u = await db.users.find_one({"_id": ObjectId(user_id)}) if ObjectId.is_valid(user_id) else None
     if not u or u.get("role") != "customer":
         return
-    amount = float(s["signup_bonus"] or 0)
-    if not s["signup_bonus_enabled"] or amount <= 0:
-        return  # feature OFF → nothing credited, nothing logged as pending
+    amount = _promised_bonus(u, s)
+    if amount <= 0:
+        return  # nothing promised to this customer → nothing credited, nothing logged as pending
     if u.get("signup_bonus_paid") or await _has_signup_bonus(user_id):
         return  # already received (new flow or legacy locked bonus) — never twice
     if await db.signup_bonus_log.find_one({"user_id": user_id, "status": "not_eligible"}):
@@ -1628,8 +1636,10 @@ async def get_wallet(user: dict = Depends(get_current_user)):
         st = "not_eligible"
     else:
         s = await get_settings()
-        st = "pending" if s["signup_bonus_enabled"] and s["signup_bonus"] > 0 else "off"
-    amt = float(sb["amount"]) if sb else (await get_settings())["signup_bonus"]
+        full = await db.users.find_one({"_id": ObjectId(user["id"])}, {"welcome": 1}) or {}
+        promised = _promised_bonus(full, s)
+        st = "pending" if promised > 0 else "off"
+    amt = float(sb["amount"]) if sb else promised
     w["signup_bonus"] = {"status": st, "amount": round(float(amt or 0), 2), "ref_id": (sb or {}).get("ref_id", ""), "credited_at": (sb or {}).get("unlocked_at", "")}
     return w
 
