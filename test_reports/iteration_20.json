@@ -1,0 +1,28 @@
+{
+  "summary": "Full regression (backend pytest + frontend Playwright) of all features shipped today: Contact & Support settings, Signup Bonus wallet card + freeze + admin backfill, secure password reset with OTP + generic responses + wrong-OTP lockout, session revocation via /security/logout-all, admin devices list + remove, employee 403 on admin/contact. All 13 backend tests PASS and all frontend spot checks PASS. Production data preserved: contact values reverted (all mobiles 6376541191, radhikatradersofficial@gmail.com, bhatiharish276@gmail.com); signup_bonus setting restored to 20 enabled=true; admin password NEVER changed; pwd_reset_otps and otp_locks cleaned for admin email after wrong-OTP lock test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_20_regression.py",
+    "/app/test_reports/pytest/iter20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "wallet-bonus-locked testid element remained present in DOM on /wallet even when signup bonus status is 'Credited' (observed for testcust). Minor: this testid should only render for the locked variant so tests can differentiate. Not a functional bug — the visible label correctly shows 'Signup Bonus · Credited'.",
+    "GET /api/contact/public exposes 4 fields (owner_email correctly excluded), matches spec. Cache-Control: no-store confirmed.",
+    "PUT /api/admin/contact: same-values submission returns 400 (rejects no-change) as required; invalid mobile/email rejected with 400/422; history & activity-log entries written.",
+    "POST /api/admin/signup-bonus/backfill is idempotent on 2nd run (locked=0, credited=0).",
+    "Signup-bonus amount frozen per user: after admin changed setting 20 -> 100, testcust wallet.signup_bonus.amount unchanged.",
+    "POST /api/auth/forgot-password: nonexistent email returns generic 200; wrong-portal for admin email returns generic 200 without sending; legitimate admin request returns {expires_in:300, resend_in:60} and immediate 2nd call returns 429 cooldown; 5 wrong OTPs return 400,400,400,400,429 (lock).",
+    "Session revocation: /security/logout-all invalidates both old tokens (A and B) and returns a fresh working token — token_version bump verified via /auth/me 401 on old tokens.",
+    "Admin devices: GET /security/status returns devices list with fingerprints; DELETE /security/devices/{fp} returns 200 then 404 on repeat.",
+    "Employee (rahul.k) GET /api/admin/contact -> 403 and UI /admin/contact redirects away."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_20_regression.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% of spot-checks"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 (UNCHANGED); Customer testcust@example.com / Test@1234; Employee rahul.k / Emp@1234",
+  "seed_data_creation": "None. All changes reverted. DB cleanup performed: db.pwd_reset_otps.delete_many({email: admin}) and db.otp_locks.delete_many({email: admin}).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Full regression suite at /app/backend/tests/test_iteration_20_regression.py — reuse for future iterations. Includes fixtures using MONGO_URL/DB_NAME env for OTP/lock cleanup. Admin password remains Radhika@2023. Contact defaults are all 6376541191 / radhikatradersofficial@gmail.com / bhatiharish276@gmail.com. signup_bonus=20 enabled=true. Login response uses {'token','user'} keys (NOT access_token)."
+}
