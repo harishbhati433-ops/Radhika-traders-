@@ -59,12 +59,12 @@ export default function Signup() {
       subtitle={step === 1 ? (referredBy ? `Invited by partner ${referredBy} · Zero investment, free to join` : "Start earning with Radhika Traders — zero investment") : `Enter the 6-digit code sent to ${form.email}`}>
       {step === 1 ? (
         <form onSubmit={requestOtp} className="space-y-3.5">
-          {referredBy && signupBonus > 0 && (
+          {signupBonus > 0 && (
             <div className="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3" data-testid="signup-bonus-banner">
               <div className="rounded-lg bg-violet-500 p-2 text-white"><Gift className="h-4 w-4" /></div>
               <div className="text-sm">
                 <div className="font-bold text-violet-900">You get ₹{signupBonus} signup bonus! 🎁</div>
-                <div className="text-xs text-violet-700">Added to your Bonus Wallet on signup · moves to your main wallet (withdrawable) after your first approved lead.</div>
+                <div className="text-xs text-violet-700">Credited to your main wallet (withdrawable) as soon as your first lead is approved.</div>
               </div>
             </div>
           )}
