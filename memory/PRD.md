@@ -292,3 +292,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Backend `aadhaar_error()` (12 digits, cannot start 0/1, not all-same, Verhoeff checksum) used in _validate_kyc (customer + admin KYC edits) and lead form dynamic `aadhaar` field.
 - IFSC now verified against Razorpay IFSC list in `_apply_kyc` and lead-form `ifsc` field: invalid_format/not_found → 400 rejected; lookup_unavailable (network) → allowed.
 - Frontend validators.js aadhaarError has Verhoeff; IfscBankInfo shows red "Invalid IFSC" for not_found.
+
+## 2026-06 — Campaign-wise duplicate leads + Account workflow
+- create_lead normalizes name/mobile(+91/0 stripped → 10 digits)/email/PAN; stores `dup_keys` {pan,mobile,email,dob,name}. `find_duplicate_lead(campaign_id, keys)`: candidates in SAME campaign matching any strong key (pan/mobile/email); duplicate if ≥1 strong + ≥2 total fields match. Lead saved with status="duplicate", duplicate_of (lead_id), duplicate_of_id, duplicate_fields, duplicate_reason "Duplicate Match: PAN + Mobile + Email". Same person in another campaign = normal lead. No global uniqueness.
+- Submission never blocked: response still returns redirect_url (+ `duplicate` flag). Double-click/simultaneous: unique partial index on `submit_key` (campaign:hash(keys):minute) → returns existing lead.
+- Admin PATCH: status change on duplicate lead → 400 (system-controlled); account_status now pending(Not Started)|account_opened|trade_done|rejected; "Account Open" no longer auto-approves lead. Summary adds duplicate & trade_done; export adds Duplicate Of/Reason. Startup backfills dup_keys for old leads + indexes.
+- UI: AdminLeads (Duplicate summary card, filters, violet badge, duplicate info box with original lead + matched fields, Approve/Reject hidden for duplicates, buttons Account Open / Trade Done / Not Started / Account Rejected); MyLeads (Duplicate + Trade Done counts/filters, duplicate notice with original lead).

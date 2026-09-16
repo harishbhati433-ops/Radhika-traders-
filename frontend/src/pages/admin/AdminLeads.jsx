@@ -9,11 +9,13 @@ import { CopyValue } from "../../components/CopyValue";
 import { LeadFundDialog } from "../../components/LeadFundDialog";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
-import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2, Wallet, CalendarDays } from "lucide-react";
+import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2, Wallet, CalendarDays, Copy, TrendingUp, AlertTriangle } from "lucide-react";
 import { useCan } from "../../lib/perm";
 
-const S_TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", approved: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", account_opened: "bg-sky-50 text-sky-700 border-sky-200" };
-const Badge = ({ s, testId }) => <span data-testid={testId} className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${S_TONE[s] || "bg-slate-100 text-slate-600"}`}>{(s || "").replace("_", " ")}</span>;
+const S_TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", approved: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", duplicate: "bg-violet-50 text-violet-700 border-violet-200", account_opened: "bg-sky-50 text-sky-700 border-sky-200", trade_done: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+const S_LABEL = { pending: "Pending", approved: "Approved", rejected: "Rejected", duplicate: "Duplicate", account_opened: "Account Open", trade_done: "Trade Done" };
+const A_LABEL = { pending: "Not Started", account_opened: "Account Open", trade_done: "Trade Done", rejected: "Rejected" };
+const Badge = ({ s, testId, account }) => <span data-testid={testId} className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${S_TONE[s] || "bg-slate-100 text-slate-600"}`}>{account ? (A_LABEL[s] || s) : (S_LABEL[s] || (s || "").replace("_", " "))}</span>;
 const LABELS = { name: "Name", mobile: "Mobile", email: "Email", pan: "PAN", dob: "DOB", aadhaar: "Aadhaar", bank_account: "Bank A/C", ifsc: "IFSC", upi: "UPI", address: "Address" };
 
 export default function AdminLeads() {
@@ -53,8 +55,8 @@ export default function AdminLeads() {
 
   return (
     <DashboardLayout nav={adminNav} title="Leads / Customer Reports">
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5" data-testid="lead-summary">
-        {[["total", "Total Leads", Users, "text-slate-700 bg-white"], ["approved", "Approved", CheckCircle, "text-emerald-700 bg-emerald-50"], ["pending", "Pending", Clock, "text-amber-700 bg-amber-50"], ["rejected", "Rejected", XCircle, "text-rose-700 bg-rose-50"], ["account_opened", "Account Opened", Building2, "text-sky-700 bg-sky-50"]].map(([k, l, I, cls]) => (
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" data-testid="lead-summary">
+        {[["total", "Total Leads", Users, "text-slate-700 bg-white"], ["approved", "Approved", CheckCircle, "text-emerald-700 bg-emerald-50"], ["pending", "Pending", Clock, "text-amber-700 bg-amber-50"], ["rejected", "Rejected", XCircle, "text-rose-700 bg-rose-50"], ["duplicate", "Duplicate", Copy, "text-violet-700 bg-violet-50"], ["account_opened", "Account Open", Building2, "text-sky-700 bg-sky-50"], ["trade_done", "Trade Done", TrendingUp, "text-indigo-700 bg-indigo-50"]].map(([k, l, I, cls]) => (
           <div key={k} className={`rounded-2xl border border-slate-200 p-4 ${cls}`} data-testid={`lead-summary-${k}`}><I className="h-4 w-4" /><div className="mt-1 font-mono text-2xl font-bold">{summary[k] ?? 0}</div><div className="text-xs font-semibold">{l}</div></div>
         ))}
       </div>
@@ -67,8 +69,8 @@ export default function AdminLeads() {
           {campaigns.filter((c) => !c.archived && c.status !== "live").map((c) => <option key={c.id} value={c.id}>{campaignLabel(c)}</option>)}
           {campaigns.filter((c) => c.archived).map((c) => <option key={c.id} value={c.id}>{campaignLabel(c)}</option>)}
         </select>
-        <select data-testid="lead-filter-status" value={flt.status} onChange={(e) => setFlt({ ...flt, status: e.target.value })} className={sel}><option value="">All lead statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
-        <select data-testid="lead-filter-account" value={flt.account_status} onChange={(e) => setFlt({ ...flt, account_status: e.target.value })} className={sel}><option value="">All account statuses</option><option value="pending">Pending</option><option value="account_opened">Account Opened</option><option value="rejected">Rejected</option></select>
+        <select data-testid="lead-filter-status" value={flt.status} onChange={(e) => setFlt({ ...flt, status: e.target.value })} className={sel}><option value="">All lead statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="duplicate">Duplicate</option></select>
+        <select data-testid="lead-filter-account" value={flt.account_status} onChange={(e) => setFlt({ ...flt, account_status: e.target.value })} className={sel}><option value="">All account statuses</option><option value="pending">Not Started</option><option value="account_opened">Account Open</option><option value="trade_done">Trade Done</option><option value="rejected">Rejected</option></select>
         <Input data-testid="lead-filter-ref" placeholder="Publisher / Ref ID" value={flt.ref} onChange={(e) => setFlt({ ...flt, ref: e.target.value })} />
         <div className="flex gap-1"><Input data-testid="lead-filter-from" type="date" value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value, preset: "custom" })} /><Input data-testid="lead-filter-to" type="date" value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value, preset: "custom" })} /></div>
       </div>
@@ -103,7 +105,7 @@ export default function AdminLeads() {
                 <td className="p-3"><div className="inline-flex items-center gap-0.5 font-semibold text-slate-900">{l.customer_name || "—"}<CopyValue value={l.customer_name} label="Name" testId={`copy-name-${l.id}`} /></div><div className="mt-1 flex flex-wrap items-center gap-1"><PhoneLink value={l.mobile} /><CopyValue value={l.mobile} label="Mobile" testId={`copy-mobile-${l.id}`} /><EmailLink value={l.email} /><CopyValue value={l.email} label="Email" testId={`copy-email-${l.id}`} /></div></td>
                 <td className="p-3"><CampaignChip name={l.campaign_name} testId={`lead-campaign-${l.id}`} /></td>
                 <td className="p-3"><div className="font-medium text-slate-800">{l.partner_name || "Direct"}</div><div className="font-mono text-[10px] text-slate-400">{l.ref_code}</div></td>
-                <td className="p-3"><div className="flex flex-col gap-1"><Badge s={l.status} testId={`lead-status-${l.id}`} /><Badge s={l.account_status} /></div></td>
+                <td className="p-3"><div className="flex flex-col gap-1"><Badge s={l.status} testId={`lead-status-${l.id}`} /><Badge s={l.account_status} account />{l.status === "duplicate" && l.duplicate_of && <span className="text-[10px] font-mono text-violet-600" data-testid={`lead-dup-of-${l.id}`}>of {l.duplicate_of}</span>}</div></td>
                 <td className="p-3 text-xs text-slate-500">{(l.created_at || "").slice(0, 10)}<br /><span className="text-slate-400">upd {(l.updated_at || "").slice(0, 10)}</span></td>
                 <td className="p-3"><button onClick={() => setView(l)} data-testid={`lead-view-${l.id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white"><Eye className="h-3.5 w-3.5" /> View Details</button></td>
               </tr>
@@ -127,14 +129,26 @@ export default function AdminLeads() {
               </div>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
-              <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold uppercase tracking-wider text-red-600">Lead Status</span><Badge s={view.status} /><span className="ml-2 text-[11px] font-bold uppercase tracking-wider text-red-600">Account</span><Badge s={view.account_status} /></div>
+              <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold uppercase tracking-wider text-red-600">Lead Status</span><Badge s={view.status} testId="lead-view-status" /><span className="ml-2 text-[11px] font-bold uppercase tracking-wider text-red-600">Account</span><Badge s={view.account_status} account testId="lead-view-account" /></div>
               {view.reject_reason && <div className="mt-2 text-xs text-rose-600">Reason: {view.reject_reason}</div>}
+              {view.status === "duplicate" && (
+                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900" data-testid="lead-duplicate-box">
+                  <div className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> System-detected duplicate — same person already submitted in this campaign</div>
+                  <div className="mt-1"><b>{view.duplicate_reason}</b></div>
+                  <div className="mt-1">Original lead: <span className="font-mono font-bold">{view.duplicate_of}</span>{view.duplicate_original_partner && <> · referred by {view.duplicate_original_partner}</>}{view.duplicate_original_at && <> · {(view.duplicate_original_at || "").slice(0, 10)}</>}</div>
+                  <div className="mt-1 text-violet-700">Duplicate status is controlled by the system — Approve / Reject are not available. Account Open / Trade Done can still be tracked.</div>
+                </div>
+              )}
               {can.edit && <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => update(view, { status: "pending" })} data-testid="lead-set-pending" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Pending</button>
-                <button onClick={() => update(view, { status: "approved" })} data-testid="lead-approve" className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Approve Lead</button>
-                <button onClick={() => update(view, { status: "rejected" })} data-testid="lead-reject" className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject Lead</button>
-                <span className="mx-1 border-l border-slate-200" />
-                <button onClick={() => update(view, { account_status: "account_opened", status: "approved" })} data-testid="lead-account-opened" className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white">Account Opened</button>
+                {view.status !== "duplicate" && <>
+                  <button onClick={() => update(view, { status: "pending" })} data-testid="lead-set-pending" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Pending</button>
+                  <button onClick={() => update(view, { status: "approved" })} data-testid="lead-approve" className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">Approve Lead</button>
+                  <button onClick={() => update(view, { status: "rejected" })} data-testid="lead-reject" className="rounded-full bg-rose-500 px-3 py-1.5 text-xs font-bold text-white">Reject Lead</button>
+                  <span className="mx-1 border-l border-slate-200" />
+                </>}
+                <button onClick={() => update(view, { account_status: "account_opened" })} data-testid="lead-account-opened" className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-bold text-white">Account Open</button>
+                <button onClick={() => update(view, { account_status: "trade_done" })} data-testid="lead-trade-done" className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">Trade Done</button>
+                <button onClick={() => update(view, { account_status: "pending" })} data-testid="lead-account-reset" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700">Not Started</button>
                 <button onClick={() => update(view, { account_status: "rejected" })} data-testid="lead-account-rejected" className="rounded-full bg-slate-700 px-3 py-1.5 text-xs font-bold text-white">Account Rejected</button>
               </div>}
             </div>

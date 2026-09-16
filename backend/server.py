@@ -4,6 +4,9 @@ import httpx
 import io
 import re
 import uuid
+import json
+import hashlib
+from pymongo.errors import DuplicateKeyError
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -987,7 +990,43 @@ async def go_affiliate(slug: str, request: Request, background: BackgroundTasks,
 
 
 def lead_out(l: dict) -> dict:
-    return {**{k: v for k, v in l.items() if k != "_id"}, "id": str(l["_id"])}
+    return {**{k: v for k, v in l.items() if k not in ("_id", "dup_keys", "submit_key")}, "id": str(l["_id"])}
+
+
+DUP_FIELDS = (("pan", "PAN"), ("mobile", "Mobile"), ("email", "Email"), ("dob", "DOB"), ("name", "Name"))
+DUP_STRONG = {"pan", "mobile", "email"}
+
+
+def lead_dup_keys(data: dict) -> dict:
+    """Normalized identity fields used for campaign-wise duplicate detection."""
+    mob = re.sub(r"\D", "", str(data.get("mobile") or ""))
+    if len(mob) > 10:
+        mob = mob[-10:]
+    dob = re.sub(r"[^0-9]", "", str(data.get("dob") or ""))
+    return {"pan": re.sub(r"\s", "", str(data.get("pan") or "")).upper(),
+            "mobile": mob,
+            "email": re.sub(r"\s", "", str(data.get("email") or "")).lower(),
+            "dob": dob,
+            "name": re.sub(r"\s+", " ", str(data.get("name") or "")).strip().lower()}
+
+
+async def find_duplicate_lead(campaign_id: str, keys: dict):
+    """Return (original_lead, matched_field_labels) if an earlier lead in the SAME campaign belongs to the same person."""
+    ors = [{f"dup_keys.{k}": keys[k]} for k in DUP_STRONG if keys.get(k)]
+    if not ors:
+        return None, []
+    cands = await db.leads.find({"campaign_id": campaign_id, "$or": ors}).sort("created_at", 1).to_list(200)
+    best, best_fields = None, []
+    for c in cands:
+        ck = c.get("dup_keys") or lead_dup_keys(c.get("data") or {})
+        matched = [(k, label) for k, label in DUP_FIELDS if keys.get(k) and ck.get(k) == keys[k]]
+        strong = [k for k, _ in matched if k in DUP_STRONG]
+        if strong and len(matched) >= 2 and len(matched) > len(best_fields):
+            best, best_fields = c, matched
+    if best and best.get("status") == "duplicate" and best.get("duplicate_of_id"):
+        orig = await db.leads.find_one({"_id": ObjectId(best["duplicate_of_id"])}) if ObjectId.is_valid(best["duplicate_of_id"]) else None
+        best = orig or best
+    return best, [label for _, label in best_fields]
 
 
 @api.get("/join/{slug}")
@@ -1014,8 +1053,17 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
     missing = [f["label"] for f in fields if f.get("required") and not data.get(f["key"])]
     if missing:
         raise HTTPException(status_code=400, detail=f"Required: {', '.join(missing)}")
-    if data.get("mobile") and not re.fullmatch(r"\d{10}", data["mobile"]):
-        raise HTTPException(status_code=400, detail="Mobile number must be 10 digits")
+    if data.get("mobile"):
+        m = re.sub(r"\D", "", data["mobile"])
+        if len(m) > 10 and m.startswith(("91", "0")):
+            m = m[-10:]
+        data["mobile"] = m
+        if not re.fullmatch(r"\d{10}", m):
+            raise HTTPException(status_code=400, detail="Mobile number must be 10 digits")
+    if data.get("email"):
+        data["email"] = data["email"].strip().lower()
+    if data.get("name"):
+        data["name"] = re.sub(r"\s+", " ", data["name"]).strip()
     if data.get("pan"):
         data["pan"] = data["pan"].upper()
         if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", data["pan"]):
@@ -1031,17 +1079,32 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
             raise HTTPException(status_code=400, detail=f"IFSC {data['ifsc']} is not a valid bank branch code. Please check and enter the correct IFSC.")
     ref = (body.ref or "").upper()
     partner = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
+    keys = lead_dup_keys(data)
+    submit_key = f"{c['_id']}:{hashlib.sha1(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:16]}:{now_iso()[:16]}"
+    existing = await db.leads.find_one({"submit_key": submit_key})
+    if existing:
+        return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
+    original, matched = await find_duplicate_lead(str(c["_id"]), keys)
     doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
            "campaign_link": _primary_link(c) or "", "ref_code": ref, "partner_id": str(partner["_id"]) if partner else None,
            "partner_name": partner.get("name") if partner else "", "data": data, "customer_name": data.get("name", ""),
            "mobile": data.get("mobile", ""), "email": data.get("email", ""), "status": "pending", "account_status": "pending",
-           "reject_reason": "", "ip": request.headers.get("x-forwarded-for", ""), "created_at": now_iso(), "updated_at": now_iso()}
-    res = await db.leads.insert_one(doc)
+           "reject_reason": "", "ip": request.headers.get("x-forwarded-for", ""), "created_at": now_iso(), "updated_at": now_iso(),
+           "dup_keys": keys, "submit_key": submit_key}
+    if original is not None:
+        doc.update({"status": "duplicate", "duplicate_of_id": str(original["_id"]), "duplicate_of": original["lead_id"],
+                    "duplicate_fields": matched, "duplicate_reason": "Duplicate Match: " + " + ".join(matched),
+                    "duplicate_original_partner": original.get("partner_name") or "", "duplicate_original_at": original.get("created_at")})
+    try:
+        res = await db.leads.insert_one(doc)
+    except DuplicateKeyError:
+        existing = await db.leads.find_one({"submit_key": submit_key})
+        return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
     if partner:
-        await db.notifications.insert_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}",
-                                           "body": f"{data.get('name') or 'A customer'} submitted details via your link.", "link": "/my-leads",
+        await db.notifications.insert_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}" + (" (duplicate)" if original is not None else ""),
+                                           "body": f"{data.get('name') or 'A customer'} submitted details via your link." + (f" Marked duplicate of {original['lead_id']}." if original is not None else ""), "link": "/my-leads",
                                            "type": "lead", "read": False, "created_at": now_iso()})
-    return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}"}
+    return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": original is not None}
 
 
 @api.get("/my-leads")
@@ -1065,7 +1128,7 @@ async def admin_leads_summary(admin: dict = Depends(require_perm("leads", "view"
     total = sum(r["n"] for r in rows)
     by = lambda key, val: sum(r["n"] for r in rows if r["_id"][key] == val)
     return {"total": total, "approved": by("s", "approved"), "pending": by("s", "pending"), "rejected": by("s", "rejected"),
-            "account_opened": by("a", "account_opened")}
+            "duplicate": by("s", "duplicate"), "account_opened": by("a", "account_opened"), "trade_done": by("a", "trade_done")}
 
 
 @api.get("/admin/leads")
@@ -1125,6 +1188,7 @@ async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = 
     for l in items:
         row = {"Lead ID": l.get("lead_id", ""), "Date": (l.get("created_at") or "")[:10], "Time": (l.get("created_at") or "")[11:19],
                "Campaign": l.get("campaign_name", ""), "Lead Status": l.get("status", ""), "Account Status": l.get("account_status", ""),
+               "Duplicate Of": l.get("duplicate_of", ""), "Duplicate Reason": l.get("duplicate_reason", ""),
                "Referred By (Partner)": l.get("partner_name", ""), "Ref Code": l.get("ref_code", "")}
         for k in field_keys:
             row[labels.get(k, k.replace("_", " ").title())] = (l.get("data") or {}).get(k, "")
@@ -1165,9 +1229,11 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
     if body.status:
         if body.status not in ("pending", "approved", "rejected"):
             raise HTTPException(status_code=400, detail="Invalid status")
+        if l.get("status") == "duplicate":
+            raise HTTPException(status_code=400, detail=f"This lead is a system-detected DUPLICATE of {l.get('duplicate_of', 'an earlier lead')} and cannot be approved or rejected.")
         upd["status"] = body.status
     if body.account_status:
-        if body.account_status not in ("pending", "account_opened", "rejected"):
+        if body.account_status not in ("pending", "account_opened", "trade_done", "rejected"):
             raise HTTPException(status_code=400, detail="Invalid account status")
         upd["account_status"] = body.account_status
     if body.reject_reason is not None:
@@ -2581,6 +2647,11 @@ async def startup():
                           ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id")):
             await db[coll].create_index(key)
         await db.users.create_index("username", unique=True, partialFilterExpression={"username": {"$type": "string"}})
+        await db.leads.create_index("submit_key", unique=True, partialFilterExpression={"submit_key": {"$type": "string"}})
+        for k in ("pan", "mobile", "email"):
+            await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
+        async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):
+            await db.leads.update_one({"_id": l["_id"]}, {"$set": {"dup_keys": lead_dup_keys(l.get("data") or {})}})
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin
