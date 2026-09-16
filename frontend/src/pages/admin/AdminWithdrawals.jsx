@@ -8,6 +8,7 @@ import { MarkPaidDialog } from "../../components/MarkPaidDialog";
 import { celebrate } from "../../components/Celebration";
 import { toast } from "sonner";
 import { Check, X, IndianRupee, Receipt } from "lucide-react";
+import { Pager } from "../../components/Pager";
 import { useCan } from "../../lib/perm";
 
 const TABS = ["all", "pending", "approved", "paid", "rejected"];
@@ -26,8 +27,10 @@ export default function AdminWithdrawals() {
   const [params] = useSearchParams();
   const highlight = params.get("highlight");
 
-  const load = () => api.get("/admin/withdrawals", { params: tab === "all" ? {} : { status: tab } }).then(({ data }) => setList(data));
-  useEffect(() => { load(); }, [tab]);
+  const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
+  const load = (page = pg.page) => api.get("/admin/withdrawals", { params: { ...(tab === "all" ? {} : { status: tab }), page, limit: pg.limit } })
+    .then(({ data }) => { setList(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
+  useEffect(() => { load(1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!highlight || !list.length) return;
     const el = document.querySelector(`[data-testid="wd-row-${highlight}"]`);
@@ -77,6 +80,7 @@ export default function AdminWithdrawals() {
             </div>}
           </div>
         ))}
+        <div className="rounded-2xl border border-slate-200 bg-white"><Pager {...pg} onChange={(p) => load(p)} testId="withdrawals-pager" /></div>
       </div>
       {paying && <MarkPaidDialog w={paying} onClose={() => setPaying(null)} onConfirm={(extra) => update(paying, "paid", extra)} />}
     </DashboardLayout>

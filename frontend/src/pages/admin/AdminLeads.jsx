@@ -10,6 +10,7 @@ import { LeadFundDialog } from "../../components/LeadFundDialog";
 import { Input } from "../../components/ui/input";
 import { toast } from "sonner";
 import { Search, Eye, X, CheckCircle, XCircle, Clock, Users, Building2, Wallet, CalendarDays, Copy, TrendingUp, AlertTriangle } from "lucide-react";
+import { Pager } from "../../components/Pager";
 import { useCan } from "../../lib/perm";
 
 const S_TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", approved: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", duplicate: "bg-violet-50 text-violet-700 border-violet-200", account_opened: "bg-sky-50 text-sky-700 border-sky-200", trade_done: "bg-indigo-50 text-indigo-700 border-indigo-200" };
@@ -21,6 +22,7 @@ const LABELS = { name: "Name", mobile: "Mobile", email: "Email", pan: "PAN", dob
 export default function AdminLeads() {
   const [summary, setSummary] = useState({});
   const [list, setList] = useState([]);
+  const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
   const [campaigns, setCampaigns] = useState([]);
   const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: "", date_from: "", date_to: "", preset: "" });
   const [view, setView] = useState(null);
@@ -39,9 +41,9 @@ export default function AdminLeads() {
     setCustomOpen(false); const [a, b] = presetRange(k); setFlt({ ...flt, date_from: a, date_to: b, preset: k });
   };
 
-  const load = () => {
-    const params = Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset"));
-    api.get("/admin/leads", { params }).then(({ data }) => setList(data));
+  const load = (page = pg.page) => {
+    const params = { ...Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset")), page, limit: pg.limit };
+    api.get("/admin/leads", { params }).then(({ data }) => { setList(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
     api.get("/admin/leads/summary").then(({ data }) => setSummary(data));
   };
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function AdminLeads() {
       .then(([a, b]) => setCampaigns([...a.data, ...b.data.map((c) => ({ ...c, archived: true }))]));
   }, []);
   const campaignLabel = (c) => `${c.offer_name}${c.archived ? " (Archived)" : c.status && c.status !== "live" ? ` (${c.status[0].toUpperCase()}${c.status.slice(1)})` : !c.offer_enabled ? " (Offer OFF)" : ""}`;
-  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setTimeout(() => load(1), 250); return () => clearTimeout(t); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = async (l, patch) => {
     if (patch.status === "rejected" || patch.account_status === "rejected") patch.reject_reason = window.prompt("Reject reason (optional):") || "";
@@ -97,11 +99,11 @@ export default function AdminLeads() {
           <div className="flex w-full flex-wrap items-end gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3" data-testid="lead-custom-range">
             <div><div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">From</div><Input data-testid="lead-custom-from" type="date" max={flt.date_to || undefined} value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value, preset: "custom" })} className="h-9 bg-white" /></div>
             <div><div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">To</div><Input data-testid="lead-custom-to" type="date" min={flt.date_from || undefined} value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value, preset: "custom" })} className="h-9 bg-white" /></div>
-            <div className="text-xs text-slate-500">{flt.date_from || flt.date_to ? `Showing ${list.length} leads` : "Pick a From and To date — list filters instantly."}</div>
+            <div className="text-xs text-slate-500">{flt.date_from || flt.date_to ? `Showing ${pg.total} leads` : "Pick a From and To date — list filters instantly."}</div>
             <button onClick={() => { setCustomOpen(false); setFlt({ ...flt, date_from: "", date_to: "", preset: "" }); }} data-testid="lead-custom-clear" className="ml-auto rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">Clear</button>
           </div>
         )}
-        <LeadExport filters={{ campaign_id: flt.campaign_id, status: flt.status, account_status: flt.account_status, ref: flt.ref, search: flt.search, date_from: flt.date_from, date_to: flt.date_to }} count={list.length} />
+        <LeadExport filters={{ campaign_id: flt.campaign_id, status: flt.status, account_status: flt.account_status, ref: flt.ref, search: flt.search, date_from: flt.date_from, date_to: flt.date_to }} count={pg.total} />
         {can.isAdmin && <button onClick={rescan} data-testid="lead-rescan-duplicates" className="inline-flex items-center gap-1.5 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-100"><Copy className="h-3.5 w-3.5" /> Re-scan old leads for duplicates</button>}
       </div>
 
@@ -123,6 +125,7 @@ export default function AdminLeads() {
             {list.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-slate-500" data-testid="lead-empty">No leads found.</td></tr>}
           </tbody>
         </table>
+        <Pager {...pg} onChange={(p) => load(p)} testId="leads-pager" />
       </div>
 
       {view && (

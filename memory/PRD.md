@@ -358,3 +358,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Full regression before deploy
 - iteration_20: 13/13 backend + all frontend checks PASS (contact settings, bonus wallet freeze/backfill, OTP reset rules, session revocation, devices, employee 403). Production data restored (contact defaults, signup_bonus 20/ON, OTP locks cleared, admin password unchanged). Ready to deploy.
+
+## 2026-06 — Admin pagination & dashboard aggregation
+- `/admin/dashboard` now uses count_documents + aggregations (no full transactions/withdrawals scans). `/admin/leads`, `/admin/customers` (+ server-side `search`), `/admin/withdrawals` accept `page` & `limit` (10–200, default 50) and return `{items,total,page,limit,pages}`; without `page` they keep the legacy array response.
+- Frontend: shared `Pager` component (testids leads-pager / customers-pager / withdrawals-pager with -info/-prev/-next/-page) wired into AdminLeads, AdminCustomers (server search, debounced), AdminWithdrawals. Export count uses total.

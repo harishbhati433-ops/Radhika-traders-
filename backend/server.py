@@ -1156,26 +1156,21 @@ async def admin_leads_summary(admin: dict = Depends(require_perm("leads", "view"
             "duplicate": by("s", "duplicate"), "account_opened": by("a", "account_opened"), "trade_done": by("a", "trade_done")}
 
 
+def _paged(page: int, limit: int) -> tuple[int, int]:
+    return max(1, page), max(10, min(limit, 200))
+
+
 @api.get("/admin/leads")
 async def admin_leads(campaign_id: Optional[str] = None, status: Optional[str] = None, account_status: Optional[str] = None,
                       ref: Optional[str] = None, search: Optional[str] = None, date_from: Optional[str] = None,
-                      date_to: Optional[str] = None, admin: dict = Depends(require_perm("leads", "view"))):
-    q = {}
-    if campaign_id:
-        q["campaign_id"] = campaign_id
-    if status:
-        q["status"] = status
-    if account_status:
-        q["account_status"] = account_status
-    if ref:
-        q["$or"] = [{"ref_code": ref.upper()}, {"partner_name": {"$regex": re.escape(ref), "$options": "i"}}]
-    if date_from or date_to:
-        q["created_at"] = {**({"$gte": date_from} if date_from else {}), **({"$lte": date_to + "T23:59:59"} if date_to else {})}
-    if search:
-        rx = {"$regex": re.escape(search), "$options": "i"}
-        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
-    items = await db.leads.find(q).sort("created_at", -1).to_list(5000)
-    return [lead_out(l) for l in items]
+                      date_to: Optional[str] = None, page: int = 0, limit: int = 50, admin: dict = Depends(require_perm("leads", "view"))):
+    q = _lead_query(campaign_id, status, account_status, ref, search, date_from, date_to)
+    if page <= 0:
+        return [lead_out(l) for l in await db.leads.find(q).sort("created_at", -1).to_list(5000)]
+    page, limit = _paged(page, limit)
+    total = await db.leads.count_documents(q)
+    items = await db.leads.find(q).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"items": [lead_out(l) for l in items], "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
 
 
 def _lead_query(campaign_id, status, account_status, ref, search, date_from, date_to) -> dict:
@@ -1853,11 +1848,17 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
 
 
 @api.get("/admin/withdrawals")
-async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(require_perm("withdrawals", "view"))):
+async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: int = 50, admin: dict = Depends(require_perm("withdrawals", "view"))):
     q = {}
     if status:
         q["status"] = status
-    items = await db.withdrawals.find(q).sort("created_at", -1).to_list(5000)
+    paged = page > 0
+    if paged:
+        page, limit = _paged(page, limit)
+        total = await db.withdrawals.count_documents(q)
+        items = await db.withdrawals.find(q).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    else:
+        items = await db.withdrawals.find(q).sort("created_at", -1).to_list(5000)
     codes = {(w.get("payout_info") or {}).get("ifsc") for w in items if not (w.get("payout_info") or {}).get("bank_name") and (w.get("payout_info") or {}).get("ifsc")}
     found = {}
     for code in list(codes)[:100]:
@@ -1871,6 +1872,8 @@ async def all_withdrawals(status: Optional[str] = None, admin: dict = Depends(re
             pi["bank_name"], pi["branch"] = found[pi["ifsc"]]
             await db.withdrawals.update_one({"_id": w["_id"]}, {"$set": {"payout_info.bank_name": pi["bank_name"], "payout_info.branch": pi["branch"]}})
         out.append({**{k: v for k, v in w.items() if k != "_id"}, "payout_info": pi, "id": str(w["_id"])})
+    if paged:
+        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
     return out
 
 
@@ -2267,11 +2270,20 @@ async def admin_delete_notifications(title: str = Query(...), created_at: str = 
 
 # ----------------------------- Admin: customers & credit -----------------------------
 @api.get("/admin/customers")
-async def list_customers(include_deleted: bool = False, admin: dict = Depends(require_perm("clients", "view"))):
+async def list_customers(include_deleted: bool = False, search: Optional[str] = None, page: int = 0, limit: int = 50, admin: dict = Depends(require_perm("clients", "view"))):
     q = {"role": "customer", "email_verified": True}
     if not include_deleted:
         q["account_status"] = {"$ne": "deleted"}
-    users = await db.users.find(q).sort("created_at", -1).to_list(5000)
+    if search:
+        rx = {"$regex": re.escape(search.strip()), "$options": "i"}
+        q["$or"] = [{"name": rx}, {"email": rx}, {"mobile": rx}, {"referral_code": rx}]
+    paged = page > 0
+    if paged:
+        page, limit = _paged(page, limit)
+        total = await db.users.count_documents(q)
+        users = await db.users.find(q).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    else:
+        users = await db.users.find(q).sort("created_at", -1).to_list(5000)
     ids = [str(u["_id"]) for u in users]
     agg = {i: {"credit": 0.0, "debit": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
     txn_rows = await db.transactions.aggregate([
@@ -2304,6 +2316,8 @@ async def list_customers(include_deleted: bool = False, admin: dict = Depends(re
             "pending_withdrawal": round(a["pending"], 2),
         }
         out.append(pu)
+    if paged:
+        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
     return out
 
 
@@ -2438,33 +2452,31 @@ async def admin_edit_kyc(uid: str, body: KycIn, request: Request, admin: dict = 
 
 @api.get("/admin/dashboard")
 async def admin_dashboard(admin: dict = Depends(require_admin)):
-    campaigns = await db.campaigns.find({"is_deleted": False}).to_list(5000)
-    total_campaigns = len(campaigns)
-    live = sum(1 for c in campaigns if c.get("status") == "live")
-    paused = sum(1 for c in campaigns if c.get("status") == "paused")
-    closed = sum(1 for c in campaigns if c.get("status") == "closed")
-    enabled = sum(1 for c in campaigns if c.get("offer_enabled"))
+    cq = {"is_deleted": False}
+    total_campaigns, live, paused, closed, enabled = await asyncio.gather(
+        db.campaigns.count_documents(cq), db.campaigns.count_documents({**cq, "status": "live"}), db.campaigns.count_documents({**cq, "status": "paused"}),
+        db.campaigns.count_documents({**cq, "status": "closed"}), db.campaigns.count_documents({**cq, "offer_enabled": True}))
     total_customers = await db.users.count_documents({"role": "customer", "email_verified": True})
-    all_txns = await db.transactions.find({}).to_list(20000)
-    total_earnings = sum(t["amount"] for t in all_txns if t["type"] == "credit")
-    cust_ids = {str(i) for i in await db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}})}
-    all_wds = [w for w in await db.withdrawals.find({}).to_list(20000) if w.get("user_id") in cust_ids]
-    total_paid = sum(w["amount"] for w in all_wds if w["status"] == "paid")
+    earn = await db.transactions.aggregate([{"$match": {"type": "credit"}}, {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
+    total_earnings = float(earn[0]["s"]) if earn else 0.0
+    cust_ids = [str(i) for i in await db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}})]
+    wd = {r["_id"]: r for r in await db.withdrawals.aggregate([{"$match": {"user_id": {"$in": cust_ids}}},
+                                                                 {"$group": {"_id": "$status", "n": {"$sum": 1}, "s": {"$sum": "$amount"}}}]).to_list(20)}
     money = (await wallet_rows("holding"))["summary"]
-    recent = sorted(campaigns, key=lambda c: c.get("updated_at", ""), reverse=True)[:5]
+    recent = await db.campaigns.find(cq).sort("updated_at", -1).to_list(5)
     return {
         "total_campaigns": total_campaigns, "live": live, "paused": paused, "closed": closed,
         "enabled_offers": enabled, "disabled_offers": total_campaigns - enabled,
         "total_customers": total_customers,
         "total_wallet_balance": money["total_balance"],
         "total_pending_withdrawal_amount": money["total_pending"],
-        "total_paid_amount": round(total_paid, 2),
+        "total_paid_amount": round(float(wd.get("paid", {}).get("s", 0)), 2),
         "total_payable": money["total_liability"],
         "customers_holding_money": money["customers"],
         "total_earnings": round(total_earnings, 2),
-        "withdrawals_total": len(all_wds),
-        "withdrawals_pending": sum(1 for w in all_wds if w["status"] in ("pending", "approved")),
-        "withdrawals_paid": sum(1 for w in all_wds if w["status"] == "paid"),
+        "withdrawals_total": sum(r["n"] for r in wd.values()),
+        "withdrawals_pending": wd.get("pending", {}).get("n", 0) + wd.get("approved", {}).get("n", 0),
+        "withdrawals_paid": wd.get("paid", {}).get("n", 0),
         "recent_campaigns": [campaign_out(c) for c in recent],
     }
 

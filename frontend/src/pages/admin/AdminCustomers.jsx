@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 import { toast } from "sonner";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
 import { Search, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2, SlidersHorizontal, UserCog, FileText } from "lucide-react";
+import { Pager } from "../../components/Pager";
 import { CustomerStatementDialog } from "../../components/CustomerStatementDialog";
 import { AccountStatusControl, ACCOUNT_TONE } from "../../components/AccountStatusControl";
 import { WalletAdjustDialog } from "../../components/WalletAdjustDialog";
@@ -25,8 +26,10 @@ export default function AdminCustomers() {
   const [desc, setDesc] = useState("Affiliate earning credit");
   const [busy, setBusy] = useState(false);
 
-  const load = () => api.get("/admin/customers", { params: { include_deleted: showDeleted } }).then(({ data }) => setCustomers(data));
-  useEffect(() => { load(); }, [showDeleted]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
+  const load = (page = pg.page) => api.get("/admin/customers", { params: { include_deleted: showDeleted, search: search || undefined, page, limit: pg.limit } })
+    .then(({ data }) => { setCustomers(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
+  useEffect(() => { const t = setTimeout(() => load(1), 250); return () => clearTimeout(t); }, [showDeleted, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const credit = async (e) => {
     e.preventDefault(); setBusy(true);
@@ -40,7 +43,7 @@ export default function AdminCustomers() {
 
   const kycIcon = (s) => s === "verified" ? <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> : s === "pending" ? <ShieldQuestion className="h-3.5 w-3.5 text-amber-600" /> : <ShieldAlert className="h-3.5 w-3.5 text-rose-500" />;
 
-  const filtered = customers.filter((c) => (c.name + c.email + c.mobile).toLowerCase().includes(search.toLowerCase()));
+  const filtered = customers;
 
   return (
     <DashboardLayout nav={adminNav} title="Customers">
@@ -95,6 +98,7 @@ export default function AdminCustomers() {
             {filtered.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500">No customers found.</td></tr>}
           </tbody>
         </table>
+        <Pager {...pg} onChange={(p) => load(p)} testId="customers-pager" />
       </div>
 
       <Dialog open={!!active} onOpenChange={(o) => !o && setActive(null)}>
