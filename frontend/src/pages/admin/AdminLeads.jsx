@@ -29,7 +29,7 @@ export default function AdminLeads() {
   const can = useCan("leads");
   const canPay = useCan("payments");
   const rescan = async () => {
-    if (!window.confirm("Re-check all existing leads campaign-wise and mark same-person repeat submissions as Duplicate (Approved leads are not touched)?")) return;
+    if (!window.confirm("Re-check ALL existing leads campaign-wise (including Approved) and mark later same-person repeat submissions as Duplicate + Rejected? The first/original lead in each campaign stays as it is.")) return;
     try { const { data } = await api.post("/admin/leads/rescan-duplicates"); toast.success(data.message); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Re-scan failed"); }
   };

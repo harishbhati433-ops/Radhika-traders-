@@ -1167,7 +1167,7 @@ async def rescan_duplicates(include_approved: bool = False):
 
 
 @api.post("/admin/leads/rescan-duplicates")
-async def admin_rescan_duplicates(request: Request, include_approved: bool = False, admin: dict = Depends(require_admin)):
+async def admin_rescan_duplicates(request: Request, include_approved: bool = True, admin: dict = Depends(require_admin)):
     result = await rescan_duplicates(include_approved)
     await log_activity(admin, "leads_duplicate_rescan", request, entity_type="leads", status="done", amount=result["marked"], detail=f"checked {result['checked']}, include_approved={include_approved}")
     return {"message": f"Re-scan complete: {result['marked']} lead(s) marked duplicate out of {result['checked']} checked.", **result}
