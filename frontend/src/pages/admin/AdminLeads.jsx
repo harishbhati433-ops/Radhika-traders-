@@ -69,7 +69,11 @@ export default function AdminLeads() {
           {campaigns.filter((c) => !c.archived && c.status !== "live").map((c) => <option key={c.id} value={c.id}>{campaignLabel(c)}</option>)}
           {campaigns.filter((c) => c.archived).map((c) => <option key={c.id} value={c.id}>{campaignLabel(c)}</option>)}
         </select>
-        <select data-testid="lead-filter-status" value={flt.status} onChange={(e) => setFlt({ ...flt, status: e.target.value })} className={sel}><option value="">All lead statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="duplicate">Duplicate</option></select>
+        <select data-testid="lead-filter-status" value={flt.status || (flt.account_status ? `acc:${flt.account_status}` : "")} onChange={(e) => { const v = e.target.value; setFlt(v.startsWith("acc:") ? { ...flt, status: "", account_status: v.slice(4) } : { ...flt, status: v, account_status: v ? "" : flt.account_status }); }} className={sel}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="duplicate">Duplicate</option>
+          <option value="acc:account_opened">Account Open</option><option value="acc:trade_done">Trade Done</option>
+        </select>
         <select data-testid="lead-filter-account" value={flt.account_status} onChange={(e) => setFlt({ ...flt, account_status: e.target.value })} className={sel}><option value="">All account statuses</option><option value="pending">Not Started</option><option value="account_opened">Account Open</option><option value="trade_done">Trade Done</option><option value="rejected">Rejected</option></select>
         <Input data-testid="lead-filter-ref" placeholder="Publisher / Ref ID" value={flt.ref} onChange={(e) => setFlt({ ...flt, ref: e.target.value })} />
         <div className="flex gap-1"><Input data-testid="lead-filter-from" type="date" value={flt.date_from} onChange={(e) => setFlt({ ...flt, date_from: e.target.value, preset: "custom" })} /><Input data-testid="lead-filter-to" type="date" value={flt.date_to} onChange={(e) => setFlt({ ...flt, date_to: e.target.value, preset: "custom" })} /></div>
