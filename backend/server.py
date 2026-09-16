@@ -1636,9 +1636,15 @@ async def get_wallet(user: dict = Depends(get_current_user)):
         st = "not_eligible"
     else:
         s = await get_settings()
-        full = await db.users.find_one({"_id": ObjectId(user["id"])}, {"welcome": 1}) or {}
+        full = await db.users.find_one({"_id": ObjectId(user["id"])}) or {}
         promised = _promised_bonus(full, s)
-        st = "pending" if promised > 0 else "off"
+        if promised > 0 and "signup_bonus" not in (full.get("welcome") or {}):
+            await db.users.update_one({"_id": full["_id"]}, {"$set": {"welcome.signup_bonus": promised}})  # freeze once, never follows setting changes
+        lock = await lock_signup_bonus(full) if promised > 0 else "off"
+        if lock in ("locked", "exists"):
+            return await get_wallet(user)
+        st = "not_eligible" if lock == "duplicate" else "pending" if promised > 0 else "off"
+        promised = 0 if lock == "duplicate" else promised
     amt = float(sb["amount"]) if sb else promised
     w["signup_bonus"] = {"status": st, "amount": round(float(amt or 0), 2), "ref_id": (sb or {}).get("ref_id", ""), "credited_at": (sb or {}).get("unlocked_at", "")}
     return w
@@ -2894,6 +2900,12 @@ async def _fresh_contact(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     await contact_settings.load_contact(db)
+    try:
+        s = await get_settings()
+        if s["signup_bonus_enabled"] and float(s["signup_bonus"] or 0) > 0:
+            await db.users.update_many({"role": "customer", "welcome.signup_bonus": {"$exists": False}}, {"$set": {"welcome.signup_bonus": float(s["signup_bonus"])}})
+    except Exception as e:
+        logger.warning(f"signup bonus freeze migration skipped: {e}")
     try:
         await db.users.create_index("email", unique=True)
         await db.otp_codes.create_index("email")

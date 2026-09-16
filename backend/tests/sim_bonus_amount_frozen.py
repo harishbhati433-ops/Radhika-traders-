@@ -23,7 +23,10 @@ async def main():
     await db.settings.update_one({"key": "app"}, {"$set": {"signup_bonus": 50, "signup_bonus_enabled": True}})
     old_pending = await mk("OldPending", 50)      # signed up at ₹50, no txn yet
     old_locked = await mk("OldLocked", 50); print("lock old:", await server.lock_signup_bonus(old_locked))
-    legacy = await mk("Legacy", None)             # very old account, nothing frozen
+    legacy = await mk("Legacy", None)             # very old account, nothing frozen → gets frozen at first wallet view (₹50), not at later ₹100
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=server.app), base_url="http://t") as c:
+        t = (await c.post("/api/auth/login", json={"email": legacy["email"], "password": "Test@1234"})).json()["token"]
+        print("Legacy first view @50:", (await c.get("/api/wallet", headers={"Authorization": f"Bearer {t}"})).json()["signup_bonus"])
     await db.settings.update_one({"key": "app"}, {"$set": {"signup_bonus": 100}})   # admin changes 50 → 100
     new_user = await mk("NewUser", 100); print("lock new:", await server.lock_signup_bonus(new_user))
 
