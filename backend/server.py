@@ -35,6 +35,7 @@ from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
 from contact_routes import build_router as build_contact_router
 from password_reset import build_router as build_password_reset_router
+from login_alerts import record_admin_login
 import contact_settings
 
 mongo_url = os.environ["MONGO_URL"]
@@ -643,7 +644,7 @@ def _client_ip(request: Request) -> str:
 
 
 @api.post("/auth/login")
-async def login(body: LoginIn, request: Request):
+async def login(body: LoginIn, request: Request, background: BackgroundTasks):
     email = body.email.lower()
     identifier = f"{_client_ip(request)}:{email}"
     now = now_iso()
@@ -687,6 +688,9 @@ async def login(body: LoginIn, request: Request):
     if user["role"] == "customer" and not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="Please verify your email first")
     token = create_access_token(str(user["_id"]), email, user["role"], user.get("token_version", 0))
+    if user["role"] == "admin":
+        origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+        background.add_task(record_admin_login, db, user, request, _client_ip(request), origin, _log_security)
     if needs_rehash(user.get("password_hash", "")):
         new_hash = await asyncio.to_thread(hash_password, body.password)
         await db.users.update_one({"_id": user["_id"], "password_hash": user["password_hash"]}, {"$set": {"password_hash": new_hash}})
@@ -2083,8 +2087,12 @@ async def recover_email(body: RecoverEmailIn, request: Request):
 async def security_status(user: dict = Depends(get_current_user)):
     full = await db.users.find_one({"_id": ObjectId(user["id"])})
     logs = await db.security_logs.find({"user_id": user["id"]}).sort("created_at", -1).to_list(10)
-    return {"has_txn_password": bool(full.get("txn_password_hash")),
-            "logs": [{"event": l["event"], "created_at": l["created_at"]} for l in logs]}
+    out = {"has_txn_password": bool(full.get("txn_password_hash")),
+           "logs": [{"event": l["event"], "created_at": l["created_at"], "detail": l.get("detail", ""), "ip": l.get("ip", "")} for l in logs]}
+    if full.get("role") == "admin":
+        devs = await db.admin_devices.find({"user_id": user["id"]}, {"_id": 0, "user_agent": 0}).sort("last_seen", -1).to_list(50)
+        out["devices"] = devs
+    return out
 
 
 # ----------------------------- Notifications, KYC mgmt, Broadcast -----------------------------
@@ -2893,6 +2901,7 @@ async def startup():
         await db.signup_bonus_log.create_index("user_id")
         await db.pwd_reset_otps.create_index("email")
         await db.otp_locks.create_index("identifier", unique=True)
+        await db.admin_devices.create_index([("user_id", 1), ("fingerprint", 1)], unique=True)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

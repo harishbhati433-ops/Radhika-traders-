@@ -338,3 +338,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Password-changed confirmation email (`send_password_changed_email`). Security logs: password_reset_otp_sent / password_reset_locked / password_reset_via_otp.
 - UI: /admin/forgot-password (AdminLogin "Forgot password?" link), ForgotPassword page w/ 5-min countdown + resend timer (portal prop), `OtpPasswordReset` card in SecuritySettings (admin + customer Security pages).
 - Tested: tests/sim_password_reset.py (all rules), UI screenshot, real OTP delivered to admin Gmail.
+
+## 2026-06 — Admin login alert (new device / IP)
+- `login_alerts.py` `record_admin_login` runs in background on successful admin login: fingerprint = sha256(ip|browser|os) stored in `admin_devices` (per admin). First time seen → Gmail alert (`send_login_alert_email`, to admin email + Contact & Support owner_email) with time IST, device, IP, "Reset admin password" button (→ /admin/forgot-password), admin bell notification (type security), security log `admin_login_new_device`.
+- `GET /api/security/status` now returns `devices` (admin only) + detail/ip on logs; Security page shows "Admin login devices" table (`sec-devices`).
+- Tested via curl with 3 logins (2 same UA → one alert, 1 new UA → second alert), emails sent without error, screenshot of table.

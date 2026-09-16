@@ -143,6 +143,25 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, device: str, reset_link: str, security_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"New device login to Radhika Traders Admin Panel — {device}"
+    rows = [("Date & Time", when_ist), ("Device / Browser", device), ("IP Address", ip or "Unknown")]
+    table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
+                    f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+        f'<p style="font-size:14px;color:#334155">Your <b>Admin Panel</b> was just logged into from a device or IP address we have not seen before:</p>'
+        f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
+        f'<p style="font-size:14px;color:#334155"><b>Was this you?</b> No action needed. You will not be alerted again for this device.</p>'
+        f'<p style="font-size:14px;color:#B91C1C"><b>Not you?</b> Reset your password immediately — this logs out every device, including the intruder.</p>'
+        f'<p style="margin:16px 0 6px"><a href="{escape(reset_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Reset admin password</a></p>'
+        f'<p style="font-size:12px;color:#64748b">Or open Admin Panel → <a href="{escape(security_link)}" style="color:#991B1B">Security</a> to review recent activity.</p>'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_password_changed_email(to: str, name: str, when_ist: str, ip: str) -> str | None:
     if not to:
         return None

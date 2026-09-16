@@ -3,9 +3,11 @@ import api, { formatApiErrorDetail } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
-import { KeyRound, Lock, Loader2, ShieldCheck } from "lucide-react";
+import { KeyRound, Lock, Loader2, ShieldCheck, MonitorSmartphone } from "lucide-react";
 import { PasswordInput } from "./PasswordInput";
 import { OtpPasswordReset } from "./OtpPasswordReset";
+
+const dt = (iso) => iso ? new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export function SecuritySettings({ showTxn = true }) {
   const [st, setSt] = useState({ has_txn_password: false, logs: [] });
@@ -66,10 +68,34 @@ export function SecuritySettings({ showTxn = true }) {
         <button type="submit" disabled={busy === "tp"} data-testid="sec-txn-save" className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-bold text-slate-950 disabled:opacity-60">{busy === "tp" && <Loader2 className="h-4 w-4 animate-spin" />} {st.has_txn_password ? "Reset Transaction Password" : "Set Transaction Password"}</button>
       </form>}
 
+      {st.devices && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2" data-testid="sec-devices">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><MonitorSmartphone className="h-4 w-4 text-sky-600" /> Admin login devices <span className="text-xs font-semibold text-slate-400">({st.devices.length})</span></div>
+          <p className="mt-1 text-xs text-slate-500">You get a Gmail alert the first time the Admin Panel is opened from a new device or IP. Don't recognise one? Reset your password via OTP above — every device is logged out.</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2">Device</th><th className="p-2">IP</th><th className="p-2">First login</th><th className="p-2">Last login</th><th className="p-2 text-right">Logins</th></tr></thead>
+              <tbody>
+                {st.devices.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-slate-400">No logins recorded yet.</td></tr>}
+                {st.devices.map((d) => (
+                  <tr key={d.fingerprint} className="border-t border-slate-100" data-testid={`sec-device-${d.fingerprint}`}>
+                    <td className="p-2 font-semibold text-slate-900">{d.browser} on {d.os}</td>
+                    <td className="p-2 font-mono text-slate-600">{d.ip}</td>
+                    <td className="whitespace-nowrap p-2 font-mono text-slate-500">{dt(d.first_seen)}</td>
+                    <td className="whitespace-nowrap p-2 font-mono text-slate-500">{dt(d.last_seen)}</td>
+                    <td className="p-2 text-right font-mono text-slate-700">{d.logins}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {st.logs.length > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2" data-testid="sec-logs">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Recent security activity</div>
-          <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">{st.logs.map((l, i) => <li key={i} className="flex justify-between gap-2 rounded-lg bg-slate-50 px-3 py-1.5"><span className="capitalize">{l.event.replace(/_/g, " ")}</span><span className="font-mono text-slate-400">{(l.created_at || "").slice(0, 16).replace("T", " ")}</span></li>)}</ul>
+          <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">{st.logs.map((l, i) => <li key={i} className="flex justify-between gap-2 rounded-lg bg-slate-50 px-3 py-1.5"><span><span className="capitalize">{l.event.replace(/_/g, " ")}</span>{l.detail && <span className="ml-1 text-slate-400">· {l.detail}</span>}</span><span className="shrink-0 font-mono text-slate-400">{(l.created_at || "").slice(0, 16).replace("T", " ")}</span></li>)}</ul>
         </div>
       )}
     </div>
