@@ -10,7 +10,8 @@ import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
 import { toast } from "sonner";
-import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert, Lock } from "lucide-react";
+import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert } from "lucide-react";
+import { BonusWalletCard } from "../../components/BonusWalletCard";
 
 function Stat({ icon: Icon, label, value, tone = "slate" }) {
   const tones = { emerald: "bg-emerald-50 text-emerald-700", red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", slate: "bg-slate-100 text-slate-700" };
@@ -48,18 +49,13 @@ export default function CustomerDashboard() {
 
       <OfferBanners />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat icon={Wallet} label="Available Balance" value={`₹${wallet?.balance ?? "…"}`} tone="emerald" />
+        <BonusWalletCard wallet={wallet} compact />
         <Stat icon={TrendingUp} label="Total Earnings" value={`₹${wallet?.total_earnings ?? "…"}`} tone="red" />
         <Stat icon={ArrowDownToLine} label="Total Withdrawn" value={`₹${wallet?.total_withdrawn ?? "…"}`} tone="slate" />
         <Stat icon={Clock} label="Pending Withdrawal" value={`₹${wallet?.pending_withdrawal ?? "…"}`} tone="amber" />
       </div>
-      {(wallet?.bonus_locked ?? 0) > 0 && (
-        <Link to="/wallet" className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 text-sm" data-testid="dash-bonus-locked">
-          <span className="flex items-center gap-2 font-semibold text-violet-900"><Lock className="h-4 w-4" /> Bonus Wallet: <span className="font-mono font-bold">₹{wallet.bonus_locked}</span> locked</span>
-          <span className="text-xs text-violet-700">Get your first lead approved to unlock →</span>
-        </Link>
-      )}
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-[#0B0F17] p-6 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">

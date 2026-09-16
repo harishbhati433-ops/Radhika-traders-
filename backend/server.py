@@ -501,6 +501,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
         s = await get_settings()
         bonus = s["signup_bonus"] if s["signup_bonus_enabled"] else 0
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"welcome": {"issued_at": now_iso(), "signup_bonus": bonus}}})
+        await lock_signup_bonus(user)
         origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
         background.add_task(send_welcome_email, email, user.get("name", ""), user.get("referral_code", ""), bonus, f"{origin}/dashboard")
     token = create_access_token(str(user["_id"]), email, user["role"])
@@ -1289,8 +1290,8 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
         upd["reject_reason"] = body.reject_reason
     await db.leads.update_one({"_id": l["_id"]}, {"$set": upd})
     if l.get("partner_id") and body.status == "approved":
-        await unlock_signup_bonus(l["partner_id"])
-        await grant_signup_bonus(l["partner_id"], l)
+        if await unlock_signup_bonus(l["partner_id"], l) == "none":
+            await grant_signup_bonus(l["partner_id"], l)
     if l.get("partner_id") and (body.status or body.account_status):
         label = (body.account_status or body.status).replace("_", " ")
         await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
@@ -1484,6 +1485,47 @@ async def _signup_bonus_log(u: dict, amount: float, status: str, lead: dict, cre
                                           "referred": bool(u.get("referred_by_code")), "created_at": now_iso()})
 
 
+async def _signup_dup(u: dict):
+    """Earlier customer account sharing the same mobile / email / PAN → (dup_doc, field) or (None, '')."""
+    pan = ((u.get("kyc") or {}).get("pan") or "").upper()
+    ors = [{"mobile": u.get("mobile")}] if u.get("mobile") else []
+    if u.get("email"):
+        ors.append({"email": {"$regex": f"^{re.escape(u['email'])}$", "$options": "i"}})
+    if pan:
+        ors.append({"kyc.pan": pan})
+    dup = await db.users.find_one({"_id": {"$ne": u["_id"]}, "role": "customer", "created_at": {"$lt": u.get("created_at", "")}, "$or": ors}) if ors else None
+    if not dup:
+        return None, ""
+    f = "mobile" if dup.get("mobile") == u.get("mobile") else "email" if (dup.get("email") or "").lower() == (u.get("email") or "").lower() else "PAN"
+    return dup, f
+
+
+async def _has_signup_bonus(user_id: str) -> bool:
+    return bool(await db.transactions.find_one({"user_id": user_id, "$or": [{"signup_bonus_for": user_id}, {"type": "bonus"}, {"ref_id": {"$regex": "^SB-"}}]}))
+
+
+async def lock_signup_bonus(u: dict) -> str:
+    """Show the Signup Bonus in the customer's Bonus Wallet (locked, not withdrawable) right after signup. Returns locked|exists|off|duplicate."""
+    if not u or u.get("role") != "customer":
+        return "off"
+    s = await get_settings()
+    amount = float(s["signup_bonus"] or 0)
+    if not s["signup_bonus_enabled"] or amount <= 0:
+        return "off"
+    uid = str(u["_id"])
+    if u.get("signup_bonus_paid") or await _has_signup_bonus(uid):
+        return "exists"
+    dup, _ = await _signup_dup(u)
+    if dup:
+        return "duplicate"
+    try:
+        await db.transactions.insert_one({"user_id": uid, "amount": amount, "type": "bonus", "status": "locked", "source": "signup_bonus", "signup_bonus_for": uid,
+                                          "description": "Signup Bonus — unlocks to Main Wallet after your first approved lead", "ref_id": f"SB-{uuid.uuid4().hex[:8].upper()}", "created_at": now_iso()})
+    except DuplicateKeyError:
+        return "exists"
+    return "locked"
+
+
 async def grant_signup_bonus(user_id: str, lead: dict) -> None:
     """Credit the configured Signup Bonus to the user's main wallet exactly once, after their first approved lead. Server-side only."""
     s = await get_settings()
@@ -1493,20 +1535,12 @@ async def grant_signup_bonus(user_id: str, lead: dict) -> None:
     amount = float(s["signup_bonus"] or 0)
     if not s["signup_bonus_enabled"] or amount <= 0:
         return  # feature OFF → nothing credited, nothing logged as pending
-    if u.get("signup_bonus_paid") or await db.transactions.find_one({"user_id": user_id, "$or": [{"signup_bonus_for": user_id}, {"type": "bonus"}, {"ref_id": {"$regex": "^SB-"}}]}):
+    if u.get("signup_bonus_paid") or await _has_signup_bonus(user_id):
         return  # already received (new flow or legacy locked bonus) — never twice
     if await db.signup_bonus_log.find_one({"user_id": user_id, "status": "not_eligible"}):
         return  # already evaluated and rejected; do not re-log on every approval
-    # duplicate-identity check: another (earlier) customer account with same mobile / email / PAN
-    pan = ((u.get("kyc") or {}).get("pan") or "").upper()
-    ors = [{"mobile": u.get("mobile")}] if u.get("mobile") else []
-    if u.get("email"):
-        ors.append({"email": {"$regex": f"^{re.escape(u['email'])}$", "$options": "i"}})
-    if pan:
-        ors.append({"kyc.pan": pan})
-    dup = await db.users.find_one({"_id": {"$ne": u["_id"]}, "role": "customer", "created_at": {"$lt": u.get("created_at", "")}, "$or": ors}) if ors else None
+    dup, f = await _signup_dup(u)
     if dup:
-        f = "mobile" if dup.get("mobile") == u.get("mobile") else "email" if (dup.get("email") or "").lower() == (u.get("email") or "").lower() else "PAN"
         await _signup_bonus_log(u, amount, "not_eligible", lead, "not_credited", f"Duplicate account — same {f} as {dup.get('referral_code') or dup.get('email')}")
         return
     ref_id = f"SB-{uuid.uuid4().hex[:8].upper()}"
@@ -1530,17 +1564,60 @@ async def admin_signup_bonus_log(status: Optional[str] = None, admin: dict = Dep
             "items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items]}
 
 
-async def unlock_signup_bonus(user_id: str):
+async def unlock_signup_bonus(user_id: str, lead: Optional[dict] = None) -> str:
+    """First approved lead → move the locked Signup Bonus from Bonus Wallet to Main Wallet (once). Returns credited|cancelled|none."""
     locked = await db.transactions.find({"user_id": user_id, "type": "bonus", "status": "locked"}).to_list(50)
     if not locked:
-        return
+        return "none"
+    u = await db.users.find_one({"_id": ObjectId(user_id)}) if ObjectId.is_valid(user_id) else None
+    if not u:
+        return "none"
     total = sum(t["amount"] for t in locked)
+    lead = lead or {}
+    dup, f = await _signup_dup(u)
+    if dup:
+        await db.transactions.update_many({"user_id": user_id, "type": "bonus", "status": "locked"},
+                                          {"$set": {"status": "cancelled", "cancelled_at": now_iso(), "description": "Signup Bonus cancelled — duplicate account"}})
+        await _signup_bonus_log(u, total, "not_eligible", lead, "not_credited", f"Duplicate account — same {f} as {dup.get('referral_code') or dup.get('email')}")
+        return "cancelled"
     await db.transactions.update_many({"user_id": user_id, "type": "bonus", "status": "locked"},
-                                      {"$set": {"type": "credit", "status": "completed", "unlocked_at": now_iso(),
-                                                "description": "Signup bonus unlocked — first lead approved"}})
-    await db.notifications.insert_one({"user_id": user_id, "title": f"₹{int(total)} bonus moved to main wallet",
-                                       "body": "Congratulations! Your first lead was approved, so your signup bonus is now withdrawable.",
+                                      {"$set": {"type": "credit", "status": "completed", "unlocked_at": now_iso(), "campaign_id": lead.get("campaign_id"),
+                                                "description": "Signup Bonus — first lead approved"}})
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"signup_bonus_paid": True, "signup_bonus_paid_at": now_iso(), "signup_bonus_ref": locked[0].get("ref_id", "")}})
+    await _signup_bonus_log(u, total, "credited", lead, "credited", "", locked[0].get("ref_id", ""))
+    await db.notifications.insert_one({"user_id": user_id, "title": f"₹{total:g} Signup Bonus moved to Main Wallet",
+                                       "body": "Congratulations! Your first lead was approved, so your Signup Bonus is now withdrawable.",
                                        "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+    return "credited"
+
+
+@api.post("/admin/signup-bonus/backfill")
+async def admin_signup_bonus_backfill(request: Request, admin: dict = Depends(require_admin)):
+    """Give the Signup Bonus to every verified customer who never received it: locked in Bonus Wallet, or credited if they already have an approved lead."""
+    s = await get_settings()
+    if not s["signup_bonus_enabled"] or float(s["signup_bonus"] or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Turn ON the Signup Bonus and set an amount first")
+    out = {"locked": 0, "credited": 0, "duplicate": 0, "already_had": 0, "amount": s["signup_bonus"]}
+    async for u in db.users.find({"role": "customer", "email_verified": True, "account_status": {"$ne": "deleted"}}):
+        uid = str(u["_id"])
+        r = await lock_signup_bonus(u)
+        if r == "exists":
+            out["already_had"] += 1
+            continue
+        if r == "duplicate":
+            out["duplicate"] += 1
+            continue
+        if r != "locked":
+            continue
+        lead = await db.leads.find_one({"partner_id": uid, "status": "approved"}, sort=[("created_at", 1)])
+        if lead:
+            res = await unlock_signup_bonus(uid, lead)
+            out["credited" if res == "credited" else "duplicate"] += 1
+        else:
+            out["locked"] += 1
+    await log_activity(admin, "signup_bonus_backfill", request, entity_type="settings", status="done", amount=float(s["signup_bonus"]),
+                       detail=f"Locked {out['locked']} · Credited {out['credited']} · Duplicate {out['duplicate']} · Already had {out['already_had']}")
+    return out
 
 
 async def compute_wallet(user_id: str) -> dict:
@@ -1566,7 +1643,20 @@ async def compute_wallet(user_id: str) -> dict:
 
 @api.get("/wallet")
 async def get_wallet(user: dict = Depends(get_current_user)):
-    return await compute_wallet(user["id"])
+    w = await compute_wallet(user["id"])
+    sb = await db.transactions.find_one({"user_id": user["id"], "$or": [{"signup_bonus_for": user["id"]}, {"ref_id": {"$regex": "^SB-"}}, {"type": "bonus"}]}, sort=[("created_at", -1)])
+    if sb and sb.get("status") == "locked":
+        st = "locked"
+    elif sb and sb.get("status") == "completed":
+        st = "credited"
+    elif sb and sb.get("status") == "cancelled":
+        st = "not_eligible"
+    else:
+        s = await get_settings()
+        st = "pending" if s["signup_bonus_enabled"] and s["signup_bonus"] > 0 else "off"
+    amt = float(sb["amount"]) if sb else (await get_settings())["signup_bonus"]
+    w["signup_bonus"] = {"status": st, "amount": round(float(amt or 0), 2), "ref_id": (sb or {}).get("ref_id", ""), "credited_at": (sb or {}).get("unlocked_at", "")}
+    return w
 
 
 async def _scan_double_payouts():

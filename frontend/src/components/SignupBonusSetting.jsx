@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { toast } from "sonner";
-import { Sparkles, Loader2, Save, Power, History } from "lucide-react";
+import { Sparkles, Loader2, Save, Power, History, Users } from "lucide-react";
 
 const PRESETS = [10, 20, 50, 100, 200];
 const dt = (iso) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -27,6 +27,17 @@ export function SignupBonusSetting() {
     finally { setBusy(false); }
   };
 
+  const backfill = async () => {
+    if (!window.confirm(`Give ₹${saved} Signup Bonus to ALL existing verified customers who never received it?\n\n• Customers without an approved lead → ₹${saved} LOCKED in their Bonus Wallet (not withdrawable)\n• Customers who already have an approved lead → ₹${saved} CREDITED to Main Wallet\n• Duplicate accounts are skipped. Runs only once per customer.`)) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/admin/signup-bonus/backfill");
+      toast.success(`Done — Locked: ${data.locked} · Credited: ${data.credited} · Duplicate skipped: ${data.duplicate} · Already had: ${data.already_had}`, { duration: 9000 });
+      loadLog();
+    } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5" data-testid="signup-bonus-setting">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -34,7 +45,7 @@ export function SignupBonusSetting() {
           <div className="rounded-xl bg-violet-500 p-2.5 text-white"><Sparkles className="h-5 w-5" /></div>
           <div>
             <div className="font-display font-bold text-slate-900">New Customer Signup Bonus</div>
-            <div className="text-xs text-slate-600">Every new customer (with or without referral link) gets this amount in their main wallet when their first lead is approved. Only once per person — duplicate accounts (same mobile / email / PAN) are not eligible.</div>
+            <div className="text-xs text-slate-600">Every new customer (with or without referral link) sees this amount LOCKED in their Bonus Wallet right after signup. It moves to the Main Wallet automatically when their first lead is approved. Only once per person — duplicate accounts (same mobile / email / PAN) are not eligible.</div>
             <div className="mt-1 text-xs font-bold text-violet-800" data-testid="signup-bonus-current">Currently: {enabled && saved > 0 ? `ON · ₹${saved} per new customer` : "OFF"}</div>
           </div>
         </div>
@@ -55,6 +66,9 @@ export function SignupBonusSetting() {
           </div>
           <button type="button" onClick={() => { setShowLog(!showLog); loadLog(); }} data-testid="signup-bonus-log-toggle" className="inline-flex items-center gap-1 rounded-full border border-violet-300 bg-white px-3 py-1.5 text-xs font-bold text-violet-700">
             <History className="h-3.5 w-3.5" /> Bonus records {log ? `(${log.items.length})` : ""}
+          </button>
+          <button type="button" onClick={backfill} disabled={busy || !enabled || !(saved > 0)} data-testid="signup-bonus-backfill" title="Give the bonus to every existing customer who never got it" className="inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+            <Users className="h-3.5 w-3.5" /> Give to existing customers
           </button>
         </div>
       </div>

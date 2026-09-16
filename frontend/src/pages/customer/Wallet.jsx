@@ -3,6 +3,7 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api from "../../lib/api";
 import { Wallet as WalletIcon, ArrowUpRight, ArrowDownRight, Lock } from "lucide-react";
+import { BonusWalletCard } from "../../components/BonusWalletCard";
 
 export default function Wallet() {
   const [wallet, setWallet] = useState(null);
@@ -29,11 +30,7 @@ export default function Wallet() {
           <div className="mt-2 font-mono text-4xl font-bold" data-testid="wallet-balance">₹{wallet?.balance ?? "…"}</div>
           <div className="mt-1 text-xs text-red-200">Withdrawable amount</div>
         </div>
-        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-6" data-testid="bonus-wallet-card">
-          <div className="flex items-center gap-2 text-violet-800"><Lock className="h-4 w-4" /> <span className="text-sm font-bold">Bonus Wallet</span></div>
-          <div className="mt-2 font-mono text-3xl font-bold text-violet-900" data-testid="wallet-bonus-locked">₹{wallet?.bonus_locked ?? "…"}</div>
-          <div className="mt-1 text-xs text-violet-700">{(wallet?.bonus_locked ?? 0) > 0 ? "Locked · moves to Main Wallet when your first lead is approved." : "Signup bonus appears here until your first lead is approved."}</div>
-        </div>
+        <BonusWalletCard wallet={wallet} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

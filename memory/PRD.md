@@ -322,3 +322,11 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Tested: iteration_19 (frontend E2E all pass) + curl backend checks. Values reverted to originals after test.
 - 2026-06 FIX (on-the-spot update): `/api/contact/public` now reads DB on every call + `Cache-Control: no-store`; HTTP middleware refreshes in-memory CONTACT cache (2s TTL) so every worker/replica, emails and posters use fresh values; frontend hook refetches on every mount/focus with cache-busting param. Verified 3 consecutive fresh loads show new number instantly.
 - 2026-06: Customer sidebar 'Customer Support' box removed on user request (confusing for customers). Support details remain in Footer/Contact/Login help/WhatsApp button.
+
+## 2026-06 — Signup Bonus visible from day one (locked Bonus Wallet) + backfill
+- Bug: after signup Bonus Wallet showed ₹0 (bonus only credited silently on first approval) → customers confused.
+- Fix: `lock_signup_bonus(user)` on OTP verify → txn {type:"bonus", status:"locked", ref SB-…} so Bonus Wallet shows the amount (non-withdrawable). `unlock_signup_bonus(user_id, lead)` on first approved lead → converts to credit (main wallet), sets signup_bonus_paid, logs credited, notifies; duplicate account → status "cancelled" + not_eligible log. `grant_signup_bonus` stays as fallback when no locked txn exists.
+- `GET /api/wallet` now returns `signup_bonus: {status: locked|credited|pending|not_eligible|off, amount, ref_id, credited_at}`.
+- UI: shared `BonusWalletCard` on customer Dashboard (5th stat card, always visible) and Wallet page.
+- Admin: "Give to existing customers" button (POST /api/admin/signup-bonus/backfill) — locks for verified customers without bonus, credits immediately if they already have an approved lead, skips duplicates, idempotent, activity-logged. USER MUST CLICK THIS ONCE ON PRODUCTION.
+- Tested: tests/sim_locked_signup_bonus.py (lock→exists, unlock→credited→none, fallback no double credit, dup→duplicate), backfill idempotent via curl, dashboard/wallet screenshots.
