@@ -1,7 +1,9 @@
 import { PublicLayout } from "../components/PublicLayout";
 import { Phone, Mail, MapPin, MessageCircle, Instagram, Facebook, Youtube } from "lucide-react";
+import { useContact, telLink, waLink, WA_GREETING } from "../lib/contact";
 
 export default function Contact() {
+  const contact = useContact();
   return (
     <PublicLayout>
       <section className="mx-auto max-w-7xl px-6 py-16">
@@ -12,8 +14,9 @@ export default function Contact() {
         <div className="mx-auto mt-12 grid max-w-4xl gap-6 md:grid-cols-2">
           <div className="space-y-4">
             {[
-              [Phone, "Phone", "6376541191", "tel:+916376541191"],
-              [Mail, "Email", "radhikatradersofficial@gmail.com", "mailto:radhikatradersofficial@gmail.com"],
+              [Phone, "Phone", contact.support_mobile, telLink(contact.support_mobile)],
+              [MessageCircle, "WhatsApp", contact.whatsapp_number, waLink(contact.whatsapp_number, WA_GREETING)],
+              [Mail, "Email", contact.support_email, `mailto:${contact.support_email}`],
               [MapPin, "Address", "Bada Gawali Pura Rd, nearby Pitambara Hospital, Chhawani Naka, Chhawani, Agar, Madhya Pradesh 465441", "https://www.google.com/maps/search/?api=1&query=Radhika+Traders+Bada+Gawali+Pura+Rd+Chhawani+Naka+Agar+Madhya+Pradesh+465441"],
             ].map(([Icon, label, val, href]) => (
               <div key={label} className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -38,11 +41,11 @@ export default function Contact() {
               <p className="mt-4 text-sm text-red-100">Have questions about campaigns, payouts or partnership? Reach out — we usually respond within a few hours.</p>
             </div>
             <div className="mt-8 space-y-3">
-              <a href="tel:+916376541191" data-testid="contact-call-now"
+              <a href={telLink(contact.owner_mobile)} data-testid="contact-call-now"
                 className="flex items-center justify-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 hover:brightness-110">
-                <Phone className="h-4 w-4" /> Call Now · 6376541191
+                <Phone className="h-4 w-4" /> Call Now · {contact.owner_mobile}
               </a>
-              <a href="https://wa.me/916376541191?text=Hello%20Radhika%20Traders%2C%20I%20want%20to%20know%20more%20about%20your%20campaigns." target="_blank" rel="noreferrer" data-testid="contact-whatsapp"
+              <a href={waLink(contact.whatsapp_number, WA_GREETING)} target="_blank" rel="noreferrer" data-testid="contact-whatsapp"
                 className="flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-sm font-bold hover:brightness-110">
                 <MessageCircle className="h-4 w-4" /> Chat on WhatsApp
               </a>

@@ -8,7 +8,20 @@ import { triggerInstall, isStandalone } from "./InstallPrompt";
 import { canUser } from "../lib/perm";
 import { ROUTE_PERM } from "../pages/admin/nav";
 import { getTheme, setTheme, applyTheme } from "../lib/theme";
-import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
+import { Eye, LayoutDashboard, Sun, Moon, MessageCircle, Mail, Phone } from "lucide-react";
+import { useContact, waLink, telLink, fmtWa } from "../lib/contact";
+
+function SupportBox() {
+  const c = useContact();
+  return (
+    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs" data-testid="sidebar-support-box">
+      <div className="font-bold text-emerald-900">Customer Support</div>
+      <a href={waLink(c.whatsapp_number, "Hello Radhika Traders, I need help with my partner account.")} target="_blank" rel="noreferrer" data-testid="sidebar-support-whatsapp" className="mt-1.5 flex items-center gap-1.5 font-semibold text-emerald-800 hover:underline"><MessageCircle style={{ width: 14, height: 14 }} /> WhatsApp {fmtWa(c.whatsapp_number)}</a>
+      <a href={telLink(c.support_mobile)} data-testid="sidebar-support-call" className="mt-1 flex items-center gap-1.5 font-semibold text-slate-700 hover:underline"><Phone style={{ width: 14, height: 14 }} /> Call {c.support_mobile}</a>
+      <a href={`mailto:${c.support_email}`} data-testid="sidebar-support-email" className="mt-1 flex items-center gap-1.5 break-all font-semibold text-slate-700 hover:underline"><Mail style={{ width: 14, height: 14 }} className="shrink-0" /> {c.support_email}</a>
+    </div>
+  );
+}
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -106,6 +119,7 @@ export function DashboardLayout({ nav, children, title }) {
               <LogOut style={{ width: 18, height: 18 }} /> Logout
             </button>
             <InstallButton />
+            {!isEmp && user?.role === "customer" && <SupportBox />}
           </div>
         </aside>
 

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
+from contact_settings import wa_number
 
 ASSETS = Path(__file__).parent / "assets"
 W = H = 1080
@@ -108,7 +109,7 @@ def poster_png(c: dict, link: str, partner_name: str, logo_bytes: bytes | None) 
             d.text((bx, by + 178 + i * 40), ln, font=_font(34), fill=WHITE)
     d.text((bx, by + 250), "Free · No investment · Radhika Traders partner", font=_font(22, False), fill=MUTED)
     d.text((bx, by + 292), "www.radhikatraders.net", font=_font(26), fill=(252, 211, 77))
-    d.text((bx, by + 334), "WhatsApp +91 63765 41191", font=_font(22, False), fill=MUTED)
+    d.text((bx, by + 334), f"WhatsApp {wa_number()}", font=_font(22, False), fill=MUTED)
 
     buf = io.BytesIO()
     img.save(buf, "PNG", optimize=True)

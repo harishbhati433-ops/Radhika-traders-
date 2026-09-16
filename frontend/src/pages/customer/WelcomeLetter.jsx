@@ -4,8 +4,10 @@ import { customerNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { toast } from "sonner";
 import { Award, Printer, Mail, Loader2 } from "lucide-react";
+import { useContact, fmtWa } from "../../lib/contact";
 
 export default function WelcomeLetter() {
+  const contact = useContact();
   const [l, setL] = useState(null);
   const [sending, setSending] = useState(false);
   useEffect(() => { api.get("/me/welcome-letter").then(({ data }) => setL(data)); }, []);
@@ -56,7 +58,8 @@ export default function WelcomeLetter() {
               </div>
               <div className="text-right text-xs text-slate-500">
                 <div>Agar, Madhya Pradesh</div>
-                <div>WhatsApp: +91 63765 41191</div>
+                <div>WhatsApp: {fmtWa(contact.whatsapp_number)}</div>
+                <div>{contact.support_email}</div>
                 <div>www.radhikatraders.net</div>
               </div>
             </div>

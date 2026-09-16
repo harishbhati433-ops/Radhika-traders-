@@ -3,11 +3,13 @@ import api from "../lib/api";
 import { ShareButtons } from "./ShareButtons";
 import { useBlobUrl } from "./ShareKit";
 import { useAuth } from "../context/AuthContext";
+import { useContact, fmtWa } from "../lib/contact";
 import { Gift, Users, Copy, ChevronDown, MessageSquareText, QrCode, Download, Crown } from "lucide-react";
 import { toast } from "sonner";
 
 export function ReferEarnCard({ code }) {
   const { user } = useAuth();
+  const contact = useContact();
   const [bonus, setBonus] = useState(0);
   const [signupBonus, setSignupBonus] = useState(0);
   const [stats, setStats] = useState(null);
@@ -25,7 +27,7 @@ export function ReferEarnCard({ code }) {
   const inviteMessage =
     `🙏 Hello!\n\nI'm *${partnerName}*, a partner with *Radhika Traders* 🏦 — an advertising & affiliate marketing agency working with India's leading brokers, banks and insurers.\n\n` +
     `✅ Join free of cost (zero investment)\n🔗 Share campaign links with your network\n💰 Earn a fixed payout on every approved account opening${bonusLine}\n\n` +
-    `👉 Join here: ${link}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: +91 63765 41191`;
+    `👉 Join here: ${link}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: ${fmtWa(contact.whatsapp_number)}`;
   const shareMsg = inviteMessage.replace(`\n\n👉 Join here: ${link}`, "\n\n👉 Join here:");
   const copy = () => { navigator.clipboard.writeText(inviteMessage); toast.success("Invite message with your link copied — paste it anywhere"); };
   const copyLinkOnly = () => { navigator.clipboard.writeText(link); toast.success("Link copied"); };

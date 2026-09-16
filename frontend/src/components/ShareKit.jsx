@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { toast } from "sonner";
+import { useContact, fmtWa, DEFAULT_CONTACT } from "../lib/contact";
 import { QrCode, Download, Share2, MessageCircle, Copy, Loader2, ImageIcon, Sparkles } from "lucide-react";
 
 const dl = (url, name) => { const a = document.createElement("a"); a.href = url; a.download = name; a.click(); };
@@ -16,13 +17,14 @@ export function useBlobUrl(path, deps = []) {
   return url;
 }
 
-export function captionsFor(c, link, name) {
+export function captionsFor(c, link, name, wa = DEFAULT_CONTACT.whatsapp_number) {
   const who = name ? `*${name.replace(/\b\w/g, (m) => m.toUpperCase())}* · Radhika Traders partner` : "*Radhika Traders*";
   const benefit = c.customer_benefit ? `\n🎯 ${c.customer_benefit}` : "";
   const brand = c.company ? ` (*${c.company}*)` : "";
+  const phone = fmtWa(wa);
   return [
-    ["Hindi", `🙏 नमस्ते!\n\n✨ *${c.offer_name}*${brand} में आज ही अपना account खोलें।${benefit}\n✅ बिलकुल free · 100% online\n\n👉 मेरे link से apply करें:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: +91 63765 41191`],
-    ["English", `🙏 Hello!\n\n✨ Open your *${c.offer_name}*${brand} account today.${benefit}\n✅ Free · 100% online\n\n👉 Apply using my link:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: +91 63765 41191`],
+    ["Hindi", `🙏 नमस्ते!\n\n✨ *${c.offer_name}*${brand} में आज ही अपना account खोलें।${benefit}\n✅ बिलकुल free · 100% online\n\n👉 मेरे link से apply करें:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}`],
+    ["English", `🙏 Hello!\n\n✨ Open your *${c.offer_name}*${brand} account today.${benefit}\n✅ Free · 100% online\n\n👉 Apply using my link:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}`],
     ["Short", `✨ *${c.offer_name}* 🔥${benefit}\n👉 Apply here: ${link}\n🏆 ${who}`],
   ];
 }
@@ -31,7 +33,8 @@ export function ShareKit({ c, link, user }) {
   const poster = useBlobUrl(`/share/poster/${c.slug}`, [c.slug]);
   const qr = useBlobUrl(`/share/qr?url=${encodeURIComponent(link)}&size=600`, [link]);
   const [sharing, setSharing] = useState(false);
-  const captions = captionsFor(c, link, user?.name);
+  const contact = useContact();
+  const captions = captionsFor(c, link, user?.name, contact.whatsapp_number);
   const fname = `${c.slug}-${user?.referral_code || "share"}.png`;
 
   const copy = (text, label) => { navigator.clipboard.writeText(text); toast.success(`${label} caption copied — paste it with the poster`); };

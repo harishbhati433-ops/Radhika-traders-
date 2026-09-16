@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin, Instagram, Facebook, Youtube, MessageCircle } from "lucide-react";
+import { useContact, telLink, waLink } from "../lib/contact";
 
 export function Footer() {
+  const contact = useContact();
   return (
     <footer className="mt-20 bg-[#0B0F17] text-slate-300">
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 md:grid-cols-4">
@@ -23,15 +25,15 @@ export function Footer() {
         <div>
           <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Contact</h4>
           <ul className="space-y-2.5 text-sm text-slate-400">
-            <li><a href="tel:+916376541191" data-testid="footer-phone" className="flex items-center gap-2 hover:text-white"><Phone className="h-4 w-4 text-red-500" /> 6376541191</a></li>
-            <li><a href="mailto:radhikatradersofficial@gmail.com" data-testid="footer-email" className="flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4 text-red-500" /> radhikatradersofficial@gmail.com</a></li>
+            <li><a href={telLink(contact.support_mobile)} data-testid="footer-phone" className="flex items-center gap-2 hover:text-white"><Phone className="h-4 w-4 text-red-500" /> {contact.support_mobile}</a></li>
+            <li><a href={`mailto:${contact.support_email}`} data-testid="footer-email" className="flex items-center gap-2 break-all hover:text-white"><Mail className="h-4 w-4 shrink-0 text-red-500" /> {contact.support_email}</a></li>
             <li><a href="https://www.google.com/maps/search/?api=1&query=Radhika+Traders+Bada+Gawali+Pura+Rd+Chhawani+Naka+Agar+Madhya+Pradesh+465441" target="_blank" rel="noreferrer" data-testid="footer-address" className="flex items-start gap-2 hover:text-white"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> Bada Gawali Pura Rd, nearby Pitambara Hospital, Chhawani Naka, Chhawani, Agar, Madhya Pradesh 465441</a></li>
           </ul>
         </div>
         <div>
           <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Follow Us</h4>
           <div className="flex gap-2">
-            <a href="https://wa.me/916376541191" target="_blank" rel="noreferrer" data-testid="footer-whatsapp" className="rounded-lg bg-white/5 p-2.5 hover:bg-emerald-600"><MessageCircle className="h-4 w-4" /></a>
+            <a href={waLink(contact.whatsapp_number)} target="_blank" rel="noreferrer" data-testid="footer-whatsapp" className="rounded-lg bg-white/5 p-2.5 hover:bg-emerald-600"><MessageCircle className="h-4 w-4" /></a>
             <a href="https://www.instagram.com/growthwithharishbhati" target="_blank" rel="noreferrer" data-testid="footer-instagram" className="rounded-lg bg-white/5 p-2.5 hover:bg-pink-600"><Instagram className="h-4 w-4" /></a>
             <a href="https://www.facebook.com/share/1BadZkWMoV/" target="_blank" rel="noreferrer" data-testid="footer-facebook" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
             <a href="https://youtube.com/@radhikatradersofficial" target="_blank" rel="noreferrer" data-testid="footer-youtube" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>

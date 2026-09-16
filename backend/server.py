@@ -33,6 +33,8 @@ from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
+from contact_routes import build_router as build_contact_router
+import contact_settings
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -1754,7 +1756,7 @@ async def _notify_admin_withdrawal(w: dict, customer_id: str, origin: str):
     when = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %B %Y, %I:%M %p IST")
     link = f"{origin}/admin/withdrawals?highlight={w['id']}"
     admins = await db.users.find({"role": "admin"}, {"email": 1, "_id": 1}).to_list(10)
-    emails = {a["email"] for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower()} - {""}
+    emails = {a["email"] for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
     for email in emails:
         await send_admin_withdrawal_alert(email, w, customer_id, when, link)
     if admins:
@@ -2791,6 +2793,7 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 
 
 api.include_router(build_employee_router(db, require_admin, log_activity, public_user))
+api.include_router(build_contact_router(db, require_admin, log_activity))
 app.include_router(api)
 
 app.add_middleware(
@@ -2804,6 +2807,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    await contact_settings.load_contact(db)
     try:
         await db.users.create_index("email", unique=True)
         await db.otp_codes.create_index("email")

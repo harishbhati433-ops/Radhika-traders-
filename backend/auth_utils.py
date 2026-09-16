@@ -6,12 +6,24 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, Request
 from bson import ObjectId
+from contact_settings import wa_number
 
 JWT_ALGORITHM = "HS256"
-ACCOUNT_STATUS_MESSAGES = {
-    "deactivated": "Your account is temporarily deactivated by Radhika Traders. Please contact support on WhatsApp +91 63765 41191.",
-    "disabled": "Your account has been disabled due to a policy violation. Please contact Radhika Traders support.",
+_STATUS_TEMPLATES = {
+    "deactivated": "Your account is temporarily deactivated by Radhika Traders. Please contact support on WhatsApp {wa}.",
+    "disabled": "Your account has been disabled due to a policy violation. Please contact Radhika Traders support on WhatsApp {wa}.",
 }
+
+
+class _StatusMessages:
+    def __contains__(self, k):
+        return k in _STATUS_TEMPLATES
+
+    def __getitem__(self, k):
+        return _STATUS_TEMPLATES[k].format(wa=wa_number())
+
+
+ACCOUNT_STATUS_MESSAGES = _StatusMessages()
 
 
 def get_jwt_secret() -> str:

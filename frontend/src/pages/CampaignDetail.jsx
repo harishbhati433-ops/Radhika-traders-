@@ -7,6 +7,7 @@ import { ShareKit } from "../components/ShareKit";
 import api, { fileUrl } from "../lib/api";
 import { useLivePoll } from "../lib/useLivePoll";
 import { useAuth } from "../context/AuthContext";
+import { useContact, fmtWa } from "../lib/contact";
 import { toast } from "sonner";
 import { Copy, ArrowLeft, TrendingUp, Wallet, FileText, ListChecks, AlertTriangle, Calendar, MousePointerClick } from "lucide-react";
 
@@ -23,6 +24,7 @@ function Field({ label, value }) {
 export default function CampaignDetail() {
   const { slug } = useParams();
   const { user } = useAuth();
+  const contact = useContact();
   const nav = useNavigate();
   const [c, setC] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -53,7 +55,7 @@ export default function CampaignDetail() {
     `✨ *${c.offer_name}*\n` +
     `${c.customer_benefit ? `🎯 ${c.customer_benefit}\n` : ""}` +
     `${c.requirements ? `📋 Requirements: ${String(c.requirements).slice(0, 160)}\n` : ""}` +
-    `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: +91 63765 41191`;
+    `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: ${fmtWa(contact.whatsapp_number)}`;
 
   return (
     <PublicLayout>

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+from contact_settings import CONTACT, wa_number
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ def _wrap(title: str, inner: str) -> str:
         f'<div style="padding:20px 22px 6px">{inner}</div>'
         '<div style="background:#0B0F17;padding:12px 22px;margin-top:18px">'
         '<div style="font-size:12px;font-weight:bold;color:#ffffff">Radhika Traders</div>'
-        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Agar, Madhya Pradesh · WhatsApp +91 63765 41191 · '
+        f'<div style="font-size:11px;color:#94a3b8;margin-top:2px">Agar, Madhya Pradesh · WhatsApp {wa_number()} · {escape(CONTACT["support_email"])} · '
         '<a href="https://www.radhikatraders.net" style="color:#FCD34D">www.radhikatraders.net</a></div>'
         '<div style="font-size:10px;color:#64748b;margin-top:6px">We never ask for your password, OTP or card details by email.</div></div>'
         '</div>'
@@ -190,7 +191,8 @@ def _signature() -> str:
             '<div style="font-size:14px;font-weight:bold;color:#0B0F17">Team Radhika Traders</div>'
             '<div style="font-size:12px;color:#64748b">Harish Bhati, Founder</div></td>'
             '<td style="padding-left:12px;font-size:12px;color:#334155;vertical-align:top">'
-            'WhatsApp: +91 63765 41191<br>'
+            f'WhatsApp: {wa_number()}<br>'
+            f'Email: <a href="mailto:{escape(CONTACT["support_email"])}" style="color:#991B1B">{escape(CONTACT["support_email"])}</a><br>'
             '<a href="https://www.radhikatraders.net" style="color:#991B1B">www.radhikatraders.net</a></td></tr></table>')
 
 

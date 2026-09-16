@@ -64,6 +64,7 @@ const AdminDedicatedReferrals = lazy(() => import("./pages/admin/AdminDedicatedR
 const AdminEmployees = lazy(() => import("./pages/admin/AdminEmployees"));
 const AdminActivityLogs = lazy(() => import("./pages/admin/AdminActivityLogs"));
 const AdminWallets = lazy(() => import("./pages/admin/AdminWallets"));
+const AdminContact = lazy(() => import("./pages/admin/AdminContact"));
 const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
 const EmployeeDashboard = lazy(() => import("./pages/employee/EmployeeDashboard"));
 
@@ -153,6 +154,7 @@ function App() {
             <Route path="/admin/employees" element={A(<AdminEmployees />)} />
             <Route path="/admin/activity-logs" element={A(<AdminActivityLogs />)} />
             <Route path="/admin/wallets" element={A(<AdminWallets />, "payments")} />
+            <Route path="/admin/contact" element={A(<AdminContact />)} />
           </Routes>
         </Suspense>
         </ShutdownGate>
