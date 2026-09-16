@@ -3,7 +3,8 @@ import { useParams, useSearchParams, Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import api, { formatApiErrorDetail, fileUrl } from "../lib/api";
 import { Input } from "../components/ui/input";
-import { formatPan, formatAadhaar, panError, aadhaarError } from "../lib/validators";
+import { formatPan, formatAadhaar, formatIfsc, panError, aadhaarError, ifscError } from "../lib/validators";
+import { IfscBankInfo } from "../components/IfscBankInfo";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, UserCheck, ArrowRight } from "lucide-react";
@@ -28,7 +29,8 @@ export default function LeadForm() {
   const submit = async (e) => {
     e.preventDefault();
     if (panError(data.pan)) return toast.error(panError(data.pan));
-    if (aadhaarError(data.aadhaar)) return toast.error(aadhaarError(data.aadhaar)); setBusy(true);
+    if (aadhaarError(data.aadhaar)) return toast.error(aadhaarError(data.aadhaar));
+    if (data.ifsc && ifscError(data.ifsc)) return toast.error(ifscError(data.ifsc)); setBusy(true);
     try {
       const { data: res } = await api.post(`/leads/${slug}`, { ref, data });
       setDone(res);
@@ -72,11 +74,13 @@ export default function LeadForm() {
                   <div key={f.key} className={f.key === "address" ? "sm:col-span-2" : ""}>
                     <Label>{f.label}{f.required && <span className="text-red-600"> *</span>}</Label>
                     <Input data-testid={`lead-field-${f.key}`} type={TYPES[f.key] || "text"} required={f.required} value={data[f.key] || ""}
-                      inputMode={f.key === "aadhaar" || f.key === "mobile" ? "numeric" : undefined} maxLength={f.key === "pan" ? 10 : f.key === "aadhaar" ? 12 : undefined}
-                      onChange={(e) => setData({ ...data, [f.key]: f.key === "pan" ? formatPan(e.target.value) : f.key === "aadhaar" ? formatAadhaar(e.target.value) : e.target.value })}
-                      className={`mt-1.5 ${(f.key === "pan" && panError(data.pan)) || (f.key === "aadhaar" && aadhaarError(data.aadhaar)) ? "border-rose-400" : ""}`} />
+                      inputMode={f.key === "aadhaar" || f.key === "mobile" ? "numeric" : undefined} maxLength={f.key === "pan" ? 10 : f.key === "aadhaar" ? 12 : f.key === "ifsc" ? 11 : undefined}
+                      onChange={(e) => setData({ ...data, [f.key]: f.key === "pan" ? formatPan(e.target.value) : f.key === "aadhaar" ? formatAadhaar(e.target.value) : f.key === "ifsc" ? formatIfsc(e.target.value) : e.target.value })}
+                      className={`mt-1.5 ${(f.key === "pan" && panError(data.pan)) || (f.key === "aadhaar" && aadhaarError(data.aadhaar)) || (f.key === "ifsc" && ifscError(data.ifsc)) ? "border-rose-400" : ""} ${f.key === "pan" || f.key === "ifsc" ? "uppercase" : ""}`} />
                     {f.key === "pan" && panError(data.pan) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="lead-pan-error">{panError(data.pan)}</div>}
                     {f.key === "aadhaar" && aadhaarError(data.aadhaar) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="lead-aadhaar-error">{aadhaarError(data.aadhaar)}</div>}
+                    {f.key === "ifsc" && ifscError(data.ifsc) && <div className="mt-1 text-xs font-semibold text-rose-600" data-testid="lead-ifsc-error">{ifscError(data.ifsc)}</div>}
+                    {f.key === "ifsc" && <IfscBankInfo ifsc={data.ifsc} testId="lead-ifsc-bank" />}
                   </div>
                 ))}
               </div>

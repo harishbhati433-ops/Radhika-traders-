@@ -779,14 +779,25 @@ def aadhaar_error(value: str) -> str:
     return "" if c == 0 else "Invalid Aadhaar number — please check the digits and try again"
 
 
+def pan_error(value: str) -> str:
+    p = re.sub(r"\s", "", value or "").upper()
+    if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", p):
+        return "Invalid PAN format (e.g. ABCPE1234F)"
+    if p[3] not in "ABCFGHLJPT":
+        return f"Invalid PAN — 4th letter '{p[3]}' is not a valid PAN type (individual PAN has 'P' as 4th letter)"
+    if re.match(r"^([A-Z])\1{4}", p) or p[5:9] == "0000":
+        return "Invalid PAN number — please check the digits and try again"
+    return ""
+
+
 def _validate_kyc(body: KycIn) -> tuple[str, str, str]:
     pan = body.pan.strip().upper()
     ifsc = body.ifsc.strip().upper()
     acct = re.sub(r"\s", "", body.bank_account)
     if body.bank_account_confirm is not None and re.sub(r"\s", "", body.bank_account_confirm) != acct:
         raise HTTPException(status_code=400, detail="Account numbers do not match. Please re-enter.")
-    if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", pan):
-        raise HTTPException(status_code=400, detail="Invalid PAN format (e.g. ABCDE1234F)")
+    if pan_error(pan):
+        raise HTTPException(status_code=400, detail=pan_error(pan))
     if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
         raise HTTPException(status_code=400, detail="Invalid IFSC code (e.g. HDFC0001234)")
     if not re.fullmatch(r"\d{9,18}", acct):
@@ -1065,9 +1076,9 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
     if data.get("name"):
         data["name"] = re.sub(r"\s+", " ", data["name"]).strip()
     if data.get("pan"):
-        data["pan"] = data["pan"].upper()
-        if not re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", data["pan"]):
-            raise HTTPException(status_code=400, detail="Invalid PAN. Format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)")
+        data["pan"] = re.sub(r"\s", "", data["pan"]).upper()
+        if pan_error(data["pan"]):
+            raise HTTPException(status_code=400, detail=pan_error(data["pan"]))
     if data.get("aadhaar"):
         data["aadhaar"] = re.sub(r"\s", "", data["aadhaar"])
         if aadhaar_error(data["aadhaar"]):

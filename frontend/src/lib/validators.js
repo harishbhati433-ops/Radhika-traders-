@@ -11,7 +11,14 @@ const VD = [[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3
 const VP = [[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],[4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]];
 export const verhoeffValid = (num) => { let c = 0; const d = String(num).split("").reverse(); for (let i = 0; i < d.length; i++) c = VD[c][VP[i % 8][Number(d[i])]]; return c === 0; };
 
-export const panError = (v) => (!v ? "" : PAN_RE.test(v) ? "" : "Invalid PAN. Format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)");
+export const PAN_TYPES = "ABCFGHLJPT";
+export const panError = (v) => {
+  if (!v) return "";
+  if (!PAN_RE.test(v)) return "Invalid PAN. Format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)";
+  if (!PAN_TYPES.includes(v[3])) return `Invalid PAN — 4th letter "${v[3]}" is not a valid PAN type (individual PAN has "P" as 4th letter, e.g. ABCPE1234F)`;
+  if (/^([A-Z])\1{4}/.test(v) || /^[A-Z]{5}0000/.test(v)) return "Invalid PAN number — please check the digits and try again";
+  return "";
+};
 export const aadhaarError = (v) => {
   if (!v) return "";
   if (!AADHAAR_RE.test(v)) return `Aadhaar must be exactly 12 digits (${v.length}/12 entered)`;
