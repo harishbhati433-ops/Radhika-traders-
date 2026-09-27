@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Star, Quote, ChevronLeft, ChevronRight, BadgeCheck } from "lucide-react";
 
 const REVIEWS = [
@@ -39,20 +39,17 @@ export function Testimonials({ interval = 3000 }) {
   const per = useVisible();
   const pages = Math.ceil(REVIEWS.length / per);
   const [idx, setIdx] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const timer = useRef(null);
 
   useEffect(() => { setIdx((i) => Math.min(i, pages - 1)); }, [pages]);
   useEffect(() => {
-    if (paused) return;
-    timer.current = setInterval(() => setIdx((i) => (i + 1) % pages), interval);
-    return () => clearInterval(timer.current);
-  }, [paused, pages, interval]);
+    const t = setInterval(() => setIdx((i) => (i + 1) % pages), interval);
+    return () => clearInterval(t);
+  }, [pages, interval]);
 
   const go = (i) => setIdx(((i % pages) + pages) % pages);
 
   return (
-    <section className="bg-slate-50 py-16" data-testid="testimonials-section" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onTouchStart={() => setPaused(true)} onTouchEnd={() => setPaused(false)}>
+    <section className="bg-slate-50 py-16" data-testid="testimonials-section">
       <div className="mx-auto max-w-7xl px-6">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
