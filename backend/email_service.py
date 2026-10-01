@@ -143,6 +143,23 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, emp_code: str, date_str: str, time_str: str, status: str, hours, for_admin: bool) -> str | None:
+    if not to:
+        return None
+    verb = "checked in" if kind == "in" else "checked out"
+    subject = f"{'Attendance: ' + emp_name if for_admin else 'Your attendance'} {verb} at {time_str} — {date_str}"
+    rows = [("Employee", f"{emp_name} ({emp_code})" if emp_code else emp_name), ("Date", date_str), ("Check-In" if kind == "in" else "Check-Out", time_str), ("Status", status)]
+    if hours is not None:
+        rows.append(("Working Hours", f"{hours} h"))
+    table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
+                    f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+    lead = (f"<b>{escape(emp_name)}</b> has {verb} at the office." if for_admin else f"You have successfully {verb}. Office hours are 10:00 AM – 5:00 PM.")
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p><p style="font-size:14px;color:#334155">{lead}</p>'
+             f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
+             f'<p style="font-size:12px;color:#64748b">{"Open Admin Panel → Attendance &amp; Salary to review or correct." if for_admin else "If anything looks wrong, please inform the admin."}</p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, device: str, reset_link: str, security_link: str) -> str | None:
     if not to:
         return None

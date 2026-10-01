@@ -26,12 +26,14 @@ class EmployeeIn(BaseModel):
     username: str
     password: str
     mobile: Optional[str] = ""
+    email: Optional[str] = ""
     permissions: dict = {}
 
 
 class EmployeeUpdateIn(BaseModel):
     name: Optional[str] = None
     mobile: Optional[str] = None
+    email: Optional[str] = None
     permissions: Optional[dict] = None
     status: Optional[str] = None
     password: Optional[str] = None
@@ -140,9 +142,11 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
             raise HTTPException(status_code=400, detail="Name is required")
         if await db.users.find_one({"username": username}):
             raise HTTPException(status_code=400, detail="Username already taken")
-        email = f"{username}@employee.radhikatraders.net"
+        email = (body.email or "").strip().lower() or f"{username}@employee.radhikatraders.net"
+        if "@" not in email or "." not in email.split("@")[-1]:
+            raise HTTPException(status_code=400, detail="Enter a valid email address")
         if await db.users.find_one({"email": email}):
-            raise HTTPException(status_code=400, detail="Username already taken")
+            raise HTTPException(status_code=400, detail="This email is already used by another account")
         doc = {"name": body.name.strip()[:80], "username": username, "email": email, "mobile": (body.mobile or "").strip()[:15],
                "password_hash": await asyncio.to_thread(hash_password, body.password), "role": "employee",
                "employee_code": "EMP-" + secrets.token_hex(2).upper(), "permissions": normalize_permissions(body.permissions),
@@ -165,6 +169,13 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
             actions.append("employee_updated")
         if body.mobile is not None:
             upd["mobile"] = body.mobile.strip()[:15]
+        if body.email is not None and body.email.strip():
+            em = body.email.strip().lower()
+            if "@" not in em or "." not in em.split("@")[-1]:
+                raise HTTPException(status_code=400, detail="Enter a valid email address")
+            if await db.users.find_one({"email": em, "_id": {"$ne": ObjectId(eid)}}):
+                raise HTTPException(status_code=400, detail="This email is already used by another account")
+            upd["email"] = em
         if body.permissions is not None:
             upd["permissions"] = normalize_permissions(body.permissions)
             actions.append("employee_permissions_changed")

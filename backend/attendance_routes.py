@@ -1,13 +1,19 @@
 """Employee attendance (check-in/out, statuses) + monthly salary calculation, exports and dashboard summary."""
 import calendar
 import io
+import logging
 from datetime import datetime, timezone, timedelta, date as ddate
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from bson import ObjectId
 import pandas as pd
+
+import contact_settings
+from email_service import send_attendance_email
+
+logger = logging.getLogger("attendance")
 
 IST = timezone(timedelta(hours=5, minutes=30))
 OFFICE_START, OFFICE_END = (10, 0), (17, 0)
@@ -154,9 +160,27 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         st = a.get("status", "")
         return ("Leave (Paid)" if a.get("leave_paid") else "Leave (Unpaid)") if st == "leave" else st.replace("_", " ").title()
 
+    async def notify_punch(emp: dict, rec: dict, kind: str) -> None:
+        full = await db.users.find_one({"_id": ObjectId(emp["id"])}) if ObjectId.is_valid(emp["id"]) else None
+        if not full:
+            return
+        when = fmt_t(rec["check_in"] if kind == "in" else rec["check_out"])
+        d = datetime.fromisoformat(rec["date"]).strftime("%d %b %Y")
+        st = label(rec) + (" (Late)" if kind == "in" and rec.get("late") else "")
+        hours = rec.get("hours") if kind == "out" else None
+        admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
+        targets = {(a["email"].lower(), a.get("name", "Admin"), True) for a in admins if a.get("email")} | {(contact_settings.CONTACT["owner_email"], "Admin", True)}
+        if full.get("email"):
+            targets.add((full["email"].lower(), full.get("name", ""), False))
+        for to, name, for_admin in targets:
+            try:
+                await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin)
+            except Exception as e:  # never block attendance on email failure
+                logger.warning(f"attendance email to {to} failed: {e}")
+
     # ---------------- Employee ----------------
     @r.post("/employee/attendance/check-in")
-    async def check_in(request: Request, emp: dict = Depends(require_employee)):
+    async def check_in(request: Request, background: BackgroundTasks, emp: dict = Depends(require_employee)):
         today = ist_today()
         if await db.attendance.find_one({"employee_id": emp["id"], "date": today}):
             raise HTTPException(status_code=400, detail="Already checked in today")
@@ -164,10 +188,12 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                       "ip": request.headers.get("x-forwarded-for", "").split(",")[0].strip(), "created_at": now_utc().isoformat(), "updated_at": now_utc().isoformat()})
         res = await db.attendance.insert_one(rec)
         await log_activity(emp, "attendance_check_in", request, entity_type="attendance", entity_id=today, status=rec["status"], detail=f"Check-in {fmt_t(rec['check_in'])}")
-        return out(await db.attendance.find_one({"_id": res.inserted_id}))
+        saved = await db.attendance.find_one({"_id": res.inserted_id})
+        background.add_task(notify_punch, emp, saved, "in")
+        return out(saved)
 
     @r.post("/employee/attendance/check-out")
-    async def check_out(request: Request, emp: dict = Depends(require_employee)):
+    async def check_out(request: Request, background: BackgroundTasks, emp: dict = Depends(require_employee)):
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": ist_today()})
         if not rec or not rec.get("check_in"):
             raise HTTPException(status_code=400, detail="Please check in first")
@@ -177,7 +203,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         rec = derive(rec)
         await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {"check_out": rec["check_out"], "hours": rec["hours"], "status": rec["status"], "late": rec["late"], "updated_at": now_utc().isoformat()}})
         await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {rec['hours']} h")
-        return out(await db.attendance.find_one({"_id": rec["_id"]}))
+        saved = await db.attendance.find_one({"_id": rec["_id"]})
+        background.add_task(notify_punch, emp, saved, "out")
+        return out(saved)
 
     @r.get("/employee/attendance")
     async def my_attendance(month: Optional[str] = None, emp: dict = Depends(require_employee)):

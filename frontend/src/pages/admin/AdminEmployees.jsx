@@ -29,13 +29,13 @@ function PermMatrix({ value, onChange }) {
 
 function EmployeeDialog({ emp, onClose, onSaved }) {
   const isEdit = !!emp;
-  const [f, setF] = useState({ name: emp?.name || "", username: emp?.username || "", mobile: emp?.mobile || "", password: "", permissions: emp?.permissions || emptyPerms() });
+  const [f, setF] = useState({ name: emp?.name || "", username: emp?.username || "", mobile: emp?.mobile || "", email: emp?.email && !emp.email.endsWith("@employee.radhikatraders.net") ? emp.email : "", password: "", permissions: emp?.permissions || emptyPerms() });
   const [busy, setBusy] = useState(false);
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try {
       if (isEdit) {
-        const body = { name: f.name, mobile: f.mobile, permissions: f.permissions };
+        const body = { name: f.name, mobile: f.mobile, email: f.email, permissions: f.permissions };
         if (f.password) body.password = f.password;
         await api.patch(`/admin/employees/${emp.id}`, body);
         toast.success("Employee updated");
@@ -54,6 +54,7 @@ function EmployeeDialog({ emp, onClose, onSaved }) {
           <div><Label>Full name</Label><Input data-testid="emp-name" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1" /></div>
           <div><Label>Username</Label><Input data-testid="emp-username" required disabled={isEdit} value={f.username} onChange={(e) => setF({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, "") })} className="mt-1" placeholder="lowercase, e.g. rahul.k" /></div>
           <div><Label>Mobile (optional)</Label><Input data-testid="emp-mobile" value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} className="mt-1" /></div>
+          <div><Label>Email / Gmail (for attendance mails)</Label><Input data-testid="emp-email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} className="mt-1" placeholder="employee@gmail.com" /></div>
           <div><Label>{isEdit ? "New password (leave blank to keep)" : "Password"}</Label><PasswordInput data-testid="emp-password" required={!isEdit} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} className="mt-1" /></div>
         </div>
         <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wider text-red-600">Role & permissions</div>

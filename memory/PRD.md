@@ -375,3 +375,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## 2026-06 — Bug fix: wallet adjust (deduct / set ₹0) spinner
 - Cause: after pagination, AdminCustomers `load(page)` received the dialog's response object via `onDone={load}` → `page=[object Object]` → 422 → list never reloaded (infinite loader). Fix: `onDone={() => load()}` for WalletAdjustDialog & CustomerEditDialog, `Number(page)||1` guard + `.catch` toast in load (same guard in AdminLeads/AdminWithdrawals). Verified via UI: deduct → zero → add restore, list reloads instantly.
+
+## 2026-06 — Attendance punch emails
+- On employee check-in AND check-out, background task `notify_punch` emails (a) every admin + Contact & Support owner_email and (b) the employee (template `send_attendance_email`: employee, date, time, status incl. Late, working hours on check-out). Email failures are logged, never block attendance.
+- Employees now have a real **Email / Gmail** field (create + edit in Admin → Employees; backend validates format + uniqueness). Default placeholder `<username>@employee.radhikatraders.net` is undeliverable → admin must set a real email for employees to receive mails. rahul.k (preview) set to bhatiharish276+rahul@gmail.com.
