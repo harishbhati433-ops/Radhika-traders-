@@ -386,3 +386,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Statement date range (customer + admin)
 - `_statement_range(preset, date_from, date_to)`: presets today | yesterday | weekly (7d) | monthly (30d) | 3m | 6m | 1y | all | custom (both dates required → 400 otherwise), IST day bounds. `GET /api/statement` and `GET /api/admin/customers/{uid}/statement/download` accept `preset`, `date_from`, `date_to`; PDF shows "Statement Period", txn count, credits/debits in period; filename includes range tag.
 - Frontend: shared `StatementRangePicker` + `useStatementRange` (testids stmt-range-<preset>, -from, -to; admin dialog uses adm-stmt-range-*). Used on customer /statements page and admin CustomerStatementDialog. Verified via curl (row counts per preset) + UI downloads.
+
+## Update (June 2026) — Admin login link hidden
+- Public "Admin Login →" link removed from Footer, Maintenance page and Employee Login page. Admin login is reachable ONLY via direct URL `/admin/login` (user mandate: no public button anywhere).

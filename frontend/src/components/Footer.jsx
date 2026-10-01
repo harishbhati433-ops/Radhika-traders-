@@ -38,7 +38,6 @@ export function Footer() {
             <a href="https://www.facebook.com/share/1BadZkWMoV/" target="_blank" rel="noreferrer" data-testid="footer-facebook" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
             <a href="https://youtube.com/@radhikatradersofficial" target="_blank" rel="noreferrer" data-testid="footer-youtube" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>
           </div>
-          <Link to="/admin/login" className="mt-6 inline-block text-xs text-slate-500 hover:text-amber-400" data-testid="footer-admin-link">Admin Login →</Link>
         </div>
       </div>
       <div className="border-t border-white/10 py-5 text-center text-xs text-slate-500">

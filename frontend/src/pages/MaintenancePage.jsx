@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { Wrench, Clock, MessageCircle, ShieldCheck, RefreshCw } from "lucide-react";
 import { useContact, waLink } from "../lib/contact";
 
@@ -39,7 +38,6 @@ export function MaintenancePage({ state, onRecheck }) {
           <a href={waLink(contact.whatsapp_number)} target="_blank" rel="noreferrer" data-testid="maintenance-whatsapp" className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white hover:brightness-110"><MessageCircle className="h-4 w-4" /> WhatsApp support</a>
           <button onClick={onRecheck} data-testid="maintenance-recheck" className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-sm font-bold text-white hover:bg-white/10"><RefreshCw className="h-4 w-4" /> Check again</button>
         </div>
-        <Link to="/admin/login" className="mt-10 inline-block text-[11px] text-slate-500 hover:text-slate-300" data-testid="maintenance-admin-link">Admin login</Link>
       </div>
     </div>
   );
