@@ -33,6 +33,7 @@ from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
+from attendance_routes import build_router as build_attendance_router
 from contact_routes import build_router as build_contact_router
 from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login
@@ -2889,7 +2890,9 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
                            "eligible": bool(r.get("dedicated_referral_paid")), "kyc_status": r.get("kyc", {}).get("status", "not_submitted")} for r in referred]}
 
 
-api.include_router(build_employee_router(db, require_admin, log_activity, public_user))
+_emp_router = build_employee_router(db, require_admin, log_activity, public_user)
+api.include_router(_emp_router)
+api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 app.include_router(api)
@@ -2936,6 +2939,8 @@ async def startup():
         await db.pwd_reset_otps.create_index("email")
         await db.otp_locks.create_index("identifier", unique=True)
         await db.admin_devices.create_index([("user_id", 1), ("fingerprint", 1)], unique=True)
+        await db.attendance.create_index([("employee_id", 1), ("date", 1)], unique=True)
+        await db.salary_adjustments.create_index([("employee_id", 1), ("month", 1)], unique=True)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { PasswordInput } from "../../components/PasswordInput";
 import { toast } from "sonner";
-import { Eye, Pencil, KeyRound, History } from "lucide-react";
+import { Eye, Pencil, KeyRound, History, CalendarCheck } from "lucide-react";
 
 function ChangePassword() {
   const [f, setF] = useState({ current_password: "", new_password: "", confirm: "" });
@@ -65,6 +65,10 @@ export default function EmployeeDashboard() {
         </div>
       )}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Link to="/employee/attendance" data-testid="emp-attendance-tile" className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md lg:col-span-2">
+          <div><div className="flex items-center gap-2 font-display font-bold text-emerald-900"><CalendarCheck className="h-5 w-5" /> My Attendance</div><div className="mt-1 text-xs text-emerald-800">Check In / Check Out for today, monthly summary & working hours.</div></div>
+          <span className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white">Open</span>
+        </Link>
         <ChangePassword />
         <div className="rounded-2xl border border-slate-200 bg-white p-5" data-testid="emp-recent-activity">
           <div className="mb-3 flex items-center gap-2 font-display font-bold text-slate-900"><History className="h-4 w-4 text-red-600" /> My recent activity</div>

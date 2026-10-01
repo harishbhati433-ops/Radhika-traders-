@@ -119,6 +119,8 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
         items = await db.activity_logs.find({"actor_id": emp["id"]}).sort("created_at", -1).to_list(50)
         return [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items]
 
+    r.require_employee = require_employee
+
     # ---------------- Super admin: employees ----------------
     @r.get("/admin/employees")
     async def list_employees(admin: dict = Depends(require_admin)):

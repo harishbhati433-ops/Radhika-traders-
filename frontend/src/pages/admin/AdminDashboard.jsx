@@ -9,6 +9,7 @@ import { MinWithdrawalSetting } from "../../components/MinWithdrawalSetting";
 import { SignupBonusSetting } from "../../components/SignupBonusSetting";
 import { WithdrawalToggleSetting } from "../../components/WithdrawalToggleSetting";
 import { ReferralLimitSetting } from "../../components/ReferralLimitSetting";
+import { AttendanceSummary } from "../../components/attendance/AttendanceSummary";
 import { Megaphone, Radio, PauseCircle, XCircle, Users, Wallet, TrendingUp, ArrowDownToLine, Clock, CheckCircle, IndianRupee } from "lucide-react";
 
 function KPI({ icon: Icon, label, value, tone }) {
@@ -64,6 +65,8 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+
+          <AttendanceSummary compact />
 
           <div className="mt-6 space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><ReferralBonusSetting /></div>
 
