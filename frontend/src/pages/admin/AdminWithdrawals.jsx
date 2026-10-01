@@ -28,7 +28,7 @@ export default function AdminWithdrawals() {
   const highlight = params.get("highlight");
 
   const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
-  const load = (page = pg.page) => api.get("/admin/withdrawals", { params: { ...(tab === "all" ? {} : { status: tab }), page, limit: pg.limit } })
+  const load = (page = pg.page) => api.get("/admin/withdrawals", { params: { ...(tab === "all" ? {} : { status: tab }), page: Number(page) || 1, limit: pg.limit } })
     .then(({ data }) => { setList(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
   useEffect(() => { load(1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

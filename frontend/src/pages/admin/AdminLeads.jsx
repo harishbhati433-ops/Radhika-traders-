@@ -42,7 +42,7 @@ export default function AdminLeads() {
   };
 
   const load = (page = pg.page) => {
-    const params = { ...Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset")), page, limit: pg.limit };
+    const params = { ...Object.fromEntries(Object.entries(flt).filter(([k, v]) => v && k !== "preset")), page: Number(page) || 1, limit: pg.limit };
     api.get("/admin/leads", { params }).then(({ data }) => { setList(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
     api.get("/admin/leads/summary").then(({ data }) => setSummary(data));
   };

@@ -27,8 +27,9 @@ export default function AdminCustomers() {
   const [busy, setBusy] = useState(false);
 
   const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
-  const load = (page = pg.page) => api.get("/admin/customers", { params: { include_deleted: showDeleted, search: search || undefined, page, limit: pg.limit } })
-    .then(({ data }) => { setCustomers(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
+  const load = (page = pg.page) => api.get("/admin/customers", { params: { include_deleted: showDeleted, search: search || undefined, page: Number(page) || 1, limit: pg.limit } })
+    .then(({ data }) => { setCustomers(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); })
+    .catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Could not load customers"));
   useEffect(() => { const t = setTimeout(() => load(1), 250); return () => clearTimeout(t); }, [showDeleted, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const credit = async (e) => {
@@ -113,8 +114,8 @@ export default function AdminCustomers() {
           </form>
         </DialogContent>
       </Dialog>
-      <WalletAdjustDialog customer={adjust} open={!!adjust} onClose={() => setAdjust(null)} onDone={load} />
-      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={load} />
+      <WalletAdjustDialog customer={adjust} open={!!adjust} onClose={() => setAdjust(null)} onDone={() => load()} />
+      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={() => load()} />
       <CustomerStatementDialog userId={stmt} onClose={() => setStmt(null)} />
     </DashboardLayout>
   );
