@@ -3,6 +3,7 @@ import api, { formatApiErrorDetail } from "../lib/api";
 import { CopyValue } from "./CopyValue";
 import { toast } from "sonner";
 import { X, Loader2, FileText, FileSpreadsheet, FileDown, ArrowDownLeft, ArrowUpRight, Lock } from "lucide-react";
+import { StatementRangePicker, useStatementRange } from "./StatementRangePicker";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -13,6 +14,7 @@ export function CustomerStatementDialog({ userId, onClose }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("transactions");
   const [busy, setBusy] = useState("");
+  const r = useStatementRange();
 
   useEffect(() => {
     if (!userId) return;
@@ -21,13 +23,15 @@ export function CustomerStatementDialog({ userId, onClose }) {
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const download = async (fmt) => {
+    if (!r.valid) return toast.error("Select both From and To dates");
     setBusy(fmt);
     try {
-      const res = await fetch(`${API}/admin/customers/${userId}/statement/download?format=${fmt}`, { headers: { Authorization: `Bearer ${localStorage.getItem("rt_token")}` } });
+      const qs = new URLSearchParams({ format: fmt, ...r.params }).toString();
+      const res = await fetch(`${API}/admin/customers/${userId}/statement/download?${qs}`, { headers: { Authorization: `Bearer ${localStorage.getItem("rt_token")}` } });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-      a.download = `statement_${(data?.customer?.name || "customer").replace(/\s+/g, "_")}.${fmt === "excel" ? "xlsx" : fmt}`; a.click(); URL.revokeObjectURL(a.href);
+      a.download = `statement_${(data?.customer?.name || "customer").replace(/\s+/g, "_")}_${r.preset === "custom" ? `${r.from}_${r.to}` : r.preset}.${fmt === "excel" ? "xlsx" : fmt}`; a.click(); URL.revokeObjectURL(a.href);
       toast.success(`${fmt.toUpperCase()} downloaded`);
     } catch { toast.error("Download failed"); } finally { setBusy(""); }
   };
@@ -72,6 +76,7 @@ export function CustomerStatementDialog({ userId, onClose }) {
                 ))}
               </div>
             </div>
+            <div className="px-4 pt-3"><StatementRangePicker r={r} compact testId="adm-stmt-range" /></div>
             <div className="min-h-0 flex-1 overflow-auto rt-scroll p-4">
               {tab === "transactions" ? (
                 <table className="w-full text-left text-xs" data-testid="stmt-tx-table">

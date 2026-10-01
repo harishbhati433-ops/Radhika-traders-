@@ -9,7 +9,7 @@ import hashlib
 from pymongo.errors import DuplicateKeyError
 import logging
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import List, Optional
 
 from dotenv import load_dotenv
@@ -2653,8 +2653,40 @@ async def download_report(rid: str, user: dict = Depends(get_current_user)):
 
 
 # ----------------------------- Statements -----------------------------
-async def _statement_rows(user_id: str):
-    txns = await db.transactions.find({"user_id": user_id}).sort("created_at", -1).to_list(5000)
+def _statement_range(preset: Optional[str], date_from: Optional[str], date_to: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
+    """Resolve preset/custom range to ISO bounds (IST days) + a human label."""
+    ist = timezone(timedelta(hours=5, minutes=30))
+    today = datetime.now(ist).date()
+    p = (preset or "all").lower()
+    if p == "custom":
+        if not date_from or not date_to:
+            raise HTTPException(status_code=400, detail="Select both From and To dates")
+        try:
+            d1, d2 = date.fromisoformat(date_from), date.fromisoformat(date_to)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date")
+        if d1 > d2:
+            d1, d2 = d2, d1
+        label = f"{d1.strftime('%d %b %Y')} – {d2.strftime('%d %b %Y')}"
+    else:
+        d2 = today
+        d1 = {"today": today, "yesterday": today - timedelta(days=1), "weekly": today - timedelta(days=6), "monthly": today - timedelta(days=29),
+              "3m": today - timedelta(days=89), "6m": today - timedelta(days=179), "1y": today - timedelta(days=364)}.get(p)
+        if p == "yesterday":
+            d2 = d1
+        if d1 is None:
+            return None, None, "All time"
+        label = {"today": "Today", "yesterday": "Yesterday", "weekly": "Last 7 days", "monthly": "Last 30 days", "3m": "Last 3 months", "6m": "Last 6 months", "1y": "Last 1 year"}[p] + f" ({d1.strftime('%d %b %Y')} – {d2.strftime('%d %b %Y')})"
+    start = datetime.combine(d1, datetime.min.time(), tzinfo=ist).astimezone(timezone.utc).isoformat()
+    end = datetime.combine(d2, datetime.max.time(), tzinfo=ist).astimezone(timezone.utc).isoformat()
+    return start, end, label
+
+
+async def _statement_rows(user_id: str, start: Optional[str] = None, end: Optional[str] = None):
+    q = {"user_id": user_id}
+    if start and end:
+        q["created_at"] = {"$gte": start, "$lte": end}
+    txns = await db.transactions.find(q).sort("created_at", -1).to_list(5000)
     rows = []
     for t in txns:
         rows.append({
@@ -2669,8 +2701,8 @@ async def _statement_rows(user_id: str):
 
 
 @api.get("/statement")
-async def download_statement(format: str = "csv", user: dict = Depends(get_current_user)):
-    return await _statement_file(user, format)
+async def download_statement(format: str = "csv", preset: Optional[str] = "all", date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(get_current_user)):
+    return await _statement_file(user, format, preset, date_from, date_to)
 
 
 @api.get("/admin/customers/{uid}/statement")
@@ -2699,17 +2731,21 @@ async def admin_customer_statement(uid: str, admin: dict = Depends(require_perm(
 
 
 @api.get("/admin/customers/{uid}/statement/download")
-async def admin_customer_statement_download(uid: str, format: str = "pdf", admin: dict = Depends(require_perm("payments", "view"))):
+async def admin_customer_statement_download(uid: str, format: str = "pdf", preset: Optional[str] = "all", date_from: Optional[str] = None, date_to: Optional[str] = None, admin: dict = Depends(require_perm("payments", "view"))):
     u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"}) if ObjectId.is_valid(uid) else None
     if not u:
         raise HTTPException(status_code=404, detail="Customer not found")
-    return await _statement_file(public_user(u), format)
+    return await _statement_file(public_user(u), format, preset, date_from, date_to)
 
 
-async def _statement_file(user: dict, format: str):
-    rows = await _statement_rows(user["id"])
+async def _statement_file(user: dict, format: str, preset: Optional[str] = "all", date_from: Optional[str] = None, date_to: Optional[str] = None):
+    start, end, period = _statement_range(preset, date_from, date_to)
+    rows = await _statement_rows(user["id"], start, end)
     wallet = await compute_wallet(user["id"])
-    fname = f"radhika_statement_{re.sub(r'[^a-z0-9]+', '_', (user.get('name') or '').lower()).strip('_') or 'customer'}_{datetime.now().strftime('%Y%m%d')}"
+    credits = round(sum(r["Amount"] for r in rows if r["Type"] == "CREDIT"), 2)
+    debits = round(sum(r["Amount"] for r in rows if r["Type"] == "DEBIT"), 2)
+    tag = (preset or "all").lower() if (preset or "all").lower() != "custom" else f"{date_from}_{date_to}"
+    fname = f"radhika_statement_{re.sub(r'[^a-z0-9]+', '_', (user.get('name') or '').lower()).strip('_') or 'customer'}_{tag}_{datetime.now().strftime('%Y%m%d')}"
     if format == "csv":
         import csv
         buf = io.StringIO()
@@ -2742,12 +2778,14 @@ async def _statement_file(user: dict, format: str):
                  Spacer(1, 10),
                  Paragraph(f"Account: {user.get('name')} ({user.get('email')})" + (f" · Mobile: {user.get('mobile')}" if user.get("mobile") else "") + (f" · ID: {user.get('referral_code')}" if user.get("referral_code") else ""), styles["Normal"]),
                  Paragraph(f"Available Balance: Rs. {wallet['balance']} | Total Earnings: Rs. {wallet['total_earnings']} | Withdrawn: Rs. {wallet['total_withdrawn']} | Pending Withdrawal: Rs. {wallet['pending_withdrawal']}", styles["Normal"]),
+                 Spacer(1, 6),
+                 Paragraph(f"<b>Statement Period:</b> {period} &nbsp;&nbsp;|&nbsp;&nbsp; Transactions: {len(rows)} &nbsp;&nbsp;|&nbsp;&nbsp; Credits in period: Rs. {credits} &nbsp;&nbsp;|&nbsp;&nbsp; Debits in period: Rs. {debits}", styles["Normal"]),
                  Spacer(1, 14)]
         data = [["Date", "Description", "Type", "Amount", "Reference", "Status"]]
         for r in rows:
             data.append([r["Date"], r["Description"], r["Type"], f"Rs.{r['Amount']}", r["Reference"], r["Status"]])
         if len(data) == 1:
-            data.append(["-", "No transactions yet", "-", "-", "-", "-"])
+            data.append(["-", "No transactions in this period", "-", "-", "-", "-"])
         table = Table(data, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#991B1B")),

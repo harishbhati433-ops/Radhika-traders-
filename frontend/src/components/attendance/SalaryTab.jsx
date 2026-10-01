@@ -3,7 +3,8 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
-import { X, FileText, CheckCircle } from "lucide-react";
+import { X, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { ImageUpload } from "../ImageUpload";
 import { inr, thisMonth } from "./shared";
 import { ExportButtons, dl } from "./AttendanceTab";
 
@@ -32,16 +33,41 @@ function AdjustDialog({ row, onClose, onSaved }) {
   );
 }
 
+function PayDialog({ row, onClose, onDone }) {
+  const [proof, setProof] = useState("");
+  const [utr, setUtr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault(); setBusy(true);
+    try {
+      const { data } = await api.put(`/admin/salary/${row.employee_id}/${row.month}`, { bonus: row.bonus, incentive: row.incentive, advance: row.advance, deduction: row.deduction, note: row.note, payment_status: "paid", proof_url: proof, utr });
+      toast.success(data.email_sent_to ? `Marked paid · credit email sent to ${data.email_sent_to}` : "Marked paid (employee has no email set — no mail sent)", { duration: 7000 }); onDone(); onClose();
+    } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="sal-pay-dialog">
+      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-1 flex items-center justify-between"><h3 className="font-display text-lg font-bold">Pay {inr(row.net_payable)} · {row.employee_name}</h3><button type="button" onClick={onClose}><X className="h-5 w-5" /></button></div>
+        <p className="mb-4 text-xs text-slate-500">Salary for {row.month}. Upload the transfer screenshot — the employee gets an email “Salary credited {inr(row.net_payable)}” with this proof.</p>
+        <ImageUpload label="Payment screenshot (proof)" value={proof} onChange={setProof} testId="sal-pay-proof" />
+        <div className="mt-3"><Label>UTR / Transaction ID (optional)</Label><Input value={utr} onChange={(e) => setUtr(e.target.value)} data-testid="sal-pay-utr" className="mt-1" placeholder="e.g. 4257XXXXXXXX" /></div>
+        <button disabled={busy} data-testid="sal-pay-confirm" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Confirm Paid & Email Employee</button>
+      </form>
+    </div>
+  );
+}
+
 export function SalaryTab() {
   const [month, setMonth] = useState(thisMonth());
   const [rows, setRows] = useState([]);
   const [edit, setEdit] = useState(null);
+  const [paying, setPaying] = useState(null);
   const load = () => api.get("/admin/salary", { params: { month } }).then(({ data }) => setRows(data.rows)).catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail)));
   useEffect(() => { load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
   const pay = async (r) => {
-    const paid = r.payment_status !== "paid";
-    if (!window.confirm(paid ? `Mark ${inr(r.net_payable)} salary of ${r.employee_name} for ${month} as PAID today?` : `Mark ${r.employee_name}'s ${month} salary as PENDING again?`)) return;
-    try { await api.put(`/admin/salary/${r.employee_id}/${month}`, { bonus: r.bonus, incentive: r.incentive, advance: r.advance, deduction: r.deduction, note: r.note, payment_status: paid ? "paid" : "pending" }); toast.success(paid ? "Marked paid" : "Marked pending"); load(); }
+    if (r.payment_status !== "paid") return setPaying(r);
+    if (!window.confirm(`Mark ${r.employee_name}'s ${month} salary as PENDING again?`)) return;
+    try { await api.put(`/admin/salary/${r.employee_id}/${month}`, { bonus: r.bonus, incentive: r.incentive, advance: r.advance, deduction: r.deduction, note: r.note, payment_status: "pending" }); toast.success("Marked pending"); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
   const tot = (k) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
@@ -62,7 +88,7 @@ export function SalaryTab() {
                 <td className="p-3 font-mono">{r.present + r.late}</td><td className="p-3 font-mono text-rose-700">{r.absent}</td><td className="p-3 font-mono">{r.half_day}</td><td className="p-3 font-mono">{r.paid_leave}</td><td className="p-3 font-mono">{r.unpaid_leave}</td>
                 <td className="p-3 font-mono font-bold">{r.paid_days}</td><td className="p-3 font-mono">{inr(r.earned)}</td><td className="p-3 font-mono text-emerald-700">{inr(r.bonus + r.incentive)}</td><td className="p-3 font-mono text-rose-700">{inr(r.advance)}</td><td className="p-3 font-mono text-rose-700">{inr(r.deduction)}</td>
                 <td className="p-3 font-mono text-sm font-bold text-slate-900" data-testid={`sal-net-${r.employee_id}`}>{inr(r.net_payable)}</td>
-                <td className="p-3"><button onClick={() => pay(r)} data-testid={`sal-pay-${r.employee_id}`} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}><CheckCircle className="h-3 w-3" /> {r.payment_status === "paid" ? `Paid ${r.payment_date}` : "Mark Paid"}</button></td>
+                <td className="p-3"><button onClick={() => pay(r)} data-testid={`sal-pay-${r.employee_id}`} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}><CheckCircle className="h-3 w-3" /> {r.payment_status === "paid" ? `Paid ${r.payment_date}` : "Mark Paid"}</button>{r.proof_url && <a href={r.proof_url} target="_blank" rel="noreferrer" data-testid={`sal-proof-${r.employee_id}`} className="ml-1 text-[10px] font-bold text-sky-700 hover:underline">proof</a>}</td>
                 <td className="p-3 whitespace-nowrap text-right"><button onClick={() => setEdit(r)} data-testid={`sal-edit-${r.employee_id}`} className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">Set / Adjust</button> <button onClick={() => dl(`/admin/salary/slip/${r.employee_id}`, { month, format: "pdf" })} data-testid={`sal-slip-${r.employee_id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white"><FileText className="h-3 w-3" /> Slip</button></td>
               </tr>
             ))}
@@ -71,6 +97,7 @@ export function SalaryTab() {
         </table>
       </div>
       {edit && <AdjustDialog row={edit} onClose={() => setEdit(null)} onSaved={load} />}
+      {paying && <PayDialog row={paying} onClose={() => setPaying(null)} onDone={load} />}
     </div>
   );
 }

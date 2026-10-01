@@ -143,6 +143,25 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_salary_paid_email(to: str, name: str, month: str, net: float, monthly: float, paid_days, bonus: float, deductions: float, payment_date: str, proof_link: str, utr: str) -> str | None:
+    if not to:
+        return None
+    amt = f"₹{net:,.2f}"
+    mlabel = datetime.strptime(month, "%Y-%m").strftime("%B %Y")
+    subject = f"Salary credited: {amt} for {mlabel}"
+    rows = [("Salary Month", mlabel), ("Amount Credited", amt), ("Monthly Salary", f"₹{monthly:,.2f}"), ("Paid Days", paid_days), ("Bonus / Incentive", f"₹{bonus:,.2f}"), ("Advance / Deductions", f"₹{deductions:,.2f}"), ("Payment Date", payment_date)]
+    if utr:
+        rows.append(("UTR / Reference", utr))
+    table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
+                    f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+    proof = f'<p style="margin:18px 0 0"><a href="{escape(proof_link)}" style="color:#991B1B;font-weight:bold;font-size:13px">View payment proof</a></p>' if proof_link else ""
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+             f'<p style="font-size:14px;color:#334155">Your salary of <b style="color:#15803d">{amt}</b> for <b>{escape(mlabel)}</b> has been credited. Details:</p>'
+             f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>{proof}'
+             f'<p style="font-size:12px;color:#64748b;margin-top:16px">If any detail looks incorrect, please contact the admin. Thank you for your hard work!</p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, emp_code: str, date_str: str, time_str: str, status: str, hours, for_admin: bool) -> str | None:
     if not to:
         return None

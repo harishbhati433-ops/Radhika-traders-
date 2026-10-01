@@ -379,3 +379,10 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## 2026-06 — Attendance punch emails
 - On employee check-in AND check-out, background task `notify_punch` emails (a) every admin + Contact & Support owner_email and (b) the employee (template `send_attendance_email`: employee, date, time, status incl. Late, working hours on check-out). Email failures are logged, never block attendance.
 - Employees now have a real **Email / Gmail** field (create + edit in Admin → Employees; backend validates format + uniqueness). Default placeholder `<username>@employee.radhikatraders.net` is undeliverable → admin must set a real email for employees to receive mails. rahul.k (preview) set to bhatiharish276+rahul@gmail.com.
+
+## 2026-06 — Salary paid email with proof
+- Salary Sheet "Mark Paid" now opens PayDialog (sal-pay-dialog): proof screenshot upload (ImageUpload → sal-pay-proof) + optional UTR → PUT /admin/salary/{emp}/{month} {payment_status:"paid", proof_url, utr}. On transition pending→paid, background `send_salary_paid_email` to employee: amount credited, month, monthly salary, paid days, bonus, deductions, payment date, UTR, "View payment proof" link. No duplicate mail on re-save; "proof" link shown in sheet row; proof_url/utr returned in salary rows. Marking pending again uses confirm().
+
+## 2026-06 — Statement date range (customer + admin)
+- `_statement_range(preset, date_from, date_to)`: presets today | yesterday | weekly (7d) | monthly (30d) | 3m | 6m | 1y | all | custom (both dates required → 400 otherwise), IST day bounds. `GET /api/statement` and `GET /api/admin/customers/{uid}/statement/download` accept `preset`, `date_from`, `date_to`; PDF shows "Statement Period", txn count, credits/debits in period; filename includes range tag.
+- Frontend: shared `StatementRangePicker` + `useStatementRange` (testids stmt-range-<preset>, -from, -to; admin dialog uses adm-stmt-range-*). Used on customer /statements page and admin CustomerStatementDialog. Verified via curl (row counts per preset) + UI downloads.

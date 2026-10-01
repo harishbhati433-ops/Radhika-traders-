@@ -11,7 +11,7 @@ from bson import ObjectId
 import pandas as pd
 
 import contact_settings
-from email_service import send_attendance_email
+from email_service import send_attendance_email, send_salary_paid_email
 
 logger = logging.getLogger("attendance")
 
@@ -72,6 +72,8 @@ class AdjustIn(BaseModel):
     note: Optional[str] = ""
     payment_status: Optional[str] = None  # pending | paid
     payment_date: Optional[str] = None
+    proof_url: Optional[str] = None
+    utr: Optional[str] = None
 
 
 def build_router(db, require_admin, require_employee, log_activity) -> APIRouter:
@@ -123,7 +125,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": earned,
                 "bonus": float(adj.get("bonus") or 0), "incentive": float(adj.get("incentive") or 0), "advance": float(adj.get("advance") or 0),
                 "deduction": float(adj.get("deduction") or 0), "note": adj.get("note", ""), "net_payable": round(earned + extras - cuts, 2),
-                "payment_status": adj.get("payment_status", "pending"), "payment_date": adj.get("payment_date", "")}
+                "payment_status": adj.get("payment_status", "pending"), "payment_date": adj.get("payment_date", ""), "proof_url": adj.get("proof_url", ""), "utr": adj.get("utr", "")}
 
     def export(rows: list, cols: list, title: str, fmt: str, fname: str):
         df = pd.DataFrame([{c[1]: row.get(c[0], "") for c in cols} for row in rows]) if rows else pd.DataFrame(columns=[c[1] for c in cols])
@@ -312,19 +314,30 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         return {"ok": True}
 
     @r.put("/admin/salary/{employee_id}/{month}")
-    async def set_adjustments(employee_id: str, month: str, body: AdjustIn, request: Request, admin: dict = Depends(require_admin)):
+    async def set_adjustments(employee_id: str, month: str, body: AdjustIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
         emp = (await employees([employee_id])).get(employee_id)
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
+        prev = await db.salary_adjustments.find_one({"employee_id": employee_id, "month": month}) or {}
         upd = {"bonus": float(body.bonus or 0), "incentive": float(body.incentive or 0), "advance": float(body.advance or 0), "deduction": float(body.deduction or 0), "note": (body.note or "")[:200], "updated_at": now_utc().isoformat()}
+        newly_paid = False
         if body.payment_status in ("pending", "paid"):
             upd["payment_status"] = body.payment_status
             upd["payment_date"] = (body.payment_date or ist_today()) if body.payment_status == "paid" else ""
             upd["paid_by"] = admin.get("name", "") if body.payment_status == "paid" else ""
+            upd["proof_url"] = (body.proof_url or "") if body.payment_status == "paid" else ""
+            upd["utr"] = (body.utr or "")[:60] if body.payment_status == "paid" else ""
+            newly_paid = body.payment_status == "paid" and prev.get("payment_status") != "paid"
         await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": upd, "$setOnInsert": {"employee_id": employee_id, "month": month}}, upsert=True)
         row = await salary_row(emp, month, ist_today())
         await log_activity(admin, "salary_adjusted", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", status=row["payment_status"], amount=row["net_payable"],
-                           detail=f"bonus {upd['bonus']:g} · incentive {upd['incentive']:g} · advance {upd['advance']:g} · deduction {upd['deduction']:g} → net ₹{row['net_payable']:g}")
+                           detail=f"bonus {upd['bonus']:g} · incentive {upd['incentive']:g} · advance {upd['advance']:g} · deduction {upd['deduction']:g} → net ₹{row['net_payable']:g}" + (" · marked PAID" if newly_paid else ""))
+        if newly_paid and emp.get("email"):
+            origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+            link = f"{origin}{upd['proof_url']}" if upd["proof_url"].startswith("/") else upd["proof_url"]
+            background.add_task(send_salary_paid_email, emp["email"], emp.get("name", ""), month, row["net_payable"], row["monthly_salary"], row["paid_days"],
+                                row["bonus"] + row["incentive"], row["advance"] + row["deduction"], upd["payment_date"], link, upd["utr"])
+            row["email_sent_to"] = emp["email"]
         return row
 
     # ---------------- Exports ----------------
