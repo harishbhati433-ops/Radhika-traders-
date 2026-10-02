@@ -3,6 +3,7 @@ import api, { fileUrl, formatApiErrorDetail } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Camera, Loader2, Trash2 } from "lucide-react";
+import { AvatarCropDialog } from "./AvatarCropDialog";
 
 export function UserAvatar({ user, size = 40, className = "" }) {
   const initial = (user?.name || "?").trim()[0]?.toUpperCase() || "?";
@@ -17,21 +18,30 @@ export function AvatarUpload() {
   const { user, setUser } = useAuth();
   const ref = useRef();
   const [busy, setBusy] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null);
 
   const save = async (avatar_url) => {
     const { data } = await api.put("/profile", { avatar_url });
     setUser(data);
   };
 
-  const pick = async (e) => {
+  const pick = (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) return toast.error("Photo is too large (max 8 MB)");
+    if (file.size > 15 * 1024 * 1024) return toast.error("Photo is too large (max 15 MB)");
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result);
+    reader.onerror = () => toast.error("Could not read this photo. Please try another one.");
+    reader.readAsDataURL(file);
+  };
+
+  const uploadCropped = async (blob) => {
+    setCropSrc(null);
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", new File([blob], "avatar.jpg", { type: "image/jpeg" }));
       const { data } = await api.post("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
       await save(data.url);
       toast.success("Profile photo updated");
@@ -65,8 +75,9 @@ export function AvatarUpload() {
           <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="avatar-change-btn" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{user?.avatar_url ? "Change photo" : "Upload photo"}</button>
           {user?.avatar_url && <button type="button" onClick={remove} disabled={busy} data-testid="avatar-remove-btn" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>}
         </div>
-        <p className="mt-1.5 text-[11px] text-slate-400">JPG, PNG, HEIC · pick from gallery, files or camera</p>
+        <p className="mt-1.5 text-[11px] text-slate-400">Pick from gallery, files or camera · then zoom & crop to centre your face</p>
       </div>
+      <AvatarCropDialog src={cropSrc} open={!!cropSrc} onCancel={() => setCropSrc(null)} onDone={uploadCropped} />
     </div>
   );
 }
