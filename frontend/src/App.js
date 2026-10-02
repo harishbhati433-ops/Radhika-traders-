@@ -65,6 +65,7 @@ const AdminEmployees = lazy(() => import("./pages/admin/AdminEmployees"));
 const AdminActivityLogs = lazy(() => import("./pages/admin/AdminActivityLogs"));
 const AdminWallets = lazy(() => import("./pages/admin/AdminWallets"));
 const AdminContact = lazy(() => import("./pages/admin/AdminContact"));
+const AdminTeam = lazy(() => import("./pages/admin/AdminTeam"));
 const AdminAttendance = lazy(() => import("./pages/admin/AdminAttendance"));
 const EmployeeAttendance = lazy(() => import("./pages/employee/EmployeeAttendance"));
 const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
@@ -158,6 +159,7 @@ function App() {
             <Route path="/admin/activity-logs" element={A(<AdminActivityLogs />)} />
             <Route path="/admin/wallets" element={A(<AdminWallets />, "payments")} />
             <Route path="/admin/contact" element={A(<AdminContact />)} />
+            <Route path="/admin/team" element={A(<AdminTeam />)} />
             <Route path="/admin/attendance" element={A(<AdminAttendance />)} />
             <Route path="/employee/attendance" element={E(<EmployeeAttendance />)} />
           </Routes>

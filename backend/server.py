@@ -35,6 +35,7 @@ from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
 from attendance_routes import build_router as build_attendance_router
 from contact_routes import build_router as build_contact_router
+from team_routes import build_router as build_team_router
 from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked
 import contact_settings
@@ -2947,6 +2948,7 @@ _emp_router = build_employee_router(db, require_admin, log_activity, public_user
 api.include_router(_emp_router)
 api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
+api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 app.include_router(api)
 

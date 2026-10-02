@@ -31,7 +31,7 @@ api.interceptors.response.use((r) => r, (err) => {
 
 export function fileUrl(path) {
   if (!path) return "";
-  if (path.startsWith("http")) return path;
+  if (path.startsWith("http") || path.startsWith("/images/")) return path;
   if (path.startsWith("/api/")) return `${BACKEND_URL}${path}`;
   return `${API}/files/${path}`;
 }

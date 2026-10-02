@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { CampaignCard } from "../components/CampaignCard";
 import { Testimonials } from "../components/Testimonials";
+import { TeamSection } from "../components/TeamSection";
 import api from "../lib/api";
 import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee, Megaphone, MousePointerClick, Target, Link2, ClipboardList, BarChart3, Handshake } from "lucide-react";
 
@@ -183,24 +184,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Team */}
-      <section id="team" className="mx-auto max-w-7xl px-6 py-16" data-testid="team-section">
-        <div className="mb-8">
-          <span className="text-xs font-bold uppercase tracking-wider text-red-600">Our People</span>
-          <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Radhika Traders Team</h2>
-          <p className="mt-2 max-w-xl text-sm text-slate-600">The team behind every campaign, payout and celebration at our Agar (M.P.) office.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3 md:grid-rows-2">
-          <img src="/images/team-1.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-1"
-            className="h-64 w-full rounded-3xl object-cover shadow-lg md:col-span-2 md:row-span-2 md:h-full" style={{ objectPosition: "50% 30%" }} />
-          <img src="/images/team-2.jpeg" alt="Radhika Traders anniversary celebration" loading="lazy" decoding="async" data-testid="team-photo-2"
-            className="h-64 w-full rounded-3xl object-cover shadow-lg" />
-          <div className="grid grid-cols-2 gap-4">
-            <img src="/images/team-3.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-3" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
-            <img src="/images/team-4.jpeg" alt="Radhika Traders team" loading="lazy" decoding="async" data-testid="team-photo-4" className="h-64 w-full rounded-3xl object-cover shadow-lg" style={{ objectPosition: "50% 35%" }} />
-          </div>
-        </div>
-      </section>
+      <TeamSection />
 
       <Testimonials />
 
