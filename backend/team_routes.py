@@ -22,7 +22,7 @@ class TeamIn(BaseModel):
     visible: bool = True
     eyebrow: str = Field("", max_length=60)
     heading: str = Field(..., min_length=1, max_length=80)
-    description: str = Field("", max_length=300)
+    description: str = Field("", max_length=600)
     photos: List[PhotoIn] = Field(default_factory=list, max_length=12)
 
 

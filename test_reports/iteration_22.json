@@ -1,0 +1,24 @@
+{
+  "summary": "End-to-end testing of the new admin-editable Team Photos homepage section. Backend pytest: 9/9 pass (public GET no auth, admin GET/PUT require auth 401/403, admin GET returns full doc, 400 when visible+empty photos, update persists & /api/team/public reflects immediately, hide works, max 12 photos rejected). Frontend playwright: admin login + /admin/team loads 4 defaults with heading 'Radhika Traders Team' and visible ON; edited heading to 'Hamari Team', added caption 'Captain' on photo 0, moved it down (reorder OK — caption follows photo), removed last photo, Save & publish → persisted after reload (3 photos, 'Hamari Team'). Homepage team-section rendered with team-heading='Hamari Team' and 3 photos in admin order with caption visible. Image upload via team-photo-upload (hidden file input next to ImageUpload) uploaded a tiny PNG, new 4th card appeared, Save persisted, and homepage team-section shows the uploaded /api/files/... URL (img.naturalWidth>0, complete=true). Visibility toggle OFF + Save → team-section absent on homepage (count=0); toggle back ON → section restored (count=1). Regression: /admin/login still loads; footer has no 'Admin Login' link; Testimonials still rendered below TeamSection (code-verified in Home.jsx and layout). Defaults restored via mongosh db.settings.deleteOne({key:'team'}); /api/team/public now returns the original 4 /images/team-{1..4}.jpeg photos.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_team_section.py",
+    "/app/test_reports/pytest/team_section.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "team_routes.py cleanly uses settings doc with key:'team' and merges with DEFAULT_TEAM — good fallback; /_id and key stripped on read.",
+    "PUT /admin/team strips whitespace, truncates captions to 80 chars (matches Pydantic max_length constraints), and enforces visible⇒at-least-one-photo rule with 400 — correct UX.",
+    "AdminTeam.jsx: useEffect on newUrl triggers add-to-photos (fine) but relies on string truthiness; if the same file is re-uploaded resulting in identical URL it would still re-trigger (minor). Not blocking.",
+    "TeamSection.jsx renders defaults until /api/team/public resolves — avoids blank flash; good.",
+    "Backend sends Cache-Control: no-store on both GET endpoints — fresh reads on reload confirmed."
+  ],
+  "updated_files": ["/app/backend/tests/test_team_section.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all data-testids present + flows pass end-to-end)"},
+  "test_credentials": "admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin)",
+  "seed_data_creation": "Uploaded one test 1x1 PNG at /api/files/radhika-traders/uploads/7d06df9e9a2e4ebfa795c4fdf0003e70.png during upload test. Settings doc {key:'team'} deleted at end — defaults restored (owner's 4 /images/team-{1..4}.jpeg photos visible, heading 'Radhika Traders Team', visible ON). The orphan uploaded PNG file is no longer referenced by any team doc and is harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Team Photos feature fully functional. API: GET /api/team/public (no auth), GET/PUT /api/admin/team (require admin JWT). Admin login must include portal:'admin' in /api/auth/login body (customers get 403 'Admin accounts cannot log in here'). Default photos are frontend-served /images/team-{1..4}.jpeg; uploaded ones are /api/files/... — frontend lib/api.js fileUrl() handles both. All required data-testids (team-heading, team-eyebrow, team-description, team-visible-toggle, team-photo-upload, team-photo-card-{i}, team-photo-caption-{i}, team-photo-up/down/remove-{i}, team-save, team-section) are present and wired correctly. Defaults were restored at end of this iteration."
+}

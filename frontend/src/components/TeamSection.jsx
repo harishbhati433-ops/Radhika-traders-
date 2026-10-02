@@ -24,13 +24,13 @@ export function TeamSection() {
       <div className="mb-8">
         {t.eyebrow && <span className="text-xs font-bold uppercase tracking-wider text-red-600">{t.eyebrow}</span>}
         <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl" data-testid="team-heading">{t.heading}</h2>
-        {t.description && <p className="mt-2 max-w-xl text-sm text-slate-600">{t.description}</p>}
+        {t.description && <p className="mt-2 max-w-2xl whitespace-pre-line text-sm text-slate-600" data-testid="team-description-text">{t.description}</p>}
       </div>
       <div className={`grid gap-4 ${rest.length ? "md:grid-cols-3" : ""}`}>
-        <Photo p={main} cls={rest.length ? "h-64 md:col-span-2 md:h-[34rem]" : "h-72 sm:h-96"} pos="50% 30%" />
+        <Photo p={main} cls={rest.length ? "h-64 md:col-span-2 md:h-full md:min-h-[28rem]" : "h-72 sm:h-96"} pos="50% 30%" />
         {rest.length > 0 && (
-          <div className={`grid gap-4 ${rest.length === 1 ? "" : "grid-cols-2 md:grid-cols-1"} ${rest.length > 2 ? "md:grid-cols-2" : ""}`}>
-            {rest.map((p, i) => <Photo key={`${p.url}-${i}`} p={p} cls="h-64 md:h-full md:min-h-[10rem]" pos="50% 35%" />)}
+          <div className="grid grid-cols-2 content-start gap-4">
+            {rest.map((p, i) => <Photo key={`${p.url}-${i}`} p={p} cls={`h-64 ${i === 0 || (rest.length % 2 === 0 && i === rest.length - 1) ? "col-span-2" : ""}`} pos="50% 35%" />)}
           </div>
         )}
       </div>

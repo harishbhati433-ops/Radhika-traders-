@@ -5,6 +5,7 @@ import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { ImageUpload } from "../../components/ImageUpload";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Save, Trash2, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
@@ -45,7 +46,7 @@ export default function AdminTeam() {
         </div>
         <div><Label>Small label (above heading)</Label><Input data-testid="team-eyebrow" value={t.eyebrow} onChange={set("eyebrow")} className="mt-1.5" maxLength={60} /></div>
         <div><Label>Heading</Label><Input data-testid="team-heading" value={t.heading} onChange={set("heading")} className="mt-1.5" maxLength={80} /></div>
-        <div className="lg:col-span-2"><Label>Description line</Label><Input data-testid="team-description" value={t.description} onChange={set("description")} className="mt-1.5" maxLength={300} /></div>
+        <div className="lg:col-span-2"><Label>Description / lines below heading (press Enter for a new line)</Label><Textarea data-testid="team-description" value={t.description} onChange={set("description")} className="mt-1.5 min-h-[96px]" maxLength={600} placeholder="e.g. Hamari team har campaign, payout aur celebration ke peeche khadi hai.&#10;Agar (M.P.) office se 2023 se aapki seva mein." /></div>
       </section>
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6" data-testid="team-photos-section">
