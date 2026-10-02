@@ -56,7 +56,7 @@ export function AvatarUpload() {
           className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-md transition-transform hover:scale-105 disabled:opacity-60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
         </button>
-        <input ref={ref} type="file" accept="image/*,.heic,.heif" hidden onChange={pick} data-testid="avatar-file-input" />
+        <input ref={ref} type="file" accept="image/*" hidden onChange={pick} data-testid="avatar-file-input" />
       </div>
       <div>
         <div className="font-display font-bold text-slate-900">{user?.name}</div>
