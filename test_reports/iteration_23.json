@@ -1,0 +1,25 @@
+{
+  "summary": "Tested customer profile photo (AvatarUpload) feature end-to-end: backend validation (profile avatar_url prefix guard, /api/upload image guard, HEIC acceptance) and frontend flows (upload, persist across reload, remove, sidebar sync, admin customer list avatar). All backend tests pass (7/7). All frontend flows pass. Regression checks (banner-upload, Save Profile button, KYC form) look good. Test customer is left with an uploaded avatar as requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_avatar_upload.py",
+    "/app/test_reports/pytest/iter23_avatar.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py upload_image: admins bypass the image mime check entirely (if role==admin). Admins can upload arbitrary files (any content_type). Low risk but worth gating by extension or MIME allowlist.",
+    "AvatarUpload.remove() doesn't call setUser directly from response; it relies on save('') which does setUser(data). OK, but if save fails toast is 'Could not remove photo' with no error detail; consider formatApiErrorDetail for parity with pick().",
+    "ProfileIn.avatar_url validator is in _apply_profile_update, not in Pydantic schema. Admin profile-update endpoints (if any) that use ProfileIn and bypass _apply_profile_update would skip this check. Confirmed /api/profile uses _apply_profile_update, so OK, but keep in mind for future admin edit endpoints."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_avatar_upload.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "customer testcust@example.com / Test@1234; admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin)",
+  "seed_data_creation": "Uploaded a 1x1 green PNG as testcust avatar (left in place at end per task instructions). A few extra .heic/png files are present in uploads db (standard test byproduct).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Avatar feature verified; AvatarUpload uses /api/upload + PUT /api/profile with avatar_url guard requiring '/api/files/' prefix. Admin list uses UserAvatar component from AvatarUpload.jsx. HEIC accepted via content-type image/heic. Backend login requires portal:'admin' for admin accounts.",
+  "rca of the issue": "N/A - no issues found"
+}
