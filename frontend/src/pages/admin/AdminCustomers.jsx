@@ -13,6 +13,7 @@ import { CustomerStatementDialog } from "../../components/CustomerStatementDialo
 import { AccountStatusControl, ACCOUNT_TONE } from "../../components/AccountStatusControl";
 import { WalletAdjustDialog } from "../../components/WalletAdjustDialog";
 import { CustomerEditDialog } from "../../components/CustomerEditDialog";
+import { UserAvatar } from "../../components/AvatarUpload";
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState([]);
@@ -64,7 +65,7 @@ export default function AdminCustomers() {
           <tbody className="divide-y divide-slate-100">
             {filtered.map((c) => (
               <tr key={c.id} data-testid={`customer-row-${c.id}`} className={c.account_status && c.account_status !== "active" ? "bg-slate-50/60" : ""}>
-                <td className="p-4"><div className="font-semibold text-slate-800">{c.name}</div><div className="mt-1"><EmailLink value={c.email} testId={`customer-email-${c.id}`} /></div><div className="mt-1 font-mono text-[10px] text-slate-400">{c.referral_code}</div></td>
+                <td className="p-4"><div className="flex items-center gap-2.5"><UserAvatar user={c} size={34} /><div><div className="font-semibold text-slate-800">{c.name}</div><div className="mt-1"><EmailLink value={c.email} testId={`customer-email-${c.id}`} /></div><div className="mt-1 font-mono text-[10px] text-slate-400">{c.referral_code}</div></div></div></td>
                 <td className="p-4"><PhoneLink value={c.mobile} testId={`customer-phone-${c.id}`} /></td>
                 <td className="p-4"><span className="inline-flex items-center gap-1 text-xs font-semibold capitalize">{kycIcon(c.kyc?.status)} {c.kyc?.status?.replace("_", " ")}</span></td>
                 <td className="p-4">

@@ -55,7 +55,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 MIME_TYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-              "gif": "image/gif", "webp": "image/webp"}
+              "gif": "image/gif", "webp": "image/webp", "heic": "image/heic", "heif": "image/heif"}
 
 
 # ----------------------------- Helpers -----------------------------
@@ -91,6 +91,7 @@ def public_user(u: dict) -> dict:
         "mobile": u.get("mobile"),
         "address": u.get("address"),
         "dob": u.get("dob", ""),
+        "avatar_url": u.get("avatar_url", ""),
         "role": u.get("role"),
         "email_verified": u.get("email_verified", False),
         "referral_code": u.get("referral_code"),
@@ -278,6 +279,7 @@ class ProfileIn(BaseModel):
     mobile: Optional[str] = None
     address: Optional[str] = None
     dob: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class KycIn(BaseModel):
@@ -735,6 +737,8 @@ async def _apply_profile_update(uid: str, body: ProfileIn, by: str) -> dict:
         clash = await db.users.find_one({"mobile": {"$regex": f"{upd['mobile']}$"}, "_id": {"$ne": ObjectId(uid)}, "email_verified": True})
         if clash:
             raise HTTPException(status_code=400, detail="This mobile number is already registered with another account.")
+    if upd.get("avatar_url") and not upd["avatar_url"].startswith("/api/files/"):
+        raise HTTPException(status_code=400, detail="Invalid photo. Please upload again.")
     current = await db.users.find_one({"_id": ObjectId(uid)})
     if not current:
         raise HTTPException(status_code=404, detail="Customer not found")

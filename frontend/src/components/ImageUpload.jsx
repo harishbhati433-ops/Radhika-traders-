@@ -38,7 +38,7 @@ export function ImageUpload({ label, value, onChange, testId }) {
           className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload
         </button>
-        <input ref={ref} type="file" accept="image/*" hidden onChange={pick} />
+        <input ref={ref} type="file" accept="image/*,.heic,.heif" hidden onChange={pick} />
       </div>
     </div>
   );

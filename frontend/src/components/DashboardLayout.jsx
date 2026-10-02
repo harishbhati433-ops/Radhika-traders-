@@ -9,6 +9,7 @@ import { canUser } from "../lib/perm";
 import { ROUTE_PERM } from "../pages/admin/nav";
 import { getTheme, setTheme, applyTheme } from "../lib/theme";
 import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
+import { UserAvatar } from "./AvatarUpload";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -96,10 +97,13 @@ export function DashboardLayout({ nav, children, title }) {
         <aside className={`${open ? "block" : "hidden"} lg:block fixed lg:sticky inset-x-0 top-14 lg:top-6 z-30 lg:z-auto lg:h-[calc(100vh-3rem)] w-full lg:w-60 shrink-0`}>
           <div className="mx-4 lg:mx-0 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-4 hidden lg:block"><Link to="/"><Logo size="sm" /></Link></div>
-            <div className="mb-4 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-4 text-white">
-              <div className="text-xs text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
-              <div className="truncate font-display font-bold">{user?.name}</div>
-              <div className="truncate text-xs text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
+            <div className="mb-4 flex items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-4 text-white">
+              <UserAvatar user={user} size={44} />
+              <div className="min-w-0">
+                <div className="text-xs text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
+                <div className="truncate font-display font-bold">{user?.name}</div>
+                <div className="truncate text-xs text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
+              </div>
             </div>
             <SideLinks />
             <button onClick={doLogout} data-testid="dash-logout" className="mt-2 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">

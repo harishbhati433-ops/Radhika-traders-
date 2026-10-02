@@ -8,6 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { ImageUpload } from "../../components/ImageUpload";
+import { AvatarUpload } from "../../components/AvatarUpload";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Award, ArrowRight } from "lucide-react";
 import { SecuritySettings } from "../../components/SecuritySettings";
@@ -75,6 +76,7 @@ export default function Profile() {
       <div className="grid gap-6 lg:grid-cols-2">
         <form onSubmit={saveProfile} className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-slate-900">Personal Details</h2>
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4"><AvatarUpload /></div>
           <div className="mt-4 space-y-4">
             <div><Label>Full Name</Label><Input data-testid="profile-name" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} className="mt-1.5" /></div>
             <div><Label>Email</Label><Input value={user?.email} disabled className="mt-1.5 bg-slate-50" /></div>
