@@ -3,7 +3,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
-import { Pencil, X, Download } from "lucide-react";
+import { Pencil, X, Download, CalendarPlus } from "lucide-react";
 import { StatusPill, STATUS_META, EDIT_STATUSES, EDIT_LABELS, EDIT_HELP, todayIST, thisMonth, dur, mins, inr } from "./shared";
 
 const token = () => localStorage.getItem("rt_token");
@@ -58,6 +58,31 @@ function EditDialog({ row, onClose, onSaved }) {
 }
 const to24 = (t) => { const [hm, ap] = t.split(" "); let [h, m] = hm.split(":").map(Number); if (ap === "PM" && h !== 12) h += 12; if (ap === "AM" && h === 12) h = 0; return `${String(h).padStart(2, "0")}:${m.toString().padStart(2, "0")}`; };
 
+function MarkAttendance({ employees, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [emp, setEmp] = useState("");
+  const [date, setDate] = useState(todayIST());
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!emp) return toast.error("Select an employee");
+    setBusy(true);
+    try {
+      const { data } = await api.get("/admin/attendance", { params: { date, employee_id: emp } });
+      const row = data.items[0] || { id: "", employee_id: emp, date, status: "absent", check_in_time: "", check_out_time: "", virtual: true, employee_name: employees.find((e) => e.id === emp)?.name };
+      onPick(row); setOpen(false);
+    } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(false); }
+  };
+  if (!open) return <button type="button" onClick={() => setOpen(true)} data-testid="att-mark-btn" className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"><CalendarPlus className="h-4 w-4" /> Mark / Backdate Attendance</button>;
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-900 bg-slate-50 p-3" data-testid="att-mark-panel">
+      <div><Label className="text-[11px]">Employee</Label><select value={emp} onChange={(e) => setEmp(e.target.value)} data-testid="att-mark-emp" className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Select employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.employee_code})</option>)}</select></div>
+      <div><Label className="text-[11px]">Date (any past day)</Label><input type="date" value={date} max={todayIST()} onChange={(e) => setDate(e.target.value)} data-testid="att-mark-date" className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></div>
+      <button type="button" onClick={go} disabled={busy} data-testid="att-mark-go" className="rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{busy ? "…" : "Next →"}</button>
+      <button type="button" onClick={() => setOpen(false)} data-testid="att-mark-cancel" className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600">Cancel</button>
+    </div>
+  );
+}
+
 export function AttendanceTab() {
   const [mode, setMode] = useState("today");
   const [date, setDate] = useState(todayIST());
@@ -79,6 +104,10 @@ export function AttendanceTab() {
         <select value={emp} onChange={(e) => setEmp(e.target.value)} data-testid="att-filter-emp" className={sel}><option value="">All employees</option>{d.employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.employee_code})</option>)}</select>
         <select value={status} onChange={(e) => setStatus(e.target.value)} data-testid="att-filter-status" className={sel}><option value="">All statuses</option>{Object.entries(STATUS_META).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
         <ExportButtons path="/admin/attendance/export" params={{ ...(mode === "month" ? { month } : { date: mode === "today" ? todayIST() : date }), ...(emp ? { employee_id: emp } : {}) }} testId="att-export" />
+      </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <MarkAttendance employees={d.employees} onPick={setEdit} />
+        <span className="text-[11px] text-slate-500">Backdated entries (yesterday, last week, last month…) recalculate that month's salary sheet instantly.</span>
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-slate-50 px-4 py-2 text-[11px] text-slate-600" data-testid="att-rules">
         <span><b>Office</b> 10:00 AM – 5:00 PM</span><span><b>Required</b> 7h working</span><span><b>Full Day</b> = 7h worked, any arrival time, ₹0 deduction</span><span><b>Short</b> = minute-wise deduction</span><span><b>Auto close</b> 6:00 PM → Checkout Missing (admin review, unpaid until approved)</span>

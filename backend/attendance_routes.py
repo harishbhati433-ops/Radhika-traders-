@@ -354,6 +354,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             ddate.fromisoformat(date)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date")
+        if date > ist_today():
+            raise HTTPException(status_code=400, detail="Attendance cannot be marked for a future date")
         old = await db.attendance.find_one({"employee_id": employee_id, "date": date})
 
         def to_iso(hhmm):
