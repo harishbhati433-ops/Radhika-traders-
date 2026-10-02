@@ -8,6 +8,8 @@ import { ImageUpload } from "../ImageUpload";
 import { inr, thisMonth } from "./shared";
 import { ExportButtons, dl } from "./AttendanceTab";
 
+const F = ({ k, l, f, setF }) => <div><Label>{l}</Label><Input type="number" min="0" step="0.01" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`sal-${k}`} className="mt-1" /></div>;
+
 function AdjustDialog({ row, onClose, onSaved }) {
   const [f, setF] = useState({ monthly_salary: row.monthly_salary, bonus: row.bonus, incentive: row.incentive, advance: row.advance, deduction: row.deduction, note: row.note });
   const [busy, setBusy] = useState(false);
@@ -19,13 +21,13 @@ function AdjustDialog({ row, onClose, onSaved }) {
       toast.success("Salary updated"); onSaved(); onClose();
     } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(false); }
   };
-  const F = ({ k, l }) => <div><Label>{l}</Label><Input type="number" min="0" step="0.01" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`sal-${k}`} className="mt-1" /></div>;
+  const p = { f, setF };
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="sal-dialog">
       <form onSubmit={save} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between"><h3 className="font-display text-lg font-bold">{row.employee_name} · {row.month}</h3><button type="button" onClick={onClose}><X className="h-5 w-5" /></button></div>
-        <F k="monthly_salary" l="Monthly Salary (₹)" />
-        <div className="mt-3 grid grid-cols-2 gap-3"><F k="bonus" l="Bonus" /><F k="incentive" l="Incentive" /><F k="advance" l="Advance Salary" /><F k="deduction" l="Other Deduction" /></div>
+        <F k="monthly_salary" l="Monthly Salary (₹)" {...p} />
+        <div className="mt-3 grid grid-cols-2 gap-3"><F k="bonus" l="Bonus" {...p} /><F k="incentive" l="Incentive" {...p} /><F k="advance" l="Advance Salary" {...p} /><F k="deduction" l="Other Deduction" {...p} /></div>
         <div className="mt-3"><Label>Note</Label><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} data-testid="sal-note" className="mt-1" /></div>
         <button disabled={busy} data-testid="sal-save" className="mt-5 w-full rounded-full bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">Save</button>
       </form>
