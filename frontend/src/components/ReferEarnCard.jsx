@@ -77,7 +77,7 @@ export function ReferEarnCard({ code }) {
         <div className="mt-3 flex flex-wrap gap-2 text-xs" data-testid="refer-limits">
           {stats.daily_limit > 0 && <span className={`rounded-full px-3 py-1 font-bold ${stats.today >= stats.daily_limit ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>Today: {stats.today}/{stats.daily_limit} referrals</span>}
           {stats.monthly_limit > 0 && <span className={`rounded-full px-3 py-1 font-bold ${stats.month >= stats.monthly_limit ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>This month: {stats.month}/{stats.monthly_limit} referrals</span>}
-          {(stats.today >= stats.daily_limit && stats.daily_limit > 0) || (stats.month >= stats.monthly_limit && stats.monthly_limit > 0) ? <span className="text-rose-600">Limit reached — new signups via your link are paused until the limit resets.</span> : null}
+          {(stats.today >= stats.daily_limit && stats.daily_limit > 0) || (stats.month >= stats.monthly_limit && stats.monthly_limit > 0) ? <span className="text-rose-600">Limit reached — people can still join with your link, but you won't earn referral bonus until the limit resets.</span> : null}
         </div>
       )}
       <div className="mt-4 flex items-center gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-200">
@@ -110,7 +110,7 @@ export function ReferEarnCard({ code }) {
               {stats.recent.map((r, i) => (
                 <li key={i} data-testid={`refer-joined-${i}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                   <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-700">{(r.name || "?")[0]}</span><span className="font-semibold text-slate-800">{r.name}</span></span>
-                  <span className="flex items-center gap-2 text-xs text-slate-500">{(r.joined_at || "").slice(0, 10)}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${r.kyc === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>KYC {r.kyc.replace("_", " ")}</span></span>
+                  <span className="flex items-center gap-2 text-xs text-slate-500">{(r.joined_at || "").slice(0, 10)}{r.limit_exceeded && <span data-testid={`refer-no-bonus-${i}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">No bonus · {r.limit_exceeded} limit</span>}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${r.kyc === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>KYC {r.kyc.replace("_", " ")}</span></span>
                 </li>
               ))}
             </ul>

@@ -441,16 +441,8 @@ async def register(body: RegisterIn):
     if mob_owner:
         raise HTTPException(status_code=400, detail="This mobile number is already registered with another account. Please login with that account.")
     ref_code = (body.referred_by or "").strip().upper()
-    if ref_code:
-        referrer = await db.users.find_one({"referral_code": ref_code, "role": "customer"})
-        if not referrer:
-            raise HTTPException(status_code=400, detail="Invalid referral code. Please check the link or sign up without it.")
-        s = await get_settings()
-        usage = await referral_usage(ref_code)
-        if s["referral_daily_limit"] and usage["today"] >= s["referral_daily_limit"]:
-            raise HTTPException(status_code=400, detail=f"This referral link has reached today's limit of {s['referral_daily_limit']} signups. Please try again tomorrow.")
-        if s["referral_monthly_limit"] and usage["month"] >= s["referral_monthly_limit"]:
-            raise HTTPException(status_code=400, detail=f"This referral link has reached this month's limit of {s['referral_monthly_limit']} signups. Please try again next month.")
+    if ref_code and not await db.users.find_one({"referral_code": ref_code, "role": "customer"}):
+        ref_code = ""  # unknown code: still let the account be created, just without a referrer
     doc = {
         "name": body.name,
         "email": email,
@@ -496,6 +488,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
     if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
     await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    await apply_referral_limit(email)
     await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
     user = await db.users.find_one({"email": email})
     await pay_referral_bonus(user)
@@ -528,6 +521,23 @@ async def resend_welcome_letter(request: Request, background: BackgroundTasks, u
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
     background.add_task(send_welcome_email, u["email"], u.get("name", ""), u.get("referral_code", ""), bonus, f"{origin}/dashboard")
     return {"message": "Welcome letter sent to your email"}
+
+
+async def apply_referral_limit(email: str) -> None:
+    """If the referrer's daily/monthly limit is already full, the signup still succeeds but no referral payout is made."""
+    u = await db.users.find_one({"email": email}, {"referred_by_code": 1, "referral_bonus_paid": 1})
+    code = (u or {}).get("referred_by_code")
+    if not code or u.get("referral_bonus_paid"):
+        return
+    s, usage = await asyncio.gather(get_settings(), referral_usage(code))
+    daily, monthly = s["referral_daily_limit"], s["referral_monthly_limit"]
+    reason = "daily" if daily and usage["today"] >= daily else "monthly" if monthly and usage["month"] >= monthly else ""
+    if not reason:
+        return
+    referrer = await db.users.find_one({"referral_code": code, "role": "customer"}, {"_id": 1})
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"referral_bonus_paid": True, "dedicated_referral_paid": True, "referral_limit_exceeded": reason,
+                                                            "referred_by_user_id": str(referrer["_id"]) if referrer else ""}})
+    logger.info(f"[referral limit] {email} joined via {code} but {reason} limit reached — no payout")
 
 
 async def pay_referral_bonus(new_user: dict):
@@ -600,7 +610,7 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
 
 @api.get("/my-referrals")
 async def my_referrals(user: dict = Depends(get_current_user)):
-    joined = await db.users.find({"referred_by_user_id": user["id"]}, {"name": 1, "created_at": 1, "email_verified": 1, "kyc.status": 1}).sort("created_at", -1).to_list(500)
+    joined = await db.users.find({"referred_by_user_id": user["id"]}, {"name": 1, "created_at": 1, "email_verified": 1, "kyc.status": 1, "referral_limit_exceeded": 1}).sort("created_at", -1).to_list(500)
     earned = await db.transactions.aggregate([
         {"$match": {"user_id": user["id"], "type": "credit", "ref_id": {"$regex": "^REF-"}}},
         {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
@@ -613,7 +623,8 @@ async def my_referrals(user: dict = Depends(get_current_user)):
                    "total_earned": round(ded.get("total_earned", 0), 2), "since": ded.get("created_at")}
     return {"count": len(joined), "earned": round(earned[0]["s"], 2) if earned else 0, "dedicated": ded_out,
             "today": usage["today"], "month": usage["month"], "daily_limit": s["referral_daily_limit"], "monthly_limit": s["referral_monthly_limit"],
-            "recent": [{"name": j.get("name"), "joined_at": j.get("created_at"), "kyc": j.get("kyc", {}).get("status", "not_submitted")} for j in joined[:50]]}
+            "recent": [{"name": j.get("name"), "joined_at": j.get("created_at"), "kyc": j.get("kyc", {}).get("status", "not_submitted"),
+                        "limit_exceeded": j.get("referral_limit_exceeded") or ""} for j in joined[:50]]}
 
 
 @api.post("/auth/resend-otp")
