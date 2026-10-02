@@ -14,7 +14,7 @@ export function UserAvatar({ user, size = 40, className = "" }) {
   return <div style={style} data-testid="user-avatar-initial" className={`flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-red-600 font-display font-bold text-white ring-2 ring-white/70 ${className}`}>{initial}</div>;
 }
 
-export function AvatarUpload() {
+export function useAvatarPicker() {
   const { user, setUser } = useAuth();
   const ref = useRef();
   const [busy, setBusy] = useState(false);
@@ -56,28 +56,59 @@ export function AvatarUpload() {
     finally { setBusy(false); }
   };
 
+  const open = () => ref.current?.click();
+  const elements = (testId = "avatar-file-input") => (
+    <>
+      <input ref={ref} type="file" accept="image/*" hidden onChange={pick} data-testid={testId} />
+      <AvatarCropDialog src={cropSrc} open={!!cropSrc} onCancel={() => setCropSrc(null)} onDone={uploadCropped} />
+    </>
+  );
+  return { user, busy, open, remove, elements };
+}
+
+export function SidebarAvatarButton() {
+  const { user, busy, open, elements } = useAvatarPicker();
+  return (
+    <div className="relative shrink-0">
+      <button type="button" onClick={open} disabled={busy} data-testid="sidebar-avatar-btn" aria-label="Change profile photo" title="Change profile photo"
+        className="group relative block rounded-full transition-transform hover:scale-105 disabled:opacity-70">
+        <UserAvatar user={user} size={48} />
+        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Camera className="h-4 w-4 text-white" />}
+        </span>
+      </button>
+      <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-900 shadow">
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+      </span>
+      {elements("sidebar-avatar-file-input")}
+    </div>
+  );
+}
+
+export function AvatarUpload() {
+  const { user, busy, open, remove, elements } = useAvatarPicker();
+
   return (
     <div className="flex items-center gap-5" data-testid="avatar-upload">
       <div className="relative">
         <div className="rounded-full bg-gradient-to-br from-amber-400 via-red-500 to-red-900 p-[3px] shadow-lg">
           <div className="rounded-full bg-white p-[3px]"><UserAvatar user={user} size={96} className="ring-0" /></div>
         </div>
-        <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="avatar-upload-btn" aria-label="Change profile photo"
+        <button type="button" onClick={open} disabled={busy} data-testid="avatar-upload-btn" aria-label="Change profile photo"
           className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-md transition-transform hover:scale-105 disabled:opacity-60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
         </button>
-        <input ref={ref} type="file" accept="image/*" hidden onChange={pick} data-testid="avatar-file-input" />
       </div>
       <div>
         <div className="font-display font-bold text-slate-900">{user?.name}</div>
         <div className="text-xs text-slate-500">Partner ID {user?.referral_code}</div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="avatar-change-btn" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{user?.avatar_url ? "Change photo" : "Upload photo"}</button>
+          <button type="button" onClick={open} disabled={busy} data-testid="avatar-change-btn" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{user?.avatar_url ? "Change photo" : "Upload photo"}</button>
           {user?.avatar_url && <button type="button" onClick={remove} disabled={busy} data-testid="avatar-remove-btn" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>}
         </div>
         <p className="mt-1.5 text-[11px] text-slate-400">Pick from gallery, files or camera · then zoom & crop to centre your face</p>
       </div>
-      <AvatarCropDialog src={cropSrc} open={!!cropSrc} onCancel={() => setCropSrc(null)} onDone={uploadCropped} />
+      {elements()}
     </div>
   );
 }
