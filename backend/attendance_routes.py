@@ -504,6 +504,72 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         cols = [("month", "Month")] + [(f"emp_{e['id']}", f"{e['name']} ({e['employee_code']})") for e in emps] + [("total", "Total Salary"), ("paid", "Paid"), ("pending", "Pending"), ("paid_days", "Paid Days")]
         return export(rows, cols, f"Yearly Salary Summary {year}", format, f"salary_yearly_{year}")
 
+    @r.get("/admin/salary/statement/{employee_id}")
+    async def salary_statement(employee_id: str, from_month: str, to_month: str, format: str = "pdf", admin: dict = Depends(require_admin)):
+        """Multi-month salary slip (3 / 6 / 12 months or any range) for one employee."""
+        emp = (await employees([employee_id])).get(employee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        try:
+            fy, fm = map(int, from_month.split("-")); ty, tm = map(int, to_month.split("-"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Months must be YYYY-MM")
+        if (fy, fm) > (ty, tm):
+            raise HTTPException(status_code=400, detail="From month must be before To month")
+        today = ist_today()
+        months, y, m = [], fy, fm
+        while (y, m) <= (ty, tm) and f"{y}-{m:02d}" <= today[:7] and len(months) < 36:
+            months.append(f"{y}-{m:02d}")
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+        rows = [await salary_row(emp, mo, today) for mo in months]
+        for r_ in rows:
+            r_["label"] = datetime.strptime(r_["month"], "%Y-%m").strftime("%b %Y")
+            r_["full_days"] = r_["present"] + r_["late"]
+            r_["extras"] = round(r_["bonus"] + r_["incentive"], 2)
+            r_["cuts"] = round(r_["advance"] + r_["deduction"], 2)
+            r_["status_label"] = ("Paid " + r_["payment_date"]) if r_["payment_status"] == "paid" else "Pending"
+        tot = {k: round(sum(r_[k] for r_ in rows), 2) for k in ("full_days", "short_hours", "half_day", "absent", "paid_days", "earned", "extras", "cuts", "net_payable")}
+        paid_total = round(sum(r_['net_payable'] for r_ in rows if r_['payment_status'] == 'paid'), 2)
+        tot.update({"label": "TOTAL", "monthly_salary": "", "status_label": f"Paid ₹{paid_total:,.2f}"})
+        cols = [("label", "Month"), ("monthly_salary", "Monthly Salary"), ("full_days", "Full Days"), ("short_hours", "Short Days"), ("half_day", "Half"), ("absent", "Absent"), ("paid_days", "Paid Days"),
+                ("earned", "Earned"), ("extras", "Bonus+Inc"), ("cuts", "Adv+Ded"), ("net_payable", "Net Payable"), ("status_label", "Payment")]
+        title = f"Salary Statement {months[0] if months else from_month} to {months[-1] if months else to_month}"
+        fname = f"salary_statement_{emp.get('employee_code') or employee_id}_{from_month}_{to_month}"
+        if format != "pdf":
+            return export(rows + [tot], cols, title, format, fname)
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        try:
+            pdfmetrics.registerFont(TTFont("DV", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")); pdfmetrics.registerFont(TTFont("DVB", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
+            font, fontb, rs = "DV", "DVB", "₹"
+        except Exception:
+            font, fontb, rs = "Helvetica", "Helvetica-Bold", "Rs "
+            tot["status_label"] = f"Paid Rs {paid_total:,.2f}"
+        money = {"monthly_salary", "earned", "extras", "cuts", "net_payable"}
+        def cell(r_, k):
+            v = r_.get(k, "")
+            return f"{rs}{v:,.2f}" if k in money and isinstance(v, (int, float)) else str(v)
+        data = [[c[1] for c in cols]] + [[cell(r_, c[0]) for c in cols] for r_ in rows + [tot]]
+        t = Table(data, repeatRows=1)
+        n = len(data) - 1
+        t.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), font), ("FONTNAME", (0, 0), (-1, 0), fontb), ("FONTNAME", (0, n), (-1, n), fontb), ("FONTSIZE", (0, 0), (-1, -1), 8),
+                               ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#991B1B")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("BACKGROUND", (0, n), (-1, n), colors.HexColor("#FEF3C7")),
+                               ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")), ("ROWBACKGROUNDS", (0, 1), (-1, n - 1), [colors.white, colors.HexColor("#F8FAFC")]), ("PADDING", (0, 0), (-1, -1), 5)]))
+        st = getSampleStyleSheet()
+        head = Table([[f"Employee: {emp.get('name')}", f"Employee ID: {emp.get('employee_code', '')}", f"Period: {rows[0]['label'] if rows else from_month} – {rows[-1]['label'] if rows else to_month} ({len(rows)} months)"]], colWidths=[250, 200, 300])
+        head.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), fontb), ("FONTSIZE", (0, 0), (-1, -1), 9), ("PADDING", (0, 0), (-1, -1), 4)]))
+        summary = Paragraph(f"<b>Total Net Payable for period: {rs}{tot['net_payable']:,.2f}</b> &nbsp;·&nbsp; Paid Days {tot['paid_days']} &nbsp;·&nbsp; {tot['status_label']}", st["Normal"])
+        buf = io.BytesIO()
+        SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=24, rightMargin=24, topMargin=28, bottomMargin=24).build(
+            [Paragraph("<b>Radhika Traders</b> — Salary Statement", st["Title"]), Paragraph(f"Agar, Madhya Pradesh · Generated {now_utc().astimezone(IST).strftime('%d %b %Y')}", st["Normal"]), Spacer(1, 8), head, Spacer(1, 8), t, Spacer(1, 12), summary,
+             Spacer(1, 18), Paragraph("This is a system-generated salary statement. Current month figures are provisional until month end.", st["Italic"])])
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{fname}.pdf"'})
+
     @r.get("/admin/salary/slip/{employee_id}")
     async def salary_slip(employee_id: str, month: str, format: str = "pdf", admin: dict = Depends(require_admin)):
         emp = (await employees([employee_id])).get(employee_id)

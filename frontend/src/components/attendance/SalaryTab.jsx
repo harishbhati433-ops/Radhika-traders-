@@ -3,8 +3,9 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
-import { X, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { X, FileText, CheckCircle, Loader2, CalendarRange } from "lucide-react";
 import { ImageUpload } from "../ImageUpload";
+import { StatementDialog } from "./StatementDialog";
 import { inr, thisMonth } from "./shared";
 import { ExportButtons, dl } from "./AttendanceTab";
 
@@ -64,6 +65,7 @@ export function SalaryTab() {
   const [rows, setRows] = useState([]);
   const [edit, setEdit] = useState(null);
   const [paying, setPaying] = useState(null);
+  const [stmt, setStmt] = useState(null);
   const load = () => api.get("/admin/salary", { params: { month } }).then(({ data }) => setRows(data.rows)).catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail)));
   useEffect(() => { load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
   const pay = async (r) => {
@@ -92,7 +94,7 @@ export function SalaryTab() {
                 <td className="p-3 font-mono font-bold">{r.paid_days}</td><td className="p-3 font-mono">{inr(r.earned)}</td><td className="p-3 font-mono text-emerald-700">{inr(r.bonus + r.incentive)}</td><td className="p-3 font-mono text-rose-700">{inr(r.advance)}</td><td className="p-3 font-mono text-rose-700">{inr(r.deduction)}</td>
                 <td className="p-3 font-mono text-sm font-bold text-slate-900" data-testid={`sal-net-${r.employee_id}`}>{inr(r.net_payable)}</td>
                 <td className="p-3"><button onClick={() => pay(r)} data-testid={`sal-pay-${r.employee_id}`} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}><CheckCircle className="h-3 w-3" /> {r.payment_status === "paid" ? `Paid ${r.payment_date}` : "Mark Paid"}</button>{r.proof_url && <a href={r.proof_url} target="_blank" rel="noreferrer" data-testid={`sal-proof-${r.employee_id}`} className="ml-1 text-[10px] font-bold text-sky-700 hover:underline">proof</a>}</td>
-                <td className="p-3 whitespace-nowrap text-right"><button onClick={() => setEdit(r)} data-testid={`sal-edit-${r.employee_id}`} className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">Set / Adjust</button> <button onClick={() => dl(`/admin/salary/slip/${r.employee_id}`, { month, format: "pdf" })} data-testid={`sal-slip-${r.employee_id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white"><FileText className="h-3 w-3" /> Slip</button></td>
+                <td className="p-3 whitespace-nowrap text-right"><button onClick={() => setEdit(r)} data-testid={`sal-edit-${r.employee_id}`} className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">Set / Adjust</button> <button onClick={() => dl(`/admin/salary/slip/${r.employee_id}`, { month, format: "pdf" })} data-testid={`sal-slip-${r.employee_id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white"><FileText className="h-3 w-3" /> Slip</button> <button onClick={() => setStmt(r)} data-testid={`sal-stmt-${r.employee_id}`} className="inline-flex items-center gap-1 rounded-full border border-slate-900 px-2.5 py-1 text-[11px] font-bold text-slate-900 hover:bg-slate-100"><CalendarRange className="h-3 w-3" /> 3/6/12 Mo</button></td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={19} className="p-8 text-center text-slate-400">No employees.</td></tr>}
@@ -101,6 +103,7 @@ export function SalaryTab() {
       </div>
       {edit && <AdjustDialog row={edit} onClose={() => setEdit(null)} onSaved={load} />}
       {paying && <PayDialog row={paying} onClose={() => setPaying(null)} onDone={load} />}
+      {stmt && <StatementDialog row={stmt} onClose={() => setStmt(null)} />}
     </div>
   );
 }
