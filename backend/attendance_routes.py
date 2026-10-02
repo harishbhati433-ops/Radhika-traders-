@@ -120,7 +120,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         frac = paid_fraction(a)
         d.update({"id": str(a["_id"]), "check_in_time": fmt_t(a.get("check_in")), "check_out_time": fmt_t(a.get("check_out")),
                   "duration": fmt_dur(a.get("worked_minutes")), "paid_fraction": frac, "deduction": round(per_day * (1 - frac), 2) if per_day else None,
-                  "auto_closed_time": fmt_t(a.get("auto_closed_at")) if a.get("auto_closed_at") else ""})
+                  "auto_closed_time": fmt_t(a.get("auto_closed_at")) if a.get("auto_closed_at") else "",
+                  "edited_at_label": datetime.fromisoformat(a["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if a.get("edited_at") else "",
+                  "status_history": [{**h, "edited_at_label": datetime.fromisoformat(h["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if h.get("edited_at") else ""} for h in (a.get("status_history") or [])]})
         if emp:
             d.update({"employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "username": emp.get("original_username") or emp.get("username")})
         return d
@@ -135,7 +137,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         now = now_utc().astimezone(IST)
         today = ist_today()
         date_q = {"$lte": today} if (now.hour, now.minute) >= AUTO_CLOSE else {"$lt": today}
-        await db.attendance.update_many({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "date": date_q},
+        await db.attendance.update_many({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "manual_override": {"$ne": True}, "date": date_q},
                                         {"$set": {"status": "checkout_missing", "auto_closed_at": now_utc().isoformat(), "hours": None, "worked_minutes": None,
                                                   "short_minutes": None, "paid_fraction": None, "updated_at": now_utc().isoformat()}})
 
@@ -277,8 +279,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if rec.get("check_out"):
             raise HTTPException(status_code=400, detail="Already checked out today")
         rec["check_out"] = now_utc().isoformat()
+        manual = rec.get("manual_override") and rec.get("status")
         rec = derive(rec)
-        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction")} | {"updated_at": now_utc().isoformat()}})
+        if manual:  # admin's manually chosen status is final; only the actual times/minutes get recorded
+            rec["auto_status"], rec["status"] = rec["status"], manual
+        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction", "auto_status")} | {"updated_at": now_utc().isoformat()}})
         await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {fmt_dur(rec['worked_minutes'])}" + (f" · short {rec['short_minutes']} min" if rec["short_minutes"] else ""))
         saved = await db.attendance.find_one({"_id": rec["_id"]})
         background.add_task(notify_punch, emp, saved, "out")
@@ -346,18 +351,24 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             h, m = map(int, hhmm.split(":"))
             return datetime.fromisoformat(date).replace(hour=h, minute=m, tzinfo=IST).astimezone(timezone.utc).isoformat()
         rec = {"employee_id": employee_id, "date": date, "check_in": to_iso(body.check_in), "check_out": to_iso(body.check_out), "leave_paid": bool(body.leave_paid) if body.status == "leave" else False,
-               "note": (body.note or "")[:200], "source": "admin", "edited_by": admin.get("name", ""), "updated_at": now_utc().isoformat(), "created_at": (old or {}).get("created_at") or now_utc().isoformat(),
-               "auto_closed_at": None, "reviewed_by": admin.get("name", "") if (old or {}).get("status") == "checkout_missing" else (old or {}).get("reviewed_by")}
-        if body.status in TIMED and rec["check_in"] and rec["check_out"]:
-            if rec["check_out"] <= rec["check_in"]:
-                raise HTTPException(status_code=400, detail="Check-out must be after check-in")
-            rec = derive(rec)
-            if body.status == "half_day":
-                rec["status"] = "half_day"
+               "note": (body.note or "")[:200], "source": "admin", "edited_by": admin.get("name", ""), "edited_at": now_utc().isoformat(), "updated_at": now_utc().isoformat(), "created_at": (old or {}).get("created_at") or now_utc().isoformat(),
+               "auto_closed_at": None, "reviewed_by": admin.get("name", "") if (old or {}).get("status") == "checkout_missing" else (old or {}).get("reviewed_by"), "manual_override": True}
+        if rec["check_in"] and rec["check_out"] and rec["check_out"] <= rec["check_in"]:
+            raise HTTPException(status_code=400, detail="Check-out must be after check-in")
+        if rec["check_in"]:
+            rec = derive(rec)  # keeps actual times & minute metrics; status below is admin's final word
         else:
-            rec["status"], rec["late"] = body.status, body.status == "late"
             rec.update({"hours": None, "worked_minutes": None, "late_minutes": 0, "extra_minutes": 0, "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": None})
-        await db.attendance.update_one({"employee_id": employee_id, "date": date}, {"$set": rec}, upsert=True)
+        rec["auto_status"] = rec.get("status") if rec["check_in"] and rec["check_out"] else None
+        if body.status != "short_hours":  # short_hours = "use automatic minute-wise result"; everything else is a manual override
+            rec["status"] = body.status
+        rec["late"] = bool(rec.get("late_minutes")) if rec["check_in"] else body.status == "late"
+        if body.status == "late" and not rec["check_in"]:
+            rec["late"] = True
+        old_status = (old or {}).get("status") or "absent"
+        history_entry = {"old_status": old_status, "new_status": rec["status"], "edited_by": admin.get("name", ""), "edited_at": rec["edited_at"], "remark": rec["note"],
+                         "check_in": fmt_t(rec["check_in"]), "check_out": fmt_t(rec["check_out"])}
+        await db.attendance.update_one({"employee_id": employee_id, "date": date}, {"$set": rec, "$push": {"status_history": history_entry}}, upsert=True)
         def desc(a):
             times = " ".join(x for x in (fmt_t(a.get("check_in")), fmt_t(a.get("check_out"))) if x)
             return f"{label(a)}{' ' + times.replace(' ', '-', 1) if times else ''}" if a.get("check_in") and a.get("check_out") else f"{label(a)}{' ' + times if times else ''}"

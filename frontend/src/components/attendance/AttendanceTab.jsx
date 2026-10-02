@@ -4,7 +4,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Pencil, X, Download } from "lucide-react";
-import { StatusPill, STATUS_META, EDIT_STATUSES, EDIT_LABELS, todayIST, thisMonth, dur, mins, inr } from "./shared";
+import { StatusPill, STATUS_META, EDIT_STATUSES, EDIT_LABELS, EDIT_HELP, todayIST, thisMonth, dur, mins, inr } from "./shared";
 
 const token = () => localStorage.getItem("rt_token");
 export const dl = async (path, params) => {
@@ -19,27 +19,39 @@ export function ExportButtons({ path, params, testId }) {
 }
 
 function EditDialog({ row, onClose, onSaved }) {
-  const init = ["absent", "checkout_missing", "late", "short_hours"].includes(row.status) ? "present" : row.status;
-  const [f, setF] = useState({ status: init, check_in: row.check_in_time ? to24(row.check_in_time) : "10:00", check_out: row.check_out_time ? to24(row.check_out_time) : "17:00", leave_paid: !!row.leave_paid, note: row.note || "" });
+  const init = ["absent", "checkout_missing"].includes(row.status) ? "present" : row.status;
+  const [f, setF] = useState({ status: init, check_in: row.check_in_time ? to24(row.check_in_time) : "10:00", check_out: row.check_out_time ? to24(row.check_out_time) : "17:00", leave_paid: !!row.leave_paid, note: "" });
   const [busy, setBusy] = useState(false);
-  const timed = ["present", "half_day"].includes(f.status);
+  const timed = ["present", "late", "half_day", "short_hours"].includes(f.status);
   const save = async (e) => {
     e.preventDefault(); setBusy(true);
-    try { await api.put(`/admin/attendance/${row.employee_id}/${row.date}`, { ...f, check_in: timed ? f.check_in : null, check_out: timed ? f.check_out : null }); toast.success("Attendance updated & logged"); onSaved(); onClose(); }
+    try { await api.put(`/admin/attendance/${row.employee_id}/${row.date}`, { ...f, check_in: timed ? f.check_in : null, check_out: timed ? f.check_out : null }); toast.success(`Status set to ${STATUS_META[f.status][0]} — attendance & salary updated`); onSaved(); onClose(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(false); }
   };
+  const hist = row.status_history || [];
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="att-edit-dialog">
-      <form onSubmit={save} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between"><h3 className="font-display text-lg font-bold">{row.employee_name} · {row.date}</h3><button type="button" onClick={onClose}><X className="h-5 w-5" /></button></div>
+      <form onSubmit={save} className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-1 flex items-center justify-between"><h3 className="font-display text-lg font-bold">{row.employee_name} · {row.date}</h3><button type="button" onClick={onClose}><X className="h-5 w-5" /></button></div>
+        <p className="mb-3 text-xs text-slate-500">Current: <StatusPill s={row.status} paid={row.leave_paid} />{row.check_in_time && <span className="ml-2">Actual {row.check_in_time}{row.check_out_time ? ` – ${row.check_out_time}` : ""}</span>}</p>
         {row.status === "checkout_missing" && <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-orange-800" data-testid="att-edit-review-note"><b>Checkout missing</b> — session auto-closed at 6:00 PM{row.auto_closed_time ? ` (${row.auto_closed_time})` : ""}. Enter the employee's actual check-out time below to approve; working duration & deduction will be calculated from it.</div>}
-        <Label>Status</Label>
+        <Label>New Status (final — automatic logic won't override it)</Label>
         <select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} data-testid="att-edit-status" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">{EDIT_STATUSES.map((k) => <option key={k} value={k}>{EDIT_LABELS[k] || STATUS_META[k][0]}</option>)}</select>
+        <p className="mt-1 text-[11px] text-slate-500" data-testid="att-edit-help">{EDIT_HELP[f.status]}</p>
         {timed && <div className="mt-3 grid grid-cols-2 gap-3"><div><Label>Check-In</Label><Input type="time" value={f.check_in} onChange={(e) => setF({ ...f, check_in: e.target.value })} data-testid="att-edit-in" className="mt-1" /></div><div><Label>Actual Check-Out</Label><Input type="time" value={f.check_out} onChange={(e) => setF({ ...f, check_out: e.target.value })} data-testid="att-edit-out" className="mt-1" /></div></div>}
-        {timed && f.status === "present" && <p className="mt-2 text-[11px] text-slate-500">Rule: 7 hours worked = Full Day (₹0 deduction) whatever the arrival time. Less than 7h = Short Hours, deducted minute-wise.</p>}
         {f.status === "leave" && <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={f.leave_paid} onChange={(e) => setF({ ...f, leave_paid: e.target.checked })} data-testid="att-edit-paid" /> Paid leave (salary not deducted)</label>}
-        <div className="mt-3"><Label>Note / reason</Label><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} data-testid="att-edit-note" className="mt-1" placeholder="e.g. Forgot to check out" /></div>
-        <button disabled={busy} data-testid="att-edit-save" className="mt-5 w-full rounded-full bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">Save correction</button>
+        <div className="mt-3"><Label>Remark (optional)</Label><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} data-testid="att-edit-note" className="mt-1" placeholder="e.g. Informed on phone, traffic jam" /></div>
+        <button disabled={busy} data-testid="att-edit-save" className="mt-5 w-full rounded-full bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">Save status</button>
+        {hist.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-3" data-testid="att-edit-history">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Change history</div>
+            <ul className="space-y-1.5">
+              {[...hist].reverse().map((h, i) => (
+                <li key={i} className="text-xs text-slate-600" data-testid={`att-hist-${i}`}><b className="text-slate-800">{STATUS_META[h.old_status]?.[0] || h.old_status}</b> → <b className="text-slate-800">{STATUS_META[h.new_status]?.[0] || h.new_status}</b> · by {h.edited_by} · {h.edited_at_label}{h.remark ? <span className="text-slate-400"> · “{h.remark}”</span> : null}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -87,7 +99,11 @@ export function AttendanceTab() {
                 <td className={`p-3 font-mono ${a.short_minutes ? "font-bold text-rose-700" : ""}`} data-testid={`adm-att-short-${a.employee_id}-${a.date}`}>{a.worked_minutes != null ? mins(a.short_minutes || 0) : "—"}</td>
                 <td className="p-3"><StatusPill s={a.status} paid={a.leave_paid} testId={`adm-att-status-${a.employee_id}-${a.date}`} /></td>
                 <td className={`p-3 font-mono whitespace-nowrap ${a.deduction ? "font-bold text-rose-700" : "text-emerald-700"}`} data-testid={`adm-att-ded-${a.employee_id}-${a.date}`}>{a.deduction == null ? <span className="text-slate-400">salary not set</span> : a.status === "checkout_missing" ? <span title="Unpaid until admin approves checkout">{inr(a.deduction)} · pending</span> : inr(a.deduction)}</td>
-                <td className="p-3 text-slate-500">{a.note}{a.source === "admin" && <span className="ml-1 text-[10px] text-slate-400">· edited by {a.edited_by}</span>}</td>
+                <td className="p-3 text-slate-500" data-testid={`adm-att-note-${a.employee_id}-${a.date}`}>
+                  {a.manual_override && a.status_history?.length > 0 && (() => { const h = a.status_history[a.status_history.length - 1]; return <div className="text-[10px] font-semibold text-slate-700">Manual: {STATUS_META[h.old_status]?.[0] || h.old_status} → {STATUS_META[h.new_status]?.[0] || h.new_status}</div>; })()}
+                  {a.note && <div>{a.note}</div>}
+                  {a.source === "admin" && <div className="text-[10px] text-slate-400">by {a.edited_by}{a.edited_at_label ? ` · ${a.edited_at_label}` : ""}</div>}
+                </td>
                 <td className="p-3 text-right"><button onClick={() => setEdit(a)} data-testid={`adm-att-edit-${a.employee_id}-${a.date}`} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${a.status === "checkout_missing" ? "border-orange-300 bg-orange-100 text-orange-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"}`}><Pencil className="h-3 w-3" /> {a.status === "checkout_missing" ? "Review" : "Edit"}</button></td>
               </tr>
             ))}

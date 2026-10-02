@@ -1,0 +1,25 @@
+{
+  "summary": "Tested Dynamic Working-Hours attendance + salary (Iteration 24) end-to-end. Admin PUT /api/admin/attendance derives Full Day vs Short Hours correctly (10:20→17:20 => present/420/short 0/ded 0; 10:45→17:30 => short_hours/15 short/45 late/30 extra/30 adjusted/ded = per_day*15/420; 11:15→18:00 => short 15; 11:00→18:00 => present/0; check_out <= check_in => 400). GET /api/admin/attendance?month returns all 9 required fields + rules object. GET /api/admin/salary math (earned == per_day * paid_days) verified. Auto-close: stale record inserted directly into Mongo auto-switched to checkout_missing with auto_closed_at and deduction = per_day; checkout_missing count on salary sheet increments by 1 and decrements back to original after admin PUT fixes it to present. Employee API returns office.required_hours=7 and auto_close=06:00 PM; items contain NO rupee amounts (monthly_salary/per_day/earned/net_payable absent; deduction null). CSV export headers include Working Duration / Late Min / Extra Min / Adjusted Min / Short Min / Deduction (Rs). Salary slip PDF returns 200 valid PDF. Frontend admin /admin/attendance shows att-rules strip, headers Check-In | Manual Check-Out | Working Duration | Late Min | Extra Min | Adjusted Min | Short Min | Status | Salary Deduction, month-wise rows render, edit dialog status options are exactly [Present (auto...), Half Day, Absent, Leave, Holiday, Weekly Off]. Salary tab headers include Full Days / Short Days / Short Min / Short Ded. / Chk Missing. Admin dashboard shows the 'Checkout Review' KPI. Employee /employee/attendance rules card mentions '7 hours' and '6:00 PM auto-close', table columns Worked/Short present, monthly summary has Full Day/Short Hours/Checkout Missing cells, no ₹ amounts anywhere in employee view.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_attendance_working_hours.py",
+    "/app/test_reports/pytest/iter24_working_hours.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "attendance_routes.absent_row sets id='' causing identical React keys when multiple absent employees on same date; use `${date}-${employee_id}` or hide id. Low priority — table still renders.",
+    "`out()` ignores edited_by when source != 'admin'; harmless but note is sent as plain object which exposes internal fields (created_at, updated_at, ip, source) to admin UI. Not a security issue (admin-only), just verbose payload.",
+    "derive(): if admin sets status='present' with no times, record is persisted as present with worked_minutes=None — not shown as full day in salary (paid_fraction via PAID_FULL still gives 1.0). This is intentional for leave-like entries but confusing for 'present (no time)'. Spec OK."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_attendance_working_hours.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all required headers, options, KPIs present)"},
+  "test_credentials": "admin bhatiharish276@gmail.com / Radhika@2023 (portal=admin); employee rahul.k / Emp@1234",
+  "seed_data_creation": "Created 4 admin attendance records on 4 past dates (previous month because today is day 2 of current month) for rahul.k, plus 1 stale open record for auto-close test. ALL 5 dates cleaned up via module teardown (db.attendance.delete_many on those dates). Verified no leakage into real salary totals.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Attendance tests must either use previous month or guard against today_day<4 scenario (fixture already does). Admin login requires portal='admin' in JSON payload. Clear db.login_attempts before admin login runs to avoid lockouts carried from prior iterations.",
+  "rca of the issue": "No bugs found in this iteration."
+}

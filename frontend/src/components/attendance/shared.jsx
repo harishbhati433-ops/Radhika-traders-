@@ -1,7 +1,7 @@
 export const STATUS_META = {
-  present: ["Full Day", "bg-emerald-50 text-emerald-700 border-emerald-200"],
+  present: ["Present (Full Day)", "bg-emerald-50 text-emerald-700 border-emerald-200"],
   short_hours: ["Short Hours", "bg-amber-50 text-amber-700 border-amber-200"],
-  late: ["Late (legacy)", "bg-amber-50 text-amber-700 border-amber-200"],
+  late: ["Late", "bg-amber-50 text-amber-700 border-amber-200"],
   half_day: ["Half Day", "bg-sky-50 text-sky-700 border-sky-200"],
   absent: ["Absent", "bg-rose-50 text-rose-700 border-rose-200"],
   leave: ["Leave", "bg-violet-50 text-violet-700 border-violet-200"],
@@ -9,8 +9,12 @@ export const STATUS_META = {
   weekly_off: ["Weekly Off", "bg-slate-100 text-slate-600 border-slate-200"],
   checkout_missing: ["Checkout Missing – Admin Review", "bg-orange-50 text-orange-700 border-orange-300"],
 };
-export const EDIT_STATUSES = ["present", "half_day", "absent", "leave", "holiday", "weekly_off"];
-export const EDIT_LABELS = { present: "Present (auto: Full Day / Short Hours from times)" };
+export const EDIT_STATUSES = ["present", "late", "half_day", "absent", "leave", "holiday", "weekly_off", "short_hours"];
+export const EDIT_LABELS = { present: "Present (Full Day salary)", late: "Late (full day salary, late mark)", short_hours: "Short Hours — auto, minute-wise from times" };
+export const EDIT_HELP = {
+  present: "Full day salary applies. Any short-hours deduction is removed.", late: "Counted as Late mark; full day salary applies.", half_day: "50% of the day's salary.", absent: "That day's salary is deducted fully.",
+  leave: "Paid leave = full salary, unpaid leave = deducted (tick below).", holiday: "Not counted as absence or late; paid.", weekly_off: "Not counted as absence or late; paid.", short_hours: "System calculates from check-in/out: 7h = full, else deducted per missing minute.",
+};
 export const dur = (m) => (m == null ? "—" : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`);
 export const mins = (m) => (m == null ? "—" : m === 0 ? "0" : `${m} min`);
 
