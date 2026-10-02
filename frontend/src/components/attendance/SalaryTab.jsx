@@ -74,25 +74,26 @@ export function SalaryTab() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center gap-3"><input type="month" value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} data-testid="sal-month" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" /><span className="text-xs text-slate-500">Per-day = Monthly ÷ days in month · Half day = 50% · Unpaid leave/absent = 0</span></div>
+        <div className="flex items-center gap-3"><input type="month" value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} data-testid="sal-month" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" /><span className="text-xs text-slate-500">Per-day = Monthly ÷ days in month · 7h worked = Full Day · Short hours deducted minute-wise · Half day = 50% · Absent / unpaid leave / checkout-missing (pending review) = 0</span></div>
         <div className="flex items-center gap-3 text-xs font-semibold text-slate-700"><span data-testid="sal-total-payable">Total payable <b className="font-mono">{inr(tot("net_payable"))}</b></span><ExportButtons path="/admin/salary/export" params={{ month }} testId="sal-export" /></div>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>{["Employee", "Monthly", "Present", "Absent", "Half", "Paid Lv", "Unpaid Lv", "Paid Days", "Earned", "Bonus+Inc", "Advance", "Deduction", "Net Payable", "Payment", ""].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead>
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>{["Employee", "Monthly", "Full Days", "Short Days", "Short Min", "Short Ded.", "Absent", "Half", "Chk Missing", "Paid Lv", "Unpaid Lv", "Paid Days", "Earned", "Bonus+Inc", "Advance", "Deduction", "Net Payable", "Payment", ""].map((h) => <th key={h} className="p-3 whitespace-nowrap">{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.employee_id} className="border-t border-slate-100" data-testid={`sal-row-${r.employee_id}`}>
                 <td className="p-3"><div className="font-semibold text-slate-900">{r.employee_name}</div><div className="font-mono text-[10px] text-slate-400">{r.employee_code}</div></td>
                 <td className="p-3 font-mono">{r.monthly_salary ? inr(r.monthly_salary) : <span className="text-rose-600">Not set</span>}</td>
-                <td className="p-3 font-mono">{r.present + r.late}</td><td className="p-3 font-mono text-rose-700">{r.absent}</td><td className="p-3 font-mono">{r.half_day}</td><td className="p-3 font-mono">{r.paid_leave}</td><td className="p-3 font-mono">{r.unpaid_leave}</td>
+                <td className="p-3 font-mono">{r.present + r.late}</td><td className="p-3 font-mono text-amber-700">{r.short_hours}</td><td className="p-3 font-mono text-amber-700">{r.short_minutes_total}</td><td className="p-3 font-mono text-rose-700" data-testid={`sal-shortded-${r.employee_id}`}>{inr(r.short_deduction)}</td>
+                <td className="p-3 font-mono text-rose-700">{r.absent}</td><td className="p-3 font-mono">{r.half_day}</td><td className={`p-3 font-mono ${r.checkout_missing ? "font-bold text-orange-700" : ""}`} data-testid={`sal-chkmiss-${r.employee_id}`}>{r.checkout_missing}</td><td className="p-3 font-mono">{r.paid_leave}</td><td className="p-3 font-mono">{r.unpaid_leave}</td>
                 <td className="p-3 font-mono font-bold">{r.paid_days}</td><td className="p-3 font-mono">{inr(r.earned)}</td><td className="p-3 font-mono text-emerald-700">{inr(r.bonus + r.incentive)}</td><td className="p-3 font-mono text-rose-700">{inr(r.advance)}</td><td className="p-3 font-mono text-rose-700">{inr(r.deduction)}</td>
                 <td className="p-3 font-mono text-sm font-bold text-slate-900" data-testid={`sal-net-${r.employee_id}`}>{inr(r.net_payable)}</td>
                 <td className="p-3"><button onClick={() => pay(r)} data-testid={`sal-pay-${r.employee_id}`} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}><CheckCircle className="h-3 w-3" /> {r.payment_status === "paid" ? `Paid ${r.payment_date}` : "Mark Paid"}</button>{r.proof_url && <a href={r.proof_url} target="_blank" rel="noreferrer" data-testid={`sal-proof-${r.employee_id}`} className="ml-1 text-[10px] font-bold text-sky-700 hover:underline">proof</a>}</td>
                 <td className="p-3 whitespace-nowrap text-right"><button onClick={() => setEdit(r)} data-testid={`sal-edit-${r.employee_id}`} className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">Set / Adjust</button> <button onClick={() => dl(`/admin/salary/slip/${r.employee_id}`, { month, format: "pdf" })} data-testid={`sal-slip-${r.employee_id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white"><FileText className="h-3 w-3" /> Slip</button></td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={15} className="p-8 text-center text-slate-400">No employees.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={19} className="p-8 text-center text-slate-400">No employees.</td></tr>}
           </tbody>
         </table>
       </div>

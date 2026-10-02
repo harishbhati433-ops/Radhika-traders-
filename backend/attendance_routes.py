@@ -17,8 +17,10 @@ logger = logging.getLogger("attendance")
 
 IST = timezone(timedelta(hours=5, minutes=30))
 OFFICE_START, OFFICE_END = (10, 0), (17, 0)
-HALF_DAY_HOURS = 4.0
-STATUSES = ("present", "late", "half_day", "absent", "leave", "holiday", "weekly_off")
+REQUIRED_MINUTES = 7 * 60
+AUTO_CLOSE = (18, 0)
+STATUSES = ("present", "late", "short_hours", "half_day", "absent", "leave", "holiday", "weekly_off", "checkout_missing")
+TIMED = ("present", "late", "short_hours", "half_day")
 PAID_FULL = ("present", "late", "holiday", "weekly_off")
 
 
@@ -34,21 +36,55 @@ def fmt_t(iso: str) -> str:
     return datetime.fromisoformat(iso).astimezone(IST).strftime("%I:%M %p") if iso else ""
 
 
+def fmt_dur(mins) -> str:
+    if mins is None:
+        return ""
+    m = int(round(mins))
+    return f"{m // 60}h {m % 60:02d}m"
+
+
+def _ist_minutes(iso: str) -> float:
+    t = datetime.fromisoformat(iso).astimezone(IST)
+    return t.hour * 60 + t.minute + t.second / 60
+
+
 def is_late(check_in_iso: str) -> bool:
-    t = datetime.fromisoformat(check_in_iso).astimezone(IST)
-    return (t.hour, t.minute) > OFFICE_START
+    return _ist_minutes(check_in_iso) > OFFICE_START[0] * 60 + OFFICE_START[1]
+
+
+def paid_fraction(rec: dict) -> float:
+    """Share of a day's salary earned by this record (1.0 = full day)."""
+    st = rec.get("status")
+    if st in PAID_FULL:
+        return 1.0
+    if st == "short_hours":
+        return float(rec.get("paid_fraction") or 0)
+    if st == "half_day":
+        return 0.5
+    if st == "leave":
+        return 1.0 if rec.get("leave_paid") else 0.0
+    return 0.0  # absent, checkout_missing (pending admin review)
 
 
 def derive(rec: dict) -> dict:
-    """Fill hours/late/status from check-in/out for self-marked records."""
+    """Dynamic working-hours logic: full day = 7h worked regardless of arrival time; shortfall deducted minute-wise."""
     ci, co = rec.get("check_in"), rec.get("check_out")
-    rec["late"] = bool(ci) and is_late(ci)
-    if ci and co:
-        rec["hours"] = round((datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds() / 3600, 2)
-        rec["status"] = "half_day" if rec["hours"] < HALF_DAY_HOURS else ("late" if rec["late"] else "present")
-    elif ci:
-        rec["hours"] = None
-        rec["status"] = "late" if rec["late"] else "present"
+    if not ci:
+        return rec
+    late = max(0.0, _ist_minutes(ci) - (OFFICE_START[0] * 60 + OFFICE_START[1]))
+    rec["late"], rec["late_minutes"] = late > 0, int(round(late))
+    if co:
+        worked = max(0.0, (datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds() / 60)
+        extra = max(0.0, _ist_minutes(co) - (OFFICE_END[0] * 60 + OFFICE_END[1]))
+        short = max(0.0, REQUIRED_MINUTES - worked)
+        rec.update({"worked_minutes": int(round(worked)), "hours": round(worked / 60, 2), "extra_minutes": int(round(extra)),
+                    "adjusted_minutes": int(round(min(late, extra))), "short_minutes": int(round(short)),
+                    "paid_fraction": round(min(1.0, worked / REQUIRED_MINUTES), 4)})
+        rec["status"] = "present" if rec["short_minutes"] == 0 else "short_hours"
+    else:
+        rec.update({"worked_minutes": None, "hours": None, "extra_minutes": 0, "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": None})
+        if rec.get("status") != "checkout_missing":
+            rec["status"] = "present"
     return rec
 
 
@@ -79,12 +115,29 @@ class AdjustIn(BaseModel):
 def build_router(db, require_admin, require_employee, log_activity) -> APIRouter:
     r = APIRouter()
 
-    def out(a: dict, emp: Optional[dict] = None) -> dict:
+    def out(a: dict, emp: Optional[dict] = None, per_day: float = 0) -> dict:
         d = {k: v for k, v in a.items() if k != "_id"}
-        d.update({"id": str(a["_id"]), "check_in_time": fmt_t(a.get("check_in")), "check_out_time": fmt_t(a.get("check_out"))})
+        frac = paid_fraction(a)
+        d.update({"id": str(a["_id"]), "check_in_time": fmt_t(a.get("check_in")), "check_out_time": fmt_t(a.get("check_out")),
+                  "duration": fmt_dur(a.get("worked_minutes")), "paid_fraction": frac, "deduction": round(per_day * (1 - frac), 2) if per_day else None,
+                  "auto_closed_time": fmt_t(a.get("auto_closed_at")) if a.get("auto_closed_at") else ""})
         if emp:
             d.update({"employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "username": emp.get("original_username") or emp.get("username")})
         return d
+
+    def per_day_of(emp: dict, month: str) -> float:
+        y, m = map(int, month.split("-"))
+        monthly = float((emp.get("salary") or {}).get("monthly") or 0)
+        return monthly / calendar.monthrange(y, m)[1]
+
+    async def auto_close_stale() -> None:
+        """Sessions without a manual check-out are closed at 6:00 PM IST and flagged for admin review (time is NOT auto-paid)."""
+        now = now_utc().astimezone(IST)
+        today = ist_today()
+        date_q = {"$lte": today} if (now.hour, now.minute) >= AUTO_CLOSE else {"$lt": today}
+        await db.attendance.update_many({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "date": date_q},
+                                        {"$set": {"status": "checkout_missing", "auto_closed_at": now_utc().isoformat(), "hours": None, "worked_minutes": None,
+                                                  "short_minutes": None, "paid_fraction": None, "updated_at": now_utc().isoformat()}})
 
     async def employees(ids: Optional[list] = None) -> dict:
         q = {"role": "employee", "account_status": {"$ne": "deleted"}}
@@ -97,7 +150,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         days = calendar.monthrange(y, m)[1]
         counted = {i["date"] for i in items}
         last = min(days, int(today[8:])) if today[:7] == month else (days if today[:7] > month else 0)
-        s = {k: 0 for k in ("present", "late", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "late_marks")}
+        s = {k: 0 for k in ("present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "checkout_missing", "late_marks",
+                            "late_minutes_total", "extra_minutes_total", "adjusted_minutes_total", "short_minutes_total")}
+        paid = 0.0
+        short_frac = 0.0
         for i in items:
             st = i.get("status")
             if st == "leave":
@@ -106,9 +162,16 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 s[st] += 1
             if i.get("late"):
                 s["late_marks"] += 1
+            for k in ("late_minutes", "extra_minutes", "adjusted_minutes", "short_minutes"):
+                s[f"{k}_total"] += int(i.get(k) or 0)
+            f = paid_fraction(i)
+            paid += f
+            if st == "short_hours":
+                short_frac += 1 - f
         s["absent"] += sum(1 for d in range(1, last + 1) if f"{month}-{d:02d}" not in counted)
         s["days_in_month"], s["days_elapsed"] = days, last
-        s["paid_days"] = round(s["present"] + s["late"] + s["holiday"] + s["weekly_off"] + s["paid_leave"] + 0.5 * s["half_day"], 1)
+        s["paid_days"] = round(paid, 2)
+        s["short_day_fraction"] = round(short_frac, 4)
         return s
 
     async def salary_row(emp: dict, month: str, today: str) -> dict:
@@ -123,6 +186,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         cuts = float(adj.get("advance") or 0) + float(adj.get("deduction") or 0)
         return {"employee_id": eid, "employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "username": emp.get("original_username") or emp.get("username"),
                 "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": earned,
+                "short_deduction": round(per_day * s["short_day_fraction"], 2), "absent_deduction": round(per_day * s["absent"], 2),
+                "pending_review_deduction": round(per_day * s["checkout_missing"], 2),
                 "bonus": float(adj.get("bonus") or 0), "incentive": float(adj.get("incentive") or 0), "advance": float(adj.get("advance") or 0),
                 "deduction": float(adj.get("deduction") or 0), "note": adj.get("note", ""), "net_payable": round(earned + extras - cuts, 2),
                 "payment_status": adj.get("payment_status", "pending"), "payment_date": adj.get("payment_date", ""), "proof_url": adj.get("proof_url", ""), "utr": adj.get("utr", "")}
@@ -153,14 +218,21 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         buf.seek(0)
         return StreamingResponse(buf, media_type=media, headers={"Content-Disposition": f'attachment; filename="{fname}.{ext}"'})
 
-    ATT_COLS = [("date", "Date"), ("employee_name", "Employee"), ("employee_code", "Emp ID"), ("check_in_time", "Check-In"), ("check_out_time", "Check-Out"), ("hours", "Hours"), ("status_label", "Status"), ("note", "Note")]
-    SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Monthly Salary"), ("present", "Present"), ("late", "Late"), ("half_day", "Half Day"), ("absent", "Absent"),
-                ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("paid_days", "Paid Days"), ("earned", "Earned"), ("bonus", "Bonus"), ("incentive", "Incentive"), ("advance", "Advance"), ("deduction", "Deduction"),
-                ("net_payable", "Net Payable"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
+    ATT_COLS = [("date", "Date"), ("employee_name", "Employee"), ("employee_code", "Emp ID"), ("check_in_time", "Check-In"), ("check_out_time", "Manual Check-Out"), ("duration", "Working Duration"),
+                ("late_minutes", "Late Min"), ("extra_minutes", "Extra Min"), ("adjusted_minutes", "Adjusted Min"), ("short_minutes", "Short Min"), ("status_label", "Status"), ("deduction", "Deduction (Rs)"), ("note", "Note")]
+    SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Monthly Salary"), ("present", "Full Days"), ("short_hours", "Short Days"), ("half_day", "Half Day"), ("absent", "Absent"),
+                ("checkout_missing", "Checkout Missing"), ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("short_minutes_total", "Short Min"), ("short_deduction", "Short Deduction"), ("paid_days", "Paid Days"), ("earned", "Earned"),
+                ("bonus", "Bonus"), ("incentive", "Incentive"), ("advance", "Advance"), ("deduction", "Deduction"), ("net_payable", "Net Payable"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
 
     def label(a: dict) -> str:
         st = a.get("status", "")
-        return ("Leave (Paid)" if a.get("leave_paid") else "Leave (Unpaid)") if st == "leave" else st.replace("_", " ").title()
+        if st == "leave":
+            return "Leave (Paid)" if a.get("leave_paid") else "Leave (Unpaid)"
+        if st == "checkout_missing":
+            return "Checkout Missing – Admin Review"
+        if st == "present":
+            return "Full Day"
+        return st.replace("_", " ").title()
 
     async def notify_punch(emp: dict, rec: dict, kind: str) -> None:
         full = await db.users.find_one({"_id": ObjectId(emp["id"])}) if ObjectId.is_valid(emp["id"]) else None
@@ -169,7 +241,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         when = fmt_t(rec["check_in"] if kind == "in" else rec["check_out"])
         d = datetime.fromisoformat(rec["date"]).strftime("%d %b %Y")
         st = label(rec) + (" (Late)" if kind == "in" and rec.get("late") else "")
-        hours = rec.get("hours") if kind == "out" else None
+        hours = fmt_dur(rec.get("worked_minutes")) if kind == "out" else None
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
         targets = {(a["email"].lower(), a.get("name", "Admin"), True) for a in admins if a.get("email")} | {(contact_settings.CONTACT["owner_email"], "Admin", True)}
         if full.get("email"):
@@ -196,31 +268,36 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
 
     @r.post("/employee/attendance/check-out")
     async def check_out(request: Request, background: BackgroundTasks, emp: dict = Depends(require_employee)):
+        await auto_close_stale()
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": ist_today()})
         if not rec or not rec.get("check_in"):
             raise HTTPException(status_code=400, detail="Please check in first")
+        if rec.get("status") == "checkout_missing":
+            raise HTTPException(status_code=400, detail="Your session was auto-closed at 6:00 PM. Admin will review and enter your actual check-out time.")
         if rec.get("check_out"):
             raise HTTPException(status_code=400, detail="Already checked out today")
         rec["check_out"] = now_utc().isoformat()
         rec = derive(rec)
-        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {"check_out": rec["check_out"], "hours": rec["hours"], "status": rec["status"], "late": rec["late"], "updated_at": now_utc().isoformat()}})
-        await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {rec['hours']} h")
+        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction")} | {"updated_at": now_utc().isoformat()}})
+        await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {fmt_dur(rec['worked_minutes'])}" + (f" · short {rec['short_minutes']} min" if rec["short_minutes"] else ""))
         saved = await db.attendance.find_one({"_id": rec["_id"]})
         background.add_task(notify_punch, emp, saved, "out")
         return out(saved)
 
     @r.get("/employee/attendance")
     async def my_attendance(month: Optional[str] = None, emp: dict = Depends(require_employee)):
+        await auto_close_stale()
         today = ist_today()
         month = month or today[:7]
         items = await db.attendance.find({"employee_id": emp["id"], "date": {"$regex": f"^{month}"}}).sort("date", -1).to_list(100)
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": today})
         return {"today": out(rec) if rec else None, "date": today, "month": month, "items": [out(a) for a in items], "summary": summarize(items, month, today),
-                "office": {"start": "10:00 AM", "end": "05:00 PM"}}
+                "office": {"start": "10:00 AM", "end": "05:00 PM", "required_hours": REQUIRED_MINUTES / 60, "auto_close": "06:00 PM"}}
 
     # ---------------- Admin ----------------
     @r.get("/admin/attendance")
     async def admin_attendance(date: Optional[str] = None, month: Optional[str] = None, employee_id: Optional[str] = None, status: Optional[str] = None, admin: dict = Depends(require_admin)):
+        await auto_close_stale()
         q: dict = {}
         if date:
             q["date"] = date
@@ -232,18 +309,23 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             q["status"] = status
         emps = await employees()
         items = await db.attendance.find(q).sort([("date", -1), ("employee_id", 1)]).to_list(5000)
-        rows = [out(a, emps.get(a["employee_id"])) for a in items if a["employee_id"] in emps]
+        rows = [out(a, emps.get(a["employee_id"]), per_day_of(emps[a["employee_id"]], a["date"][:7])) for a in items if a["employee_id"] in emps]
+
+        def absent_row(eid, e, d):
+            pd_ = per_day_of(e, d[:7])
+            return {"id": "", "employee_id": eid, "date": d, "status": "absent", "check_in_time": "", "check_out_time": "", "hours": None, "duration": "", "late": False, "late_minutes": 0, "extra_minutes": 0,
+                    "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": 0, "deduction": round(pd_, 2) if pd_ else None, "note": "", "virtual": True,
+                    "employee_name": e.get("name"), "employee_code": e.get("employee_code", ""), "username": e.get("username")}
         if date and not status:  # show employees with no record as Absent for that day
             have = {a["employee_id"] for a in items}
             for eid, e in emps.items():
                 if eid not in have and (not employee_id or employee_id == eid) and date <= ist_today():
-                    rows.append({"id": "", "employee_id": eid, "date": date, "status": "absent", "check_in_time": "", "check_out_time": "", "hours": None, "late": False, "note": "", "virtual": True,
-                                 "employee_name": e.get("name"), "employee_code": e.get("employee_code", ""), "username": e.get("username")})
+                    rows.append(absent_row(eid, e, date))
         if status == "absent" and date:
             have = {a["employee_id"] for a in await db.attendance.find({"date": date}).to_list(1000)}
-            rows = [{"id": "", "employee_id": eid, "date": date, "status": "absent", "check_in_time": "", "check_out_time": "", "hours": None, "late": False, "note": "", "virtual": True,
-                     "employee_name": e.get("name"), "employee_code": e.get("employee_code", ""), "username": e.get("username")} for eid, e in emps.items() if eid not in have and (not employee_id or employee_id == eid)] + rows
-        return {"items": rows, "employees": [{"id": k, "name": v.get("name"), "employee_code": v.get("employee_code", "")} for k, v in emps.items()]}
+            rows = [absent_row(eid, e, date) for eid, e in emps.items() if eid not in have and (not employee_id or employee_id == eid)] + rows
+        return {"items": rows, "employees": [{"id": k, "name": v.get("name"), "employee_code": v.get("employee_code", "")} for k, v in emps.items()],
+                "rules": {"office_start": "10:00 AM", "office_end": "05:00 PM", "required_minutes": REQUIRED_MINUTES, "auto_close": "06:00 PM"}}
 
     @r.put("/admin/attendance/{employee_id}/{date}")
     async def admin_set_attendance(employee_id: str, date: str, body: AdminAttendanceIn, request: Request, admin: dict = Depends(require_admin)):
@@ -264,40 +346,46 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             h, m = map(int, hhmm.split(":"))
             return datetime.fromisoformat(date).replace(hour=h, minute=m, tzinfo=IST).astimezone(timezone.utc).isoformat()
         rec = {"employee_id": employee_id, "date": date, "check_in": to_iso(body.check_in), "check_out": to_iso(body.check_out), "leave_paid": bool(body.leave_paid) if body.status == "leave" else False,
-               "note": (body.note or "")[:200], "source": "admin", "edited_by": admin.get("name", ""), "updated_at": now_utc().isoformat(), "created_at": (old or {}).get("created_at") or now_utc().isoformat()}
-        if body.status in ("present", "late", "half_day") and rec["check_in"] and rec["check_out"]:
+               "note": (body.note or "")[:200], "source": "admin", "edited_by": admin.get("name", ""), "updated_at": now_utc().isoformat(), "created_at": (old or {}).get("created_at") or now_utc().isoformat(),
+               "auto_closed_at": None, "reviewed_by": admin.get("name", "") if (old or {}).get("status") == "checkout_missing" else (old or {}).get("reviewed_by")}
+        if body.status in TIMED and rec["check_in"] and rec["check_out"]:
+            if rec["check_out"] <= rec["check_in"]:
+                raise HTTPException(status_code=400, detail="Check-out must be after check-in")
             rec = derive(rec)
             if body.status == "half_day":
                 rec["status"] = "half_day"
         else:
             rec["status"], rec["late"] = body.status, body.status == "late"
-            rec["hours"] = round((datetime.fromisoformat(rec["check_out"]) - datetime.fromisoformat(rec["check_in"])).total_seconds() / 3600, 2) if rec["check_in"] and rec["check_out"] else None
+            rec.update({"hours": None, "worked_minutes": None, "late_minutes": 0, "extra_minutes": 0, "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": None})
         await db.attendance.update_one({"employee_id": employee_id, "date": date}, {"$set": rec}, upsert=True)
         def desc(a):
             times = " ".join(x for x in (fmt_t(a.get("check_in")), fmt_t(a.get("check_out"))) if x)
             return f"{label(a)}{' ' + times.replace(' ', '-', 1) if times else ''}" if a.get("check_in") and a.get("check_out") else f"{label(a)}{' ' + times if times else ''}"
         before = desc(old) if old else "Absent (no record)"
-        after = desc(rec)
+        after = desc(rec) + (f" · {fmt_dur(rec['worked_minutes'])}" if rec.get("worked_minutes") else "")
         await log_activity(admin, "attendance_edited", request, entity_type="attendance", entity_id=f"{employee_id}:{date}", entity_label=f"{emp.get('name')} · {date}", status=rec["status"], detail=f"{before} → {after}" + (f" · {rec['note']}" if rec["note"] else ""))
-        return out(await db.attendance.find_one({"employee_id": employee_id, "date": date}), emp)
+        return out(await db.attendance.find_one({"employee_id": employee_id, "date": date}), emp, per_day_of(emp, date[:7]))
 
     @r.get("/admin/attendance/dashboard")
     async def attendance_dashboard(admin: dict = Depends(require_admin)):
+        await auto_close_stale()
         today = ist_today()
         emps = await employees()
         todays = await db.attendance.find({"date": today}).to_list(1000)
         by = {a["employee_id"]: a for a in todays if a["employee_id"] in emps}
         rows = [await salary_row(e, today[:7], today) for e in emps.values()]
+        pending_review = await db.attendance.count_documents({"status": "checkout_missing", "employee_id": {"$in": list(emps)}})
         return {"date": today, "month": today[:7], "total_employees": len(emps),
-                "present_today": sum(1 for a in by.values() if a["status"] in ("present", "late", "half_day")),
+                "present_today": sum(1 for a in by.values() if a["status"] in ("present", "late", "short_hours", "half_day", "checkout_missing")),
                 "late_today": sum(1 for a in by.values() if a.get("late")), "on_leave_today": sum(1 for a in by.values() if a["status"] == "leave"),
-                "absent_today": sum(1 for eid in emps if eid not in by or by[eid]["status"] == "absent"),
+                "absent_today": sum(1 for eid in emps if eid not in by or by[eid]["status"] == "absent"), "pending_review": pending_review,
                 "total_monthly_salary": round(sum(r["monthly_salary"] for r in rows), 2), "salary_payable": round(sum(r["net_payable"] for r in rows), 2),
                 "salary_paid": round(sum(r["net_payable"] for r in rows if r["payment_status"] == "paid"), 2),
                 "salary_pending": round(sum(r["net_payable"] for r in rows if r["payment_status"] != "paid"), 2)}
 
     @r.get("/admin/salary")
     async def salary_sheet(month: Optional[str] = None, admin: dict = Depends(require_admin)):
+        await auto_close_stale()
         today = ist_today()
         month = month or today[:7]
         emps = await employees()
@@ -360,11 +448,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
         row = await salary_row(emp, month, ist_today())
-        fields = [("Employee Name", row["employee_name"]), ("Employee ID", row["employee_code"]), ("Salary Month", month), ("Monthly Salary", f"₹{row['monthly_salary']:,.2f}"),
-                  ("Present Days", row["present"] + row["late"]), ("Late Marks", row["late_marks"]), ("Half Days", row["half_day"]), ("Absent Days", row["absent"]),
-                  ("Paid Leave", row["paid_leave"]), ("Unpaid Leave", row["unpaid_leave"]), ("Paid Days", row["paid_days"]), ("Earned Salary", f"₹{row['earned']:,.2f}"),
+        fields = [("Employee Name", row["employee_name"]), ("Employee ID", row["employee_code"]), ("Salary Month", month), ("Monthly Salary", f"₹{row['monthly_salary']:,.2f}"), ("Per Day", f"₹{row['per_day']:,.2f}"),
+                  ("Full Days (7h+)", row["present"] + row["late"]), ("Short-Hour Days", row["short_hours"]), ("Total Short Minutes", row["short_minutes_total"]), ("Late Marks", row["late_marks"]), ("Half Days", row["half_day"]),
+                  ("Absent Days", row["absent"]), ("Checkout Missing (unpaid, pending review)", row["checkout_missing"]),
+                  ("Paid Leave", row["paid_leave"]), ("Unpaid Leave", row["unpaid_leave"]), ("Paid Days", row["paid_days"]), ("Short Working Deduction", f"₹{row['short_deduction']:,.2f}"), ("Earned Salary", f"₹{row['earned']:,.2f}"),
                   ("Bonus / Incentive", f"₹{row['bonus'] + row['incentive']:,.2f}"), ("Advance", f"₹{row['advance']:,.2f}"), ("Other Deduction", f"₹{row['deduction']:,.2f}"),
                   ("Net Payable Salary", f"₹{row['net_payable']:,.2f}"), ("Payment Status", row["payment_status"].title()), ("Payment Date", row["payment_date"] or "—")]
+        net_i = next(i for i, f in enumerate(fields) if f[0] == "Net Payable Salary")
         if format == "pdf":
             from reportlab.lib.pagesizes import A4
             from reportlab.lib import colors
@@ -383,7 +473,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             st = getSampleStyleSheet()
             t = Table([[k, str(v)] for k, v in fields], colWidths=[220, 220])
             t.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), font), ("FONTNAME", (0, 0), (0, -1), fontb), ("FONTSIZE", (0, 0), (-1, -1), 10), ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
-                                   ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]), ("BACKGROUND", (0, 15), (-1, 15), colors.HexColor("#FEF3C7")), ("FONTNAME", (0, 15), (-1, 15), fontb), ("PADDING", (0, 0), (-1, -1), 7)]))
+                                   ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]), ("BACKGROUND", (0, net_i), (-1, net_i), colors.HexColor("#FEF3C7")), ("FONTNAME", (0, net_i), (-1, net_i), fontb), ("PADDING", (0, 0), (-1, -1), 7)]))
             SimpleDocTemplate(buf, pagesize=A4, topMargin=36).build([Paragraph("<b>Radhika Traders</b> — Salary Slip", st["Title"]), Paragraph(f"Agar, Madhya Pradesh · Generated {now_utc().astimezone(IST).strftime('%d %b %Y')}", st["Normal"]), Spacer(1, 14), t,
                                                                      Spacer(1, 24), Paragraph("This is a system-generated salary slip.", st["Italic"])])
             buf.seek(0)
