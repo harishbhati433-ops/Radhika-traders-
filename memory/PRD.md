@@ -389,3 +389,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## Update (June 2026) — Admin login link hidden
 - Public "Admin Login →" link removed from Footer, Maintenance page and Employee Login page. Admin login is reachable ONLY via direct URL `/admin/login` (user mandate: no public button anywhere).
+- Brute-force lockout upgraded (June 2026): LOGIN_LOCK_MINUTES 30→15, 5 attempts. Admin portal lock is ACCOUNT-WIDE (identifier `admin:{email}`, IP-independent) so IP rotation cannot bypass; customers remain per IP+email. On admin lock: security_log + in-app notification + email alert (send_login_locked_email → owner Gmail) via asyncio.create_task (BackgroundTasks don't run when HTTPException raised). Password reset (OTP) already clears login_attempts → instant unlock. AdminLogin.jsx shows `admin-lock-banner` on 429.

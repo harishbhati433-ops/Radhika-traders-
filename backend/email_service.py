@@ -198,6 +198,27 @@ async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, dev
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_login_locked_email(to: str, name: str, when_ist: str, ip: str, device: str, attempts: int, lock_minutes: int, reset_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Security alert: Admin login locked after {attempts} wrong password attempts"
+    rows = [("Date & Time", when_ist), ("Device / Browser", device), ("IP Address", ip or "Unknown"), ("Wrong attempts", attempts), ("Locked for", f"{lock_minutes} minutes")]
+    table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
+                    f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+    inner = (
+        f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+        f'<p style="font-size:14px;color:#334155">Someone entered the wrong password for your <b>Admin Panel</b> {attempts} times in a row. '
+        f'As a safety measure, admin login is now <b>locked for {lock_minutes} minutes</b> for everyone, including you.</p>'
+        f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
+        f'<p style="font-size:14px;color:#334155"><b>Was this you?</b> Just wait {lock_minutes} minutes and try again, or reset your password via OTP to unlock instantly.</p>'
+        f'<p style="font-size:14px;color:#B91C1C"><b>Not you?</b> Someone is trying to guess your password. Your account is still safe — the password was NOT cracked. '
+        f'We recommend resetting it now to a stronger one.</p>'
+        f'<p style="margin:16px 0 6px"><a href="{escape(reset_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Reset admin password</a></p>'
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+
 async def send_password_changed_email(to: str, name: str, when_ist: str, ip: str) -> str | None:
     if not to:
         return None

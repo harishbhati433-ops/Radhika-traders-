@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Request
 
 import contact_settings
-from email_service import send_login_alert_email
+from email_service import send_login_alert_email, send_login_locked_email
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -46,3 +46,17 @@ async def record_admin_login(db, user: dict, request: Request, ip: str, origin: 
     recipients = {(user.get("email") or "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
     for to in recipients:
         await send_login_alert_email(to, user.get("name", ""), when, ip, device, f"{origin}/admin/forgot-password", f"{origin}/admin/security")
+
+
+
+async def notify_admin_login_locked(db, user: dict, request: Request, ip: str, lock_minutes: int, attempts: int, origin: str) -> None:
+    browser, os_name = describe_ua(request.headers.get("user-agent", "")[:300])
+    device = f"{browser} on {os_name}"
+    when = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.notifications.insert_one({"user_id": str(user["_id"]), "title": "Admin login locked — brute-force attempt blocked",
+                                       "body": f"{attempts} wrong passwords from {device} · IP {ip} · {when}. Login locked for {lock_minutes} min.",
+                                       "link": "/admin/security", "type": "security", "read": False, "created_at": now})
+    recipients = {(user.get("email") or "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
+    for to in recipients:
+        await send_login_locked_email(to, user.get("name", ""), when, ip, device, attempts, lock_minutes, f"{origin}/admin/forgot-password")

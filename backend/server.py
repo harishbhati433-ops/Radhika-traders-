@@ -36,7 +36,7 @@ from employee_routes import build_router as build_employee_router
 from attendance_routes import build_router as build_attendance_router
 from contact_routes import build_router as build_contact_router
 from password_reset import build_router as build_password_reset_router
-from login_alerts import record_admin_login
+from login_alerts import record_admin_login, notify_admin_login_locked
 import contact_settings
 
 mongo_url = os.environ["MONGO_URL"]
@@ -637,7 +637,7 @@ async def resend_otp(body: ResendOtpIn):
 
 
 LOGIN_MAX_ATTEMPTS = 5
-LOGIN_LOCK_MINUTES = 30
+LOGIN_LOCK_MINUTES = 15
 
 
 def _client_ip(request: Request) -> str:
@@ -647,7 +647,8 @@ def _client_ip(request: Request) -> str:
 @api.post("/auth/login")
 async def login(body: LoginIn, request: Request, background: BackgroundTasks):
     email = body.email.lower()
-    identifier = f"{_client_ip(request)}:{email}"
+    ip = _client_ip(request)
+    identifier = f"admin:{email}" if body.portal == "admin" else f"{ip}:{email}"
     now = now_iso()
     rec, user = await asyncio.gather(db.login_attempts.find_one({"identifier": identifier}), db.users.find_one({"email": email}))
     if rec and rec.get("count", 0) >= LOGIN_MAX_ATTEMPTS and (rec.get("locked_until") or "") > now:
@@ -667,7 +668,10 @@ async def login(body: LoginIn, request: Request, background: BackgroundTasks):
         if count >= LOGIN_MAX_ATTEMPTS:
             upd["$set"]["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
             if user:
-                await _log_security(str(user["_id"]), "login_locked", request, f"{count} failed attempts")
+                await _log_security(str(user["_id"]), "login_locked", request, f"{count} failed attempts · IP {ip}")
+                if user.get("role") == "admin":
+                    asyncio.create_task(notify_admin_login_locked(db, user, request, ip, LOGIN_LOCK_MINUTES, count,
+                                                                  request.headers.get("origin") or _origin(request)))
         await db.login_attempts.update_one({"identifier": identifier}, upd, upsert=True)
         left = LOGIN_MAX_ATTEMPTS - count
         if count >= LOGIN_MAX_ATTEMPTS:
