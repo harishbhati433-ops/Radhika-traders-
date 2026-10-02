@@ -162,20 +162,39 @@ async def send_salary_paid_email(to: str, name: str, month: str, net: float, mon
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
-async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, emp_code: str, date_str: str, time_str: str, status: str, hours, for_admin: bool) -> str | None:
+async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, emp_code: str, date_str: str, time_str: str, status: str, hours, for_admin: bool,
+                                check_in: str = "", check_out: str = "", short_minutes=None) -> str | None:
     if not to:
         return None
-    verb = "checked in" if kind == "in" else "checked out"
-    subject = f"{'Attendance: ' + emp_name if for_admin else 'Your attendance'} {verb} at {time_str} — {date_str}"
-    rows = [("Employee", f"{emp_name} ({emp_code})" if emp_code else emp_name), ("Date", date_str), ("Check-In" if kind == "in" else "Check-Out", time_str), ("Status", status)]
+    auto = kind == "auto"
+    verb = "checked in" if kind == "in" else "checked out" if kind == "out" else "did NOT check out"
+    if auto:
+        subject = f"{'Checkout missing: ' + emp_name if for_admin else 'You forgot to check out'} — auto-closed at 6:00 PM, {date_str}"
+    else:
+        subject = f"{'Attendance: ' + emp_name if for_admin else 'Your attendance'} {verb} at {time_str} — {date_str}"
+    rows = [("Employee", f"{emp_name} ({emp_code})" if emp_code else emp_name), ("Date", date_str)]
+    if kind == "in":
+        rows.append(("Check-In", time_str))
+    else:
+        rows += [("Check-In", check_in or "—"), ("Manual Check-Out", check_out or ("Missing — auto-closed 6:00 PM" if auto else time_str))]
+    rows.append(("Status", status))
     if hours is not None:
         rows.append(("Working Duration", str(hours)))
+    if short_minutes:
+        rows.append(("Short Working", f"{short_minutes} min (deducted minute-wise)"))
     table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
                     f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
-    lead = (f"<b>{escape(emp_name)}</b> has {verb} at the office." if for_admin else f"You have successfully {verb}. Office hours are 10:00 AM – 5:00 PM.")
+    if auto:
+        lead = (f"<b>{escape(emp_name)}</b> checked in today but never checked out. The session was auto-closed at 6:00 PM and marked <b>Checkout Missing – Admin Review</b>. "
+                f"This day is <b>not paid</b> until you enter the actual check-out time." if for_admin
+                else "You forgot to check out today. Your session was auto-closed at 6:00 PM and sent to the admin for review — please tell the admin your actual leaving time.")
+        foot = "Open Admin Panel → Attendance &amp; Salary → click <b>Review</b> on this row to enter the actual check-out time." if for_admin else "Please check out yourself every day so your full working time is counted."
+    else:
+        lead = (f"<b>{escape(emp_name)}</b> has {verb} at the office." if for_admin else f"You have successfully {verb}. Office hours are 10:00 AM – 5:00 PM · 7 hours of work = Full Day.")
+        foot = "Open Admin Panel → Attendance &amp; Salary to review or correct." if for_admin else "If anything looks wrong, please inform the admin."
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p><p style="font-size:14px;color:#334155">{lead}</p>'
              f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
-             f'<p style="font-size:12px;color:#64748b">{"Open Admin Panel → Attendance &amp; Salary to review or correct." if for_admin else "If anything looks wrong, please inform the admin."}</p>')
+             f'<p style="font-size:12px;color:#64748b">{foot}</p>')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 

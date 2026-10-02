@@ -1,4 +1,5 @@
 """Employee attendance (check-in/out, statuses) + monthly salary calculation, exports and dashboard summary."""
+import asyncio
 import calendar
 import io
 import logging
@@ -136,10 +137,18 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         """Sessions without a manual check-out are closed at 6:00 PM IST and flagged for admin review (time is NOT auto-paid)."""
         now = now_utc().astimezone(IST)
         today = ist_today()
-        date_q = {"$lte": today} if (now.hour, now.minute) >= AUTO_CLOSE else {"$lt": today}
-        await db.attendance.update_many({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "manual_override": {"$ne": True}, "date": date_q},
-                                        {"$set": {"status": "checkout_missing", "auto_closed_at": now_utc().isoformat(), "hours": None, "worked_minutes": None,
-                                                  "short_minutes": None, "paid_fraction": None, "updated_at": now_utc().isoformat()}})
+        after_close = (now.hour, now.minute) >= AUTO_CLOSE
+        date_q = {"$lte": today} if after_close else {"$lt": today}
+        close_min = AUTO_CLOSE[0] * 60 + AUTO_CLOSE[1]
+        stale = await db.attendance.find({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "manual_override": {"$ne": True}, "date": date_q}).to_list(500)
+        stale = [a for a in stale if a["date"] < today or _ist_minutes(a["check_in"]) < close_min]  # sessions started after 6 PM close next day
+        if not stale:
+            return
+        ts = now_utc().isoformat()
+        await db.attendance.update_many({"_id": {"$in": [a["_id"] for a in stale]}},
+                                        {"$set": {"status": "checkout_missing", "auto_closed_at": ts, "hours": None, "worked_minutes": None, "short_minutes": None, "paid_fraction": None, "updated_at": ts}})
+        for a in stale:
+            asyncio.create_task(notify_punch({"id": a["employee_id"]}, {**a, "status": "checkout_missing", "auto_closed_at": ts}, "auto"))
 
     async def employees(ids: Optional[list] = None) -> dict:
         q = {"role": "employee", "account_status": {"$ne": "deleted"}}
@@ -240,17 +249,19 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         full = await db.users.find_one({"_id": ObjectId(emp["id"])}) if ObjectId.is_valid(emp["id"]) else None
         if not full:
             return
-        when = fmt_t(rec["check_in"] if kind == "in" else rec["check_out"])
+        when = fmt_t(rec["check_in"] if kind == "in" else rec["check_out"] if kind == "out" else rec.get("auto_closed_at"))
         d = datetime.fromisoformat(rec["date"]).strftime("%d %b %Y")
         st = label(rec) + (" (Late)" if kind == "in" and rec.get("late") else "")
         hours = fmt_dur(rec.get("worked_minutes")) if kind == "out" else None
+        extra = {"check_in": fmt_t(rec.get("check_in")), "check_out": fmt_t(rec.get("check_out")), "short_minutes": rec.get("short_minutes")} if kind != "in" else {}
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
-        targets = {(a["email"].lower(), a.get("name", "Admin"), True) for a in admins if a.get("email")} | {(contact_settings.CONTACT["owner_email"], "Admin", True)}
+        targets = {a["email"].lower(): (a.get("name", "Admin"), True) for a in admins if a.get("email")}
+        targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), ("Admin", True))
         if full.get("email"):
-            targets.add((full["email"].lower(), full.get("name", ""), False))
-        for to, name, for_admin in targets:
+            targets.setdefault(full["email"].lower(), (full.get("name", ""), False))
+        for to, (name, for_admin) in targets.items():
             try:
-                await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin)
+                await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
             except Exception as e:  # never block attendance on email failure
                 logger.warning(f"attendance email to {to} failed: {e}")
 
