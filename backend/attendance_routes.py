@@ -466,6 +466,44 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         data = await salary_sheet(month=month, admin=admin)
         return export(data["rows"], SAL_COLS, f"Salary Sheet {month}", format, f"salary_sheet_{month}")
 
+    @r.get("/admin/salary/yearly")
+    async def salary_yearly(year: Optional[int] = None, admin: dict = Depends(require_admin)):
+        await auto_close_stale()
+        today = ist_today()
+        year = year or int(today[:4])
+        emps = await employees()
+        last_m = int(today[5:7]) if year == int(today[:4]) else (12 if year < int(today[:4]) else 0)
+        months = []
+        for m in range(1, last_m + 1):
+            mo = f"{year}-{m:02d}"
+            rows = [await salary_row(e, mo, today) for e in emps.values()]
+            paid = round(sum(r["net_payable"] for r in rows if r["payment_status"] == "paid"), 2)
+            total = round(sum(r["net_payable"] for r in rows), 2)
+            months.append({"month": mo, "label": datetime(year, m, 1).strftime("%b %Y"), "total": total, "paid": paid, "pending": round(total - paid, 2),
+                           "paid_days": round(sum(r["paid_days"] for r in rows), 2), "short_deduction": round(sum(r["short_deduction"] for r in rows), 2),
+                           "is_current": mo == today[:7],
+                           "employees": [{"employee_id": r["employee_id"], "net_payable": r["net_payable"], "payment_status": r["payment_status"], "paid_days": r["paid_days"]} for r in rows]})
+        cur = next((x for x in months if x["is_current"]), None)
+        prev = months[-2] if cur and len(months) >= 2 else (months[-1] if not cur and months else None)
+        return {"year": year, "months": months, "employees": [{"id": k, "name": v.get("name"), "employee_code": v.get("employee_code", "")} for k, v in emps.items()],
+                "totals": {"total": round(sum(x["total"] for x in months), 2), "paid": round(sum(x["paid"] for x in months), 2), "pending": round(sum(x["pending"] for x in months), 2)},
+                "current": cur, "previous": prev}
+
+    @r.get("/admin/salary/yearly/export")
+    async def export_salary_yearly(year: int, format: str = "xlsx", admin: dict = Depends(require_admin)):
+        data = await salary_yearly(year=year, admin=admin)
+        emps = data["employees"]
+        rows = []
+        for mo in data["months"]:
+            by = {e["employee_id"]: e for e in mo["employees"]}
+            row = {"month": mo["label"], "total": mo["total"], "paid": mo["paid"], "pending": mo["pending"], "paid_days": mo["paid_days"]}
+            for e in emps:
+                row[f"emp_{e['id']}"] = by.get(e["id"], {}).get("net_payable", 0)
+            rows.append(row)
+        rows.append({"month": f"TOTAL {year}", **data["totals"], "paid_days": round(sum(m["paid_days"] for m in data["months"]), 2), **{f"emp_{e['id']}": round(sum(m2.get("net_payable", 0) for mo in data["months"] for m2 in mo["employees"] if m2["employee_id"] == e["id"]), 2) for e in emps}})
+        cols = [("month", "Month")] + [(f"emp_{e['id']}", f"{e['name']} ({e['employee_code']})") for e in emps] + [("total", "Total Salary"), ("paid", "Paid"), ("pending", "Pending"), ("paid_days", "Paid Days")]
+        return export(rows, cols, f"Yearly Salary Summary {year}", format, f"salary_yearly_{year}")
+
     @r.get("/admin/salary/slip/{employee_id}")
     async def salary_slip(employee_id: str, month: str, format: str = "pdf", admin: dict = Depends(require_admin)):
         emp = (await employees([employee_id])).get(employee_id)
