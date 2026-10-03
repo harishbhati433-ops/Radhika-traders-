@@ -108,7 +108,7 @@ export function SalaryTab() {
   const tot = (k) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
   const publish = async (r) => {
     if (r.published && !window.confirm(`Hide ${r.employee_name}'s ${month} salary from the employee panel again?`)) return;
-    if (!r.published && !window.confirm(`Publish ${r.employee_name}'s ${month} Final Salary ${inr(r.net_payable)} to the employee panel? It will be treated as finalized.`)) return;
+    if (!r.published && !window.confirm(`Publish ${r.employee_name}'s ${month} salary ${inr(r.payable_now)} to the employee panel?${r.in_progress ? ` (Month still running: this is the amount for ${r.paid_days} paid days till today, not the full-month total ${inr(r.net_payable)}.)` : ""} It will be treated as finalized.`)) return;
     try { await api.put(`/admin/salary/${r.employee_id}/${month}/publish`, { published: !r.published }); toast.success(r.published ? "Salary hidden from employee" : "Salary published — employee can now see it"); load(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };

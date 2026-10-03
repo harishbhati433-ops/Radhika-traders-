@@ -144,10 +144,12 @@ async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | N
 
 
 def _salary_rows(row: dict, mlabel: str, extra: list) -> str:
+    running = row.get("in_progress")
+    final_label = f"SALARY TILL {datetime.fromisoformat(row['as_of']).strftime('%d %b')} ({row.get('paid_days', 0):g} paid days)" if running and row.get("as_of") else "FINAL SALARY"
     rows = [("Salary Month", mlabel), ("Base Monthly Salary", f"₹{row['monthly_salary']:,.2f}"), ("Daily Rate (÷30)", f"₹{row['per_day']:,.2f}"),
             ("Present / Half / Absent", f"{row['present'] + row['late']} / {row['half_day']} / {row['absent']}"), ("Leave (Paid / Unpaid)", f"{row['paid_leave']} / {row['unpaid_leave']}"),
             ("Weekly Off · Sunday Worked", f"{row['weekly_off']} · {row['sunday_worked']}"), ("Sunday Extra (+)", f"₹{row['sunday_extra']:,.2f}"), ("Bonus / Incentive (+)", f"₹{row['bonus'] + row['incentive']:,.2f}"),
-            ("Attendance Deduction (−)", f"₹{row['attendance_deduction']:,.2f}"), ("Adjustments (−)", f"₹{row['manual_adjustment']:,.2f}"), ("FINAL SALARY", f"₹{row['net_payable']:,.2f}")] + extra
+            ("Attendance Deduction (−)", f"₹{row['attendance_deduction']:,.2f}"), ("Adjustments (−)", f"₹{row['manual_adjustment']:,.2f}"), (final_label, f"₹{row['net_payable']:,.2f}")] + extra
     return "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
                    f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
 

@@ -2995,7 +2995,8 @@ async def startup():
                           ("transactions", "user_id"), ("transactions", "created_at"), ("withdrawals", "user_id"), ("withdrawals", "status"), ("withdrawals", "created_at"), ("notifications", "user_id"), ("clicks", "user_id"),
                           ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id"), ("attendance", "date"), ("attendance", "status"), ("salary_audit", "employee_id"), ("salary_audit", "month"),
                           ("login_history", "user_id"), ("security_logs", "user_id"), ("files", "storage_path"),
-                          ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id")):
+                          ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id"), ("activity_logs", "actor_role"),
+                          ("attendance_reminders", "date"), ("cron_runs", "run_id")):
             await db[coll].create_index(key)
         await db.users.create_index("username", unique=True, partialFilterExpression={"username": {"$type": "string"}})
         await db.leads.create_index("submit_key", unique=True, partialFilterExpression={"submit_key": {"$type": "string"}})

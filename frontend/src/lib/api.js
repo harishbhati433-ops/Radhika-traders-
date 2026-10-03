@@ -10,6 +10,30 @@ export const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({ baseURL: API });
 
+// Short-lived GET cache: revisiting a panel renders instantly; any write clears it so lists never go stale after an action.
+const GET_TTL_MS = 30000;
+const getCache = new Map();
+const NO_CACHE = /\/(notifications|auth\/me|files\/|cron\/|statement|export|slip|download)/;
+const cacheKey = (c) => `${c.url}?${JSON.stringify(c.params || {})}`;
+const cacheable = (c) => (c.method || "get").toLowerCase() === "get" && !c.responseType && !c.noCache && !NO_CACHE.test(c.url || "");
+export const clearApiCache = () => getCache.clear();
+window.addEventListener("rt:logout", clearApiCache);
+
+const netAdapter = axios.getAdapter(axios.defaults.adapter);
+api.defaults.adapter = async (config) => {
+  if (!cacheable(config)) {
+    const res = await netAdapter(config);
+    if ((config.method || "get").toLowerCase() !== "get") getCache.clear();
+    return res;
+  }
+  const key = cacheKey(config);
+  const hit = getCache.get(key);
+  if (hit && Date.now() - hit.at < GET_TTL_MS) return { ...hit.res, config, cached: true };
+  const res = await netAdapter(config);
+  getCache.set(key, { at: Date.now(), res });
+  return res;
+};
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("rt_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
