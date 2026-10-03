@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only verification of the new Attendance Mode (Normal/GPS/GPS+Selfie) feature on /admin/attendance and /employee/attendance. All 8 required scenarios passed end-to-end with Playwright + mocked geolocation.",
+  "scenarios_tested": [
+    "Admin policy card renders below Office Timing with testid att-policy-card and current badge 'Active: Normal · office location not set'.",
+    "GPS and GPS+Selfie mode buttons are DISABLED when office lat/lng empty; Normal remains enabled.",
+    "Entering lat 23.7117 / lng 76.0157 enables GPS buttons and reveals att-policy-map-link.",
+    "Save GPS mode → success toast → badge becomes 'Active: GPS only (within office radius) · 100 m'. Reload persists lat/lng/mode.",
+    "Employee rahul.k /employee/attendance shows chip 'Live GPS required within 100 m of office' (and ' · selfie at check-in' in gps_selfie mode).",
+    "Mocked position FAR from office (28.6,77.2) → att-check-in → toast 'You are 556244 m away from the office. Attendance is allowed only within 100 m of the office.' (correct).",
+    "Mocked position AT office (23.7117,76.0157) → att-check-in → success toast 'Checked in at …'; today-in populated; att-check-out → success toast; today-out populated.",
+    "Admin AttendanceTab shows new GPS/Selfie column (adm-att-gps-<id>-<date>) with '📍 In 0 m · Out 0 m' for Rahul today.",
+    "GPS+Selfie mode: badge 'Active: GPS + Selfie · 100 m'. Employee att-check-in opens selfie-dialog (data-testid selfie-dialog). Capture button present, not disabled (headless chromium had working fake media stream). selfie-close dismisses dialog cleanly.",
+    "Per-employee override: setting att-emp-mode-<rahulId> to 'normal' and back to 'Default' both show success toast 'Employee attendance mode updated'.",
+    "Final RESTORE: policy mode = normal (badge 'Active: Normal · 100 m'); Rahul's today attendance deleted from DB; attendance_selfie files cleared."
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin /admin/attendance (AttendanceTab filter options)", "issues": ["Pre-existing React hydration warning: <span data-ve-dynamic='true'> inside <option> on AttendanceTab.jsx line 104 (att-filter-emp). Dev-mode only but still present — carried over from iteration_27 report, not fixed yet."]}
+    ]
+  },
+  "critical_code_review_comments": [
+    "attendance_policy.py keeps the policy in a module-level dict _P (lines 15-16) that is only loaded at startup via load(db). Direct DB writes bypass this cache. In single-worker preview this is fine (admin PUT updates _P via save()), but with multiple backend workers behind a load balancer, each worker will serve a stale policy until restart. Consider reading from db.settings on every verify_punch / get_policy call, or publishing a change event, or using a short TTL cache.",
+    "AttendancePolicyCard shows '· now: Normal/GPS/GPS+Selfie' in each override row — the effective_mode is only refreshed when the whole policy GET is re-run after override save; this works because setEmp calls apply(data).",
+    "Minor copy nit: when no office is set, the badge reads 'Active: Normal · office location not set' which is good, but for GPS mode when office IS set the badge is 'Active: GPS only (within office radius) · 100 m' — consider including office_label when present for better operator feedback."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Make attendance policy read-through from settings (or add TTL cache) to avoid per-worker staleness in multi-worker deployments.",
+    "(Carryover from iter_27) Fix React hydration warning in AttendanceTab.jsx line 104 — avoid wrapping option label text in a <span>."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% on required scenarios"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 at /admin/login; Employee rahul.k / Emp@1234 at /employee/login (employee_id 6aa4f62060cf8b2d2a38c56b).",
+  "seed_data_creation": "None persisted. Temporarily (a) toggled attendance_policy mode normal→gps→gps_selfie→normal, (b) wrote lat 23.7117/lng 76.0157/radius 100m into settings, (c) created+checked-out one Rahul attendance for 2026-10-03 (verify_mode=gps), (d) created one Rahul attendance via selfie-mode UI (which was later cleared). All test data for today (2026-10-03) deleted. Policy mode restored to 'normal'. Office lat/lng left in place per instructions ('lat/lng may stay').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Attendance Mode feature verified fully green on frontend. Final state: policy mode=normal, office_lat=23.7117, office_lng=76.0157, radius_m=100, no override on rahul.k, no attendance for rahul on 2026-10-03, no selfie files. Only pre-existing dev-mode hydration warning remains on att-filter-emp options.",
+  "rca of the issue": "n/a — no bugs."
+}
