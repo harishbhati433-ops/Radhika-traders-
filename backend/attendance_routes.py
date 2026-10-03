@@ -200,6 +200,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             else:
                 paid += f
                 deduct_days += 1 - f
+                if st == "sunday_worked":  # admin marked a non-Sunday (holiday/off day) as "Sunday Worked" → honour the +1 extra
+                    sunday_extra_days += 1.0
         s["pre_joining_days"] = 0
         for d in range(1, last + 1):
             ds = f"{month}-{d:02d}"
