@@ -16,6 +16,7 @@ import pandas as pd
 
 import contact_settings
 import office_timing as ot
+import attendance_policy as ap
 from email_service import send_attendance_email, send_attendance_reminder_email, send_salary_paid_email, send_salary_published_email
 
 logger = logging.getLogger("attendance")
@@ -131,6 +132,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         d.update({"id": str(a["_id"]), "check_in_time": fmt_t(a.get("check_in")), "check_out_time": fmt_t(a.get("check_out")),
                   "duration": fmt_dur(a.get("worked_minutes")), "paid_fraction": frac, "deduction": round(per_day * (1 - frac), 2) if per_day else None,
                   "auto_closed_time": fmt_t(a.get("auto_closed_at")) if a.get("auto_closed_at") else "",
+                  "gps_label": " · ".join(x for x in [f"In {int(a['gps_in']['distance_m'])} m" if a.get("gps_in") else "", f"Out {int(a['gps_out']['distance_m'])} m" if a.get("gps_out") else "",
+                                                       "selfie" if a.get("selfie_url") else ("selfie expired" if a.get("selfie_expired") else "")] if x),
                   "edited_at_label": datetime.fromisoformat(a["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if a.get("edited_at") else "",
                   "status_history": [{**h, "edited_at_label": datetime.fromisoformat(h["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if h.get("edited_at") else ""} for h in (a.get("status_history") or [])]})
         if emp:
@@ -289,7 +292,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         return StreamingResponse(buf, media_type=media, headers={"Content-Disposition": f'attachment; filename="{fname}.{ext}"'})
 
     ATT_COLS = [("date", "Date"), ("employee_name", "Employee"), ("employee_code", "Emp ID"), ("check_in_time", "Check-In"), ("check_out_time", "Manual Check-Out"), ("duration", "Working Duration"),
-                ("late_minutes", "Late Min"), ("extra_minutes", "Extra Min"), ("adjusted_minutes", "Adjusted Min"), ("short_minutes", "Short Min"), ("status_label", "Status"), ("deduction", "Deduction (Rs)"), ("note", "Note")]
+                ("late_minutes", "Late Min"), ("extra_minutes", "Extra Min"), ("adjusted_minutes", "Adjusted Min"), ("short_minutes", "Short Min"), ("status_label", "Status"), ("deduction", "Deduction (Rs)"), ("gps_label", "GPS / Selfie"), ("note", "Note")]
     SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Base Salary"), ("per_day", "Daily Rate (/30)"), ("present", "Present"), ("short_hours", "Short Days"), ("half_day", "Half Day"), ("absent", "Absent"),
                 ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("weekly_off", "Weekly Off"), ("sunday_worked", "Sunday Worked"), ("sunday_extra", "Sunday Extra"), ("checkout_missing", "Checkout Missing"), ("attendance_deduction", "Attendance Deduction"),
                 ("bonus", "Bonus"), ("incentive", "Incentive"), ("manual_adjustment", "Manual Adjustment"), ("earned_to_date", "Earned Till Today"), ("net_payable", "Final Salary"), ("published", "Published"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
@@ -327,21 +330,50 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 logger.warning(f"attendance email to {to} failed: {e}")
 
     # ---------------- Employee ----------------
+    class PunchIn(BaseModel):
+        lat: Optional[float] = None
+        lng: Optional[float] = None
+        accuracy: Optional[float] = None
+        selfie: Optional[str] = None
+
+    async def verify_punch(emp: dict, body: Optional[PunchIn], kind: str) -> dict:
+        """Attendance mode gate: normal → nothing; gps → inside office radius; gps_selfie → + selfie on check-in. Returns extra fields to store."""
+        user = await db.users.find_one({"_id": ObjectId(emp["id"])}, {"attendance_mode": 1}) if ObjectId.is_valid(emp["id"]) else None
+        mode = ap.mode_for(user)
+        if mode == "normal":
+            return {"verify_mode": "normal"}
+        b = body or PunchIn()
+        gps, err = ap.verify_location(b.lat, b.lng, b.accuracy)
+        if err:
+            raise HTTPException(status_code=403, detail=err)
+        extra = {"verify_mode": mode, f"gps_{kind}": gps}
+        if mode == "gps_selfie" and kind == "in":
+            if not b.selfie:
+                raise HTTPException(status_code=400, detail="A live selfie is required for check-in.")
+            try:
+                extra["selfie_url"] = await ap.store_selfie(db, b.selfie, emp["id"])
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            extra["selfie_at"] = now_utc().isoformat()
+        return extra
+
     @r.post("/employee/attendance/check-in")
-    async def check_in(request: Request, background: BackgroundTasks, emp: dict = Depends(require_employee)):
+    async def check_in(request: Request, background: BackgroundTasks, body: Optional[PunchIn] = None, emp: dict = Depends(require_employee)):
         today = ist_today()
         if await db.attendance.find_one({"employee_id": emp["id"], "date": today}):
             raise HTTPException(status_code=400, detail="Already checked in today")
+        extra = await verify_punch(emp, body, "in")
         rec = derive({"employee_id": emp["id"], "date": today, "check_in": now_utc().isoformat(), "check_out": None, "source": "self", "note": "",
-                      "ip": request.headers.get("x-forwarded-for", "").split(",")[0].strip(), "created_at": now_utc().isoformat(), "updated_at": now_utc().isoformat()})
+                      "ip": request.headers.get("x-forwarded-for", "").split(",")[0].strip(), "created_at": now_utc().isoformat(), "updated_at": now_utc().isoformat(), **extra})
         res = await db.attendance.insert_one(rec)
-        await log_activity(emp, "attendance_check_in", request, entity_type="attendance", entity_id=today, status=rec["status"], detail=f"Check-in {fmt_t(rec['check_in'])}")
+        gps_note = f" · GPS {int(extra['gps_in']['distance_m'])} m" if extra.get("gps_in") else ""
+        await log_activity(emp, "attendance_check_in", request, entity_type="attendance", entity_id=today, status=rec["status"], detail=f"Check-in {fmt_t(rec['check_in'])}{gps_note}" + (" · selfie" if extra.get("selfie_url") else ""))
         saved = await db.attendance.find_one({"_id": res.inserted_id})
         background.add_task(notify_punch, emp, saved, "in")
         return out(saved)
 
     @r.post("/employee/attendance/check-out")
-    async def check_out(request: Request, background: BackgroundTasks, emp: dict = Depends(require_employee)):
+    async def check_out(request: Request, background: BackgroundTasks, body: Optional[PunchIn] = None, emp: dict = Depends(require_employee)):
         await auto_close_stale()
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": ist_today()})
         if not rec or not rec.get("check_in"):
@@ -350,12 +382,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             raise HTTPException(status_code=400, detail=f"Your session was auto-closed at {ot.auto_close_12()}. Admin will review and enter your actual check-out time.")
         if rec.get("check_out"):
             raise HTTPException(status_code=400, detail="Already checked out today")
+        extra = await verify_punch(emp, body, "out")
         rec["check_out"] = now_utc().isoformat()
         manual = rec.get("manual_override") and rec.get("status")
         rec = derive(rec)
         if manual:  # admin's manually chosen status is final; only the actual times/minutes get recorded
             rec["auto_status"], rec["status"] = rec["status"], manual
-        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction", "auto_status")} | {"updated_at": now_utc().isoformat()}})
+        await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction", "auto_status")} | {"updated_at": now_utc().isoformat()} | {k: v for k, v in extra.items() if k != "verify_mode"}})
         await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {fmt_dur(rec['worked_minutes'])}" + (f" · short {rec['short_minutes']} min" if rec["short_minutes"] else ""))
         saved = await db.attendance.find_one({"_id": rec["_id"]})
         background.add_task(notify_punch, emp, saved, "out")
@@ -369,7 +402,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         items = await db.attendance.find({"employee_id": emp["id"], "date": {"$regex": f"^{month}"}}).sort("date", -1).to_list(100)
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": today})
         return {"today": out(rec) if rec else None, "date": today, "month": month, "items": [out(a) for a in items], "summary": summarize(items, month, today),
-                "office": {"start": ot.start_12(), "end": ot.end_12(), "required_hours": REQUIRED_MINUTES / 60, "auto_close": ot.auto_close_12()}}
+                "office": {"start": ot.start_12(), "end": ot.end_12(), "required_hours": REQUIRED_MINUTES / 60, "auto_close": ot.auto_close_12()},
+                "policy": ap.employee_policy(await db.users.find_one({"_id": ObjectId(emp["id"])}, {"attendance_mode": 1}) if ObjectId.is_valid(emp["id"]) else None)}
 
     # ---------------- Admin ----------------
     @r.get("/admin/attendance")
@@ -792,6 +826,68 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await log_activity(admin, "office_timing_changed", request, entity_type="settings", entity_id="office_timing", entity_label="Office Timing",
                            detail=f"{old['start_12']}–{old['end_12']} (close {old['auto_close_12']}) → {cur['start_12']}–{cur['end_12']} (close {cur['auto_close_12']})")
         return cur
+
+    # ---------------- Attendance verification policy (Normal / GPS / GPS + Selfie) ----------------
+    class PolicyIn(BaseModel):
+        mode: str
+        office_lat: Optional[float] = None
+        office_lng: Optional[float] = None
+        radius_m: int = 100
+        selfie_retention_days: int = 60
+        office_label: Optional[str] = ""
+
+    class EmpModeIn(BaseModel):
+        mode: Optional[str] = None  # None = follow global default
+
+    @r.get("/admin/attendance/policy")
+    async def get_policy(admin: dict = Depends(require_admin)):
+        emps = await db.users.find({"role": "employee", "account_status": {"$ne": "deleted"}}, {"name": 1, "employee_code": 1, "attendance_mode": 1}).to_list(500)
+        return {**ap.current(), "modes": [{"value": m, "label": ap.MODE_LABELS[m]} for m in ap.MODES],
+                "employees": [{"id": str(e["_id"]), "name": e.get("name"), "employee_code": e.get("employee_code", ""), "attendance_mode": e.get("attendance_mode") if e.get("attendance_mode") in ap.MODES else None,
+                               "effective_mode": ap.mode_for(e)} for e in emps]}
+
+    @r.put("/admin/attendance/policy")
+    async def set_policy(body: PolicyIn, request: Request, admin: dict = Depends(require_admin)):
+        err = ap.validate_settings(body.model_dump())
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        old = ap.current()
+        cur = await ap.save(db, body.model_dump(), admin.get("name", ""))
+        await log_activity(admin, "attendance_policy_changed", request, entity_type="settings", entity_id="attendance_policy", entity_label="Attendance Mode",
+                           detail=f"{old['mode_label']} → {cur['mode_label']} · radius {cur['radius_m']} m · selfie kept {cur['selfie_retention_days']} days" + (" · office location set" if cur["office_set"] else ""))
+        return await get_policy(admin)
+
+    @r.put("/admin/attendance/policy/employee/{employee_id}")
+    async def set_employee_mode(employee_id: str, body: EmpModeIn, request: Request, admin: dict = Depends(require_admin)):
+        if body.mode is not None and body.mode not in ap.MODES:
+            raise HTTPException(status_code=400, detail="Invalid attendance mode")
+        emp = (await employees([employee_id])).get(employee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        await db.users.update_one({"_id": ObjectId(employee_id)}, {"$set": {"attendance_mode": body.mode}} if body.mode else {"$unset": {"attendance_mode": ""}})
+        await log_activity(admin, "attendance_mode_override", request, entity_type="employee", entity_id=employee_id, entity_label=emp.get("name", ""),
+                           detail=f"Attendance mode → {ap.MODE_LABELS[body.mode] if body.mode else 'Default (global)'}")
+        return await get_policy(admin)
+
+    @r.post("/cron/selfie-cleanup", status_code=202)
+    async def cron_selfie_cleanup(request: Request, background: BackgroundTasks):
+        # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+        secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+        auth = request.headers.get("authorization", "")
+        token = auth[7:] if auth.lower().startswith("bearer ") else ""
+        if not secret or not token or not hmac.compare_digest(token, secret):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        run_id = request.headers.get("x-webhook-id") or str(uuid4())
+        if await db.cron_runs.find_one({"run_id": run_id}):
+            return {"ok": True, "duplicate": True, "run_id": run_id}
+        await db.cron_runs.insert_one({"run_id": run_id, "schedule": "selfie-cleanup", "started_at": now_utc().isoformat()})
+
+        async def run():
+            n = await ap.cleanup_selfies(db)
+            await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "deleted": n}})
+            logger.info(f"selfie cleanup {run_id}: {n} selfie(s) removed")
+        background.add_task(run)
+        return {"ok": True, "queued": True, "run_id": run_id}
 
     # ---------------- Cron: 10 AM attendance reminder ----------------
     async def run_attendance_reminder(run_id: str, origin: str) -> None:

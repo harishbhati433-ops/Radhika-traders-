@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api, { formatApiErrorDetail } from "../../lib/api";
+import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
@@ -114,7 +114,7 @@ export function AttendanceTab() {
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>{["Date", "Employee", "Check-In", "Manual Check-Out", "Working Duration", "Late Min", "Extra Min", "Adjusted Min", "Short Min", "Status", "Salary Deduction", "Note", ""].map((h) => <th key={h} className="p-3 whitespace-nowrap">{h}</th>)}</tr></thead>
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>{["Date", "Employee", "Check-In", "Manual Check-Out", "Working Duration", "Late Min", "Extra Min", "Adjusted Min", "Short Min", "Status", "Salary Deduction", "GPS / Selfie", "Note", ""].map((h) => <th key={h} className="p-3 whitespace-nowrap">{h}</th>)}</tr></thead>
           <tbody>
             {d.items.map((a) => (
               <tr key={`${a.employee_id}-${a.date}`} className={`border-t border-slate-100 ${a.status === "checkout_missing" ? "bg-orange-50/40" : ""}`} data-testid={`adm-att-row-${a.employee_id}-${a.date}`}>
@@ -128,6 +128,10 @@ export function AttendanceTab() {
                 <td className={`p-3 font-mono ${a.short_minutes ? "font-bold text-rose-700" : ""}`} data-testid={`adm-att-short-${a.employee_id}-${a.date}`}>{a.worked_minutes != null ? mins(a.short_minutes || 0) : "—"}</td>
                 <td className="p-3"><StatusPill s={a.status} paid={a.leave_paid} testId={`adm-att-status-${a.employee_id}-${a.date}`} /></td>
                 <td className={`p-3 font-mono whitespace-nowrap ${a.deduction ? "font-bold text-rose-700" : "text-emerald-700"}`} data-testid={`adm-att-ded-${a.employee_id}-${a.date}`}>{a.deduction == null ? <span className="text-slate-400">salary not set</span> : a.status === "checkout_missing" ? <span title="Unpaid until admin approves checkout">{inr(a.deduction)} · pending</span> : inr(a.deduction)}</td>
+                <td className="p-3 whitespace-nowrap text-[11px]" data-testid={`adm-att-gps-${a.employee_id}-${a.date}`}>
+                  {a.gps_in || a.gps_out ? <div className="font-mono text-slate-700">{a.gps_in && <span title={`±${a.gps_in.accuracy_m ?? "?"} m`}>📍 In {Math.round(a.gps_in.distance_m)} m</span>}{a.gps_out && <span className="ml-1" title={`±${a.gps_out.accuracy_m ?? "?"} m`}>· Out {Math.round(a.gps_out.distance_m)} m</span>}</div> : <span className="text-slate-300">—</span>}
+                  {a.selfie_url ? <a href={fileUrl(a.selfie_url)} target="_blank" rel="noreferrer" className="mt-1 block" data-testid={`adm-att-selfie-${a.employee_id}-${a.date}`}><img src={fileUrl(a.selfie_url)} alt="selfie" className="h-10 w-10 rounded-lg border border-slate-200 object-cover" loading="lazy" /></a> : a.selfie_expired ? <span className="text-slate-400">selfie expired</span> : null}
+                </td>
                 <td className="p-3 text-slate-500" data-testid={`adm-att-note-${a.employee_id}-${a.date}`}>
                   {a.manual_override && a.status_history?.length > 0 && (() => { const h = a.status_history[a.status_history.length - 1]; return <div className="text-[10px] font-semibold text-slate-700">Manual: {STATUS_META[h.old_status]?.[0] || h.old_status} → {STATUS_META[h.new_status]?.[0] || h.new_status}</div>; })()}
                   {a.note && <div>{a.note}</div>}
