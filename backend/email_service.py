@@ -7,6 +7,7 @@ import logging
 import httpx
 from datetime import datetime, timezone
 from html import escape
+import office_timing as ot
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 from contact_settings import CONTACT, wa_number
@@ -189,14 +190,14 @@ async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, em
     auto = kind == "auto"
     verb = "checked in" if kind == "in" else "checked out" if kind == "out" else "did NOT check out"
     if auto:
-        subject = f"{'Checkout missing: ' + emp_name if for_admin else 'You forgot to check out'} — auto-closed at 6:00 PM, {date_str}"
+        subject = f"{'Checkout missing: ' + emp_name if for_admin else 'You forgot to check out'} — auto-closed at {ot.auto_close_12()}, {date_str}"
     else:
         subject = f"{'Attendance: ' + emp_name if for_admin else 'Your attendance'} {verb} at {time_str} — {date_str}"
     rows = [("Employee", f"{emp_name} ({emp_code})" if emp_code else emp_name), ("Date", date_str)]
     if kind == "in":
         rows.append(("Check-In", time_str))
     else:
-        rows += [("Check-In", check_in or "—"), ("Manual Check-Out", check_out or ("Missing — auto-closed 6:00 PM" if auto else time_str))]
+        rows += [("Check-In", check_in or "—"), ("Manual Check-Out", check_out or (f"Missing — auto-closed {ot.auto_close_12()}" if auto else time_str))]
     rows.append(("Status", status))
     if hours is not None:
         rows.append(("Working Duration", str(hours)))
@@ -205,12 +206,12 @@ async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, em
     table = "".join(f'<tr><td style="padding:6px 12px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td>'
                     f'<td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
     if auto:
-        lead = (f"<b>{escape(emp_name)}</b> checked in today but never checked out. The session was auto-closed at 6:00 PM and marked <b>Checkout Missing – Admin Review</b>. "
+        lead = (f"<b>{escape(emp_name)}</b> checked in today but never checked out. The session was auto-closed at {ot.auto_close_12()} and marked <b>Checkout Missing – Admin Review</b>. "
                 f"This day is <b>not paid</b> until you enter the actual check-out time." if for_admin
-                else "You forgot to check out today. Your session was auto-closed at 6:00 PM and sent to the admin for review — please tell the admin your actual leaving time.")
+                else f"You forgot to check out today. Your session was auto-closed at {ot.auto_close_12()} and sent to the admin for review — please tell the admin your actual leaving time.")
         foot = "Open Admin Panel → Attendance &amp; Salary → click <b>Review</b> on this row to enter the actual check-out time." if for_admin else "Please check out yourself every day so your full working time is counted."
     else:
-        lead = (f"<b>{escape(emp_name)}</b> has {verb} at the office." if for_admin else f"You have successfully {verb}. Office hours are 10:00 AM – 5:00 PM · 7 hours of work = Full Day.")
+        lead = (f"<b>{escape(emp_name)}</b> has {verb} at the office." if for_admin else f"You have successfully {verb}. Office hours are {ot.start_12()} – {ot.end_12()} · 7 hours of work = Full Day.")
         foot = "Open Admin Panel → Attendance &amp; Salary to review or correct." if for_admin else "If anything looks wrong, please inform the admin."
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p><p style="font-size:14px;color:#334155">{lead}</p>'
              f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
@@ -223,10 +224,10 @@ async def send_attendance_reminder_email(to: str, name: str, emp_code: str, date
         return None
     subject = f"Reminder: you have not checked in yet — {date_str}"
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
-             f'<p style="font-size:14px;color:#334155">It is past <b>10:00 AM</b> and your attendance for <b>{escape(date_str)}</b> has not been marked yet'
-             f'{" (" + escape(emp_code) + ")" if emp_code else ""}. Office hours are 10:00 AM – 5:00 PM · 7 hours of work = Full Day.</p>'
-             f'<p style="font-size:14px;color:#334155">Please open the Employee Panel and press <b>Check In</b> now. Arriving after 10:00 AM is recorded as a late mark, '
-             f'and a day with no check-in is counted as <b>Absent</b> after 6:00 PM.</p>'
+             f'<p style="font-size:14px;color:#334155">It is past <b>{ot.start_12()}</b> and your attendance for <b>{escape(date_str)}</b> has not been marked yet'
+             f'{" (" + escape(emp_code) + ")" if emp_code else ""}. Office hours are {ot.start_12()} – {ot.end_12()} · 7 hours of work = Full Day.</p>'
+             f'<p style="font-size:14px;color:#334155">Please open the Employee Panel and press <b>Check In</b> now. Arriving after {ot.start_12()} is recorded as a late mark, '
+             f'and a day with no check-in is counted as <b>Absent</b> after {ot.auto_close_12()}.</p>'
              f'<p style="margin:16px 0"><a href="{escape(portal_link)}" style="background:#991B1B;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">Check In Now</a></p>'
              f'<p style="font-size:12px;color:#64748b">On leave or holiday today? Please inform the admin so your attendance can be marked correctly.</p>')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))

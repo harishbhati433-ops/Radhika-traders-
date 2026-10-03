@@ -40,7 +40,7 @@ export default function EmployeeAttendance() {
         <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white lg:col-span-2" data-testid="att-today-card">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-wider text-amber-300">Today · {d?.date} · Office 10:00 AM – 5:00 PM · 7h required · auto-close 6:00 PM</div>
+              <div className="text-xs uppercase tracking-wider text-amber-300">Today · {d?.date} · Office {d?.office?.start || "10:00 AM"} – {d?.office?.end || "05:00 PM"} · 7h required · auto-close {d?.office?.auto_close || "06:00 PM"}</div>
               <Clockface />
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
                 {today ? <><span>In <b data-testid="att-today-in">{today.check_in_time || "—"}</b></span><span>·</span><span>Out <b data-testid="att-today-out">{today.check_out_time || (today.status === "checkout_missing" ? "Missing" : "—")}</b></span>{today.worked_minutes != null && <><span>·</span><span>Worked <b data-testid="att-today-dur">{dur(today.worked_minutes)}</b></span></>}{today.short_minutes > 0 && <><span>·</span><span className="text-amber-300">Short <b>{today.short_minutes} min</b></span></>}<StatusPill s={today.status} paid={today.leave_paid} testId="att-today-status" /></> : <span data-testid="att-today-none">Not checked in yet</span>}
@@ -57,7 +57,7 @@ export default function EmployeeAttendance() {
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
           <div className="mb-2 font-bold text-slate-900">Rules</div>
-          <ul className="space-y-1 list-disc pl-4"><li>Office <b>10:00 AM – 5:00 PM</b> · required <b>7 hours</b> of work</li><li>Work the full 7 hours = <b>Full Day</b>, whatever time you arrive (10:20 → 5:20, 11:00 → 6:00)</li><li>Less than 7 hours = <b>Short Hours</b> — only the missing minutes count</li><li><b>Sunday</b> = paid weekly off · working on Sunday = <b>Sunday Worked</b> (extra)</li><li>Always check out yourself — your time counts till your own check-out</li><li>Forgot to check out? Session auto-closes at <b>6:00 PM</b> as <b>Checkout Missing</b>; admin reviews your actual time</li></ul>
+          <ul className="space-y-1 list-disc pl-4"><li>Office <b>{d?.office?.start || "10:00 AM"} – {d?.office?.end || "05:00 PM"}</b> · required <b>7 hours</b> of work</li><li>Work the full 7 hours = <b>Full Day</b>, whatever time you arrive (10:20 → 5:20, 11:00 → 6:00)</li><li>Less than 7 hours = <b>Short Hours</b> — only the missing minutes count</li><li><b>Sunday</b> = paid weekly off · working on Sunday = <b>Sunday Worked</b> (extra)</li><li>Always check out yourself — your time counts till your own check-out</li><li>Forgot to check out? Session auto-closes at <b>6:00 PM</b> as <b>Checkout Missing</b>; admin reviews your actual time</li></ul>
         </div>
       </div>
 

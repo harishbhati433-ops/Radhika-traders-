@@ -110,7 +110,7 @@ export function AttendanceTab() {
         <span className="text-[11px] text-slate-500">Backdated entries (yesterday, last week, last month…) recalculate that month's salary sheet instantly.</span>
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-slate-50 px-4 py-2 text-[11px] text-slate-600" data-testid="att-rules">
-        <span><b>Office</b> 10:00 AM – 5:00 PM</span><span><b>Required</b> 7h working</span><span><b>Full Day</b> = 7h worked, any arrival time, ₹0 deduction</span><span><b>Short</b> = minute-wise deduction</span><span><b>Auto close</b> 6:00 PM → Checkout Missing (admin review, unpaid until approved)</span>
+        <span><b>Office</b> {d.rules?.office_start || "10:00 AM"} – {d.rules?.office_end || "05:00 PM"}</span><span><b>Required</b> 7h working</span><span><b>Full Day</b> = 7h worked, any arrival time, ₹0 deduction</span><span><b>Short</b> = minute-wise deduction</span><span><b>Auto close</b> {d.rules?.auto_close || "06:00 PM"} → Checkout Missing (admin review, unpaid until approved)</span>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-xs">

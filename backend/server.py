@@ -35,6 +35,7 @@ from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
 from attendance_routes import build_router as build_attendance_router
+import office_timing
 from contact_routes import build_router as build_contact_router
 from team_routes import build_router as build_team_router
 from password_reset import build_router as build_password_reset_router
@@ -2979,6 +2980,7 @@ async def _fresh_contact(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     await contact_settings.load_contact(db)
+    await office_timing.load(db)
     try:
         s = await get_settings()
         if s["signup_bonus_enabled"] and float(s["signup_bonus"] or 0) > 0:

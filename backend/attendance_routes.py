@@ -15,14 +15,13 @@ from bson import ObjectId
 import pandas as pd
 
 import contact_settings
+import office_timing as ot
 from email_service import send_attendance_email, send_attendance_reminder_email, send_salary_paid_email, send_salary_published_email
 
 logger = logging.getLogger("attendance")
 
 IST = timezone(timedelta(hours=5, minutes=30))
-OFFICE_START, OFFICE_END = (10, 0), (17, 0)
-REQUIRED_MINUTES = 7 * 60
-AUTO_CLOSE = (18, 0)
+REQUIRED_MINUTES = ot.REQUIRED_MINUTES  # office start/end/auto-close are admin-configurable via office_timing
 STATUSES = ("present", "late", "short_hours", "half_day", "absent", "leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing")
 TIMED = ("present", "late", "short_hours", "half_day", "sunday_worked")
 PAID_FULL = ("present", "late", "holiday", "weekly_off", "sunday_worked")
@@ -58,7 +57,7 @@ def _ist_minutes(iso: str) -> float:
 
 
 def is_late(check_in_iso: str) -> bool:
-    return _ist_minutes(check_in_iso) > OFFICE_START[0] * 60 + OFFICE_START[1]
+    return _ist_minutes(check_in_iso) > ot.start_min()
 
 
 def paid_fraction(rec: dict) -> float:
@@ -80,11 +79,11 @@ def derive(rec: dict) -> dict:
     ci, co = rec.get("check_in"), rec.get("check_out")
     if not ci:
         return rec
-    late = max(0.0, _ist_minutes(ci) - (OFFICE_START[0] * 60 + OFFICE_START[1]))
+    late = max(0.0, _ist_minutes(ci) - (ot.start_min()))
     rec["late"], rec["late_minutes"] = late > 0, int(round(late))
     if co:
         worked = max(0.0, (datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds() / 60)
-        extra = max(0.0, _ist_minutes(co) - (OFFICE_END[0] * 60 + OFFICE_END[1]))
+        extra = max(0.0, _ist_minutes(co) - (ot.end_min()))
         short = max(0.0, REQUIRED_MINUTES - worked)
         rec.update({"worked_minutes": int(round(worked)), "hours": round(worked / 60, 2), "extra_minutes": int(round(extra)),
                     "adjusted_minutes": int(round(min(late, extra))), "short_minutes": int(round(short)),
@@ -145,9 +144,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         """Sessions without a manual check-out are closed at 6:00 PM IST and flagged for admin review (time is NOT auto-paid)."""
         now = now_utc().astimezone(IST)
         today = ist_today()
-        after_close = (now.hour, now.minute) >= AUTO_CLOSE
+        after_close = (now.hour, now.minute) >= ot.auto_close()
         date_q = {"$lte": today} if after_close else {"$lt": today}
-        close_min = AUTO_CLOSE[0] * 60 + AUTO_CLOSE[1]
+        close_min = ot.auto_close_min()
         stale = await db.attendance.find({"check_in": {"$ne": None}, "check_out": None, "status": {"$ne": "checkout_missing"}, "manual_override": {"$ne": True}, "date": date_q}).to_list(500)
         stale = [a for a in stale if a["date"] < today or _ist_minutes(a["check_in"]) < close_min]  # sessions started after 6 PM close next day
         if not stale:
@@ -171,7 +170,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         last = min(days, int(today[8:])) if today[:7] == month else (days if today[:7] > month else 0)
         now_ist = now_utc().astimezone(IST)
         # today only becomes "absent" after the 6 PM auto-close — nobody is absent at 7 AM
-        absent_until = last - 1 if (today[:7] == month and last == int(today[8:]) and (now_ist.hour, now_ist.minute) < AUTO_CLOSE) else last
+        absent_until = last - 1 if (today[:7] == month and last == int(today[8:]) and (now_ist.hour, now_ist.minute) < ot.auto_close()) else last
         joined = start_date[:10] if start_date else ""
         s = {k: 0 for k in ("present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing", "late_marks",
                             "late_minutes_total", "extra_minutes_total", "adjusted_minutes_total", "short_minutes_total")}
@@ -348,7 +347,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if not rec or not rec.get("check_in"):
             raise HTTPException(status_code=400, detail="Please check in first")
         if rec.get("status") == "checkout_missing":
-            raise HTTPException(status_code=400, detail="Your session was auto-closed at 6:00 PM. Admin will review and enter your actual check-out time.")
+            raise HTTPException(status_code=400, detail=f"Your session was auto-closed at {ot.auto_close_12()}. Admin will review and enter your actual check-out time.")
         if rec.get("check_out"):
             raise HTTPException(status_code=400, detail="Already checked out today")
         rec["check_out"] = now_utc().isoformat()
@@ -370,7 +369,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         items = await db.attendance.find({"employee_id": emp["id"], "date": {"$regex": f"^{month}"}}).sort("date", -1).to_list(100)
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": today})
         return {"today": out(rec) if rec else None, "date": today, "month": month, "items": [out(a) for a in items], "summary": summarize(items, month, today),
-                "office": {"start": "10:00 AM", "end": "05:00 PM", "required_hours": REQUIRED_MINUTES / 60, "auto_close": "06:00 PM"}}
+                "office": {"start": ot.start_12(), "end": ot.end_12(), "required_hours": REQUIRED_MINUTES / 60, "auto_close": ot.auto_close_12()}}
 
     # ---------------- Admin ----------------
     @r.get("/admin/attendance")
@@ -403,7 +402,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             have = {a["employee_id"] for a in await db.attendance.find({"date": date}).to_list(1000)}
             rows = [absent_row(eid, e, date) for eid, e in emps.items() if eid not in have and (not employee_id or employee_id == eid)] + rows
         return {"items": rows, "employees": [{"id": k, "name": v.get("name"), "employee_code": v.get("employee_code", "")} for k, v in emps.items()],
-                "rules": {"office_start": "10:00 AM", "office_end": "05:00 PM", "required_minutes": REQUIRED_MINUTES, "auto_close": "06:00 PM"}}
+                "rules": {"office_start": ot.start_12(), "office_end": ot.end_12(), "required_minutes": REQUIRED_MINUTES, "auto_close": ot.auto_close_12()}}
 
     @r.put("/admin/attendance/{employee_id}/{date}")
     async def admin_set_attendance(employee_id: str, date: str, body: AdminAttendanceIn, request: Request, admin: dict = Depends(require_admin)):
@@ -465,7 +464,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 "present_today": sum(1 for a in by.values() if a["status"] in ("present", "late", "short_hours", "half_day", "checkout_missing")),
                 "late_today": sum(1 for a in by.values() if a.get("late")), "on_leave_today": sum(1 for a in by.values() if a["status"] == "leave"),
                 "absent_today": sum(1 for eid in emps if eid not in by or by[eid]["status"] == "absent"), "pending_review": pending_review,
-                "day_closed": (now_utc().astimezone(IST).hour, now_utc().astimezone(IST).minute) >= AUTO_CLOSE,
+                "day_closed": (now_utc().astimezone(IST).hour, now_utc().astimezone(IST).minute) >= ot.auto_close(),
                 "total_monthly_salary": round(sum(r["monthly_salary"] for r in rows), 2), "salary_payable": round(sum(r["net_payable"] for r in rows), 2),
                 "salary_paid": round(sum(r["net_payable"] for r in rows if r["payment_status"] == "paid"), 2),
                 "salary_pending": round(sum(r["earned_to_date"] for r in rows if r["payment_status"] != "paid"), 2),
@@ -772,6 +771,27 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             buf.seek(0)
             return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="salary_slip_{row["employee_code"] or employee_id}_{month}.pdf"'})
         return export([{"field": k, "value": v} for k, v in fields], [("field", "Field"), ("value", "Value")], f"Salary Slip {month}", format, f"salary_slip_{row['employee_code'] or employee_id}_{month}")
+
+    # ---------------- Office timing (admin-configurable) ----------------
+    class OfficeTimingIn(BaseModel):
+        start: str
+        end: str
+        auto_close: str
+
+    @r.get("/admin/attendance/settings")
+    async def get_office_timing(admin: dict = Depends(require_admin)):
+        return ot.current()
+
+    @r.put("/admin/attendance/settings")
+    async def set_office_timing(body: OfficeTimingIn, request: Request, admin: dict = Depends(require_admin)):
+        err = ot.validate(body.start, body.end, body.auto_close)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        old = ot.current()
+        cur = await ot.save(db, body.start, body.end, body.auto_close, admin.get("name", ""))
+        await log_activity(admin, "office_timing_changed", request, entity_type="settings", entity_id="office_timing", entity_label="Office Timing",
+                           detail=f"{old['start_12']}–{old['end_12']} (close {old['auto_close_12']}) → {cur['start_12']}–{cur['end_12']} (close {cur['auto_close_12']})")
+        return cur
 
     # ---------------- Cron: 10 AM attendance reminder ----------------
     async def run_attendance_reminder(run_id: str, origin: str) -> None:
