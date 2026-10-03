@@ -26,7 +26,7 @@ export function validateKyc(f) {
 export function KycField({ id, label, error, children, hint }) {
   return (
     <label className="block text-xs font-semibold text-slate-600">{label}{children}
-      {error ? <span className="mt-0.5 block text-[11px] font-semibold text-rose-600" data-testid={`${id}-error`}>{error}</span> : hint ? <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{hint}</span> : null}
+      {error ? <span className="mt-0.5 block text-[11px] font-semibold text-rose-600" data-testid={`${id}-error`}>{error}</span> : hint ? <span className="mt-0.5 block text-[10px] font-normal text-slate-400" data-testid={`${id}-hint`}>{hint}</span> : null}
     </label>
   );
 }
