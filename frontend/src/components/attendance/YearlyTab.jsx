@@ -51,7 +51,7 @@ export function YearlyTab() {
               return (
                 <tr key={m.month} className={`border-t border-slate-100 ${m.is_current ? "bg-amber-50/60" : ""}`} data-testid={`yr-row-${m.month}`}>
                   <td className="p-3 font-semibold text-slate-900">{m.label}{m.is_current && <span className="ml-1 rounded-full bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold text-amber-900">LIVE</span>}</td>
-                  {d.employees.map((e) => { const r = by[e.id]; return <td key={e.id} className="p-3 font-mono whitespace-nowrap">{r ? <>{inr(r.net_payable)} <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{r.payment_status === "paid" ? "Paid" : "Pending"}</span></> : "—"}</td>; })}
+                  {d.employees.map((e) => { const r = by[e.id]; return <td key={e.id} className="p-3 font-mono whitespace-nowrap">{r ? <>{inr(r.net_payable)} <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${r.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{r.payment_status === "paid" ? "Paid" : "Pending"}</span></> : <span className="text-slate-300" title="Not joined yet">—</span>}</td>; })}
                   <td className="p-3 font-mono font-bold text-slate-900" data-testid={`yr-total-${m.month}`}>{inr(m.total)}</td><td className="p-3 font-mono text-emerald-700">{inr(m.paid)}</td><td className="p-3 font-mono text-amber-700">{inr(m.pending)}</td><td className="p-3 font-mono">{m.paid_days}</td>
                 </tr>
               );

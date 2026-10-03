@@ -9,9 +9,9 @@ export function AttendanceSummary({ compact = false }) {
   useEffect(() => { api.get("/admin/attendance/dashboard").then(({ data }) => setD(data)).catch(() => {}); }, []);
   if (!d) return null;
   const cells = [
-    [Users, "Total Employees", d.total_employees, "text-slate-800"], [UserCheck, "Present Today", d.present_today, "text-emerald-700"], [UserX, "Absent Today", d.absent_today, "text-rose-700"],
+    [Users, "Total Employees", d.total_employees, "text-slate-800"], [UserCheck, "Present Today", d.present_today, "text-emerald-700"], [UserX, d.day_closed ? "Absent Today" : "Not In Yet", d.absent_today, d.day_closed ? "text-rose-700" : "text-slate-500"],
     [Clock, "Late Today", d.late_today, "text-amber-700"], [Plane, "On Leave Today", d.on_leave_today, "text-violet-700"], [AlertTriangle, "Checkout Review", d.pending_review || 0, "text-orange-700"], [IndianRupee, "Total Monthly Salary", inr(d.total_monthly_salary), "text-slate-800"],
-    [CheckCircle, "Salary Paid", inr(d.salary_paid), "text-emerald-700"], [Hourglass, "Salary Pending", inr(d.salary_pending), "text-amber-700"],
+    [CheckCircle, "Salary Paid", inr(d.salary_paid), "text-emerald-700"], [Hourglass, "Pending till today", inr(d.salary_pending), "text-amber-700"],
   ];
   return (
     <div className={compact ? "mt-6" : ""} data-testid="attendance-summary">

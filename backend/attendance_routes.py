@@ -162,11 +162,15 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             q = {"role": "employee", "_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}}
         return {str(u["_id"]): u for u in await db.users.find(q).sort("name", 1).to_list(1000)}
 
-    def summarize(items: list, month: str, today: str) -> dict:
+    def summarize(items: list, month: str, today: str, start_date: str = "") -> dict:
         y, m = map(int, month.split("-"))
         days = calendar.monthrange(y, m)[1]
         counted = {i["date"] for i in items}
         last = min(days, int(today[8:])) if today[:7] == month else (days if today[:7] > month else 0)
+        now_ist = now_utc().astimezone(IST)
+        # today only becomes "absent" after the 6 PM auto-close — nobody is absent at 7 AM
+        absent_until = last - 1 if (today[:7] == month and last == int(today[8:]) and (now_ist.hour, now_ist.minute) < AUTO_CLOSE) else last
+        joined = start_date[:10] if start_date else ""
         s = {k: 0 for k in ("present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing", "late_marks",
                             "late_minutes_total", "extra_minutes_total", "adjusted_minutes_total", "short_minutes_total")}
         paid = 0.0
@@ -194,19 +198,25 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             else:
                 paid += f
                 deduct_days += 1 - f
+        s["pre_joining_days"] = 0
         for d in range(1, last + 1):
             ds = f"{month}-{d:02d}"
-            if ds not in counted:
-                if is_sunday(ds):
-                    sundays_off += 1
-                    paid += 1.0
-                else:
-                    s["absent"] += 1
-                    deduct_days += 1
+            if ds in counted:
+                continue
+            if joined and ds < joined:  # not employed yet: unpaid, but not an "absent"
+                s["pre_joining_days"] += 1
+                deduct_days += 1
+            elif is_sunday(ds):
+                sundays_off += 1
+                paid += 1.0
+            elif d <= absent_until:
+                s["absent"] += 1
+                deduct_days += 1
+            # else: today, still in progress → neither paid nor absent yet
         s["weekly_off"] += sundays_off
         s["days_in_month"], s["days_elapsed"] = days, last
         s["paid_days"] = round(paid, 2)
-        s["deduct_days"] = round(deduct_days, 4)
+        s["deduct_days"] = round(min(deduct_days, SALARY_DAYS), 4)
         s["sunday_extra_days"] = round(sunday_extra_days, 4)
         s["short_day_fraction"] = round(sum(1 - paid_fraction(i) for i in items if i.get("status") == "short_hours" and not is_sunday(i["date"])), 4)
         return s
@@ -214,8 +224,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
     async def salary_row(emp: dict, month: str, today: str) -> dict:
         eid = str(emp["_id"])
         items = await db.attendance.find({"employee_id": eid, "date": {"$regex": f"^{month}"}}).to_list(100)
-        s = summarize(items, month, today)
-        monthly = float((emp.get("salary") or {}).get("monthly") or 0)
+        joined = (emp.get("joining_date") or emp.get("created_at") or "")[:10]
+        s = summarize(items, month, today, joined)
+        not_joined = bool(joined) and month < joined[:7] and not items
+        monthly = float((emp.get("salary") or {}).get("monthly") or 0) if not not_joined else 0.0
         per_day = monthly / SALARY_DAYS
         adj = await db.salary_adjustments.find_one({"employee_id": eid, "month": month}) or {}
         date_deds = adj.get("date_deductions") or []
@@ -225,8 +237,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         bonus, incentive = float(adj.get("bonus") or 0), float(adj.get("incentive") or 0)
         advance, manual_ded = float(adj.get("advance") or 0), float(adj.get("deduction") or 0)
         final = round(monthly + sunday_extra + bonus + incentive - attendance_deduction - advance - manual_ded - date_ded_total, 2)
+        earned_to_date = round(per_day * s["paid_days"] + sunday_extra + bonus + incentive - advance - manual_ded - date_ded_total, 2)
         return {"employee_id": eid, "employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "username": emp.get("original_username") or emp.get("username"),
-                "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": round(monthly - attendance_deduction, 2),
+                "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": round(monthly - attendance_deduction, 2), "earned_to_date": earned_to_date, "not_joined": not_joined, "joined_on": joined,
                 "attendance_deduction": attendance_deduction, "sunday_extra": sunday_extra, "short_deduction": round(per_day * s["short_day_fraction"], 2), "absent_deduction": round(per_day * s["absent"], 2),
                 "pending_review_deduction": round(per_day * s["checkout_missing"], 2),
                 "bonus": bonus, "incentive": incentive, "advance": advance, "deduction": manual_ded, "date_deductions": date_deds, "date_deduction_total": date_ded_total,
@@ -269,7 +282,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 ("late_minutes", "Late Min"), ("extra_minutes", "Extra Min"), ("adjusted_minutes", "Adjusted Min"), ("short_minutes", "Short Min"), ("status_label", "Status"), ("deduction", "Deduction (Rs)"), ("note", "Note")]
     SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Base Salary"), ("per_day", "Daily Rate (/30)"), ("present", "Present"), ("short_hours", "Short Days"), ("half_day", "Half Day"), ("absent", "Absent"),
                 ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("weekly_off", "Weekly Off"), ("sunday_worked", "Sunday Worked"), ("sunday_extra", "Sunday Extra"), ("checkout_missing", "Checkout Missing"), ("attendance_deduction", "Attendance Deduction"),
-                ("bonus", "Bonus"), ("incentive", "Incentive"), ("manual_adjustment", "Manual Adjustment"), ("net_payable", "Final Salary"), ("published", "Published"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
+                ("bonus", "Bonus"), ("incentive", "Incentive"), ("manual_adjustment", "Manual Adjustment"), ("earned_to_date", "Earned Till Today"), ("net_payable", "Final Salary"), ("published", "Published"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
 
     def label(a: dict) -> str:
         st = a.get("status", "")
@@ -441,9 +454,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 "present_today": sum(1 for a in by.values() if a["status"] in ("present", "late", "short_hours", "half_day", "checkout_missing")),
                 "late_today": sum(1 for a in by.values() if a.get("late")), "on_leave_today": sum(1 for a in by.values() if a["status"] == "leave"),
                 "absent_today": sum(1 for eid in emps if eid not in by or by[eid]["status"] == "absent"), "pending_review": pending_review,
+                "day_closed": (now_utc().astimezone(IST).hour, now_utc().astimezone(IST).minute) >= AUTO_CLOSE,
                 "total_monthly_salary": round(sum(r["monthly_salary"] for r in rows), 2), "salary_payable": round(sum(r["net_payable"] for r in rows), 2),
                 "salary_paid": round(sum(r["net_payable"] for r in rows if r["payment_status"] == "paid"), 2),
-                "salary_pending": round(sum(r["net_payable"] for r in rows if r["payment_status"] != "paid"), 2)}
+                "salary_pending": round(sum(r["earned_to_date"] for r in rows if r["payment_status"] != "paid"), 2),
+                "salary_projected": round(sum(r["net_payable"] for r in rows), 2)}
 
     @r.get("/admin/salary")
     async def salary_sheet(month: Optional[str] = None, admin: dict = Depends(require_admin)):
@@ -608,10 +623,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         year = year or int(today[:4])
         emps = await employees()
         last_m = int(today[5:7]) if year == int(today[:4]) else (12 if year < int(today[:4]) else 0)
+        joins = [(e.get("joining_date") or e.get("created_at") or "")[:7] for e in emps.values()]
+        first = min((j for j in joins if j), default=f"{year}-01")
+        start_m = int(first[5:7]) if first[:4] == str(year) else (1 if first[:4] < str(year) else 13)
         months = []
-        for m in range(1, last_m + 1):
+        for m in range(start_m, last_m + 1):
             mo = f"{year}-{m:02d}"
-            rows = [await salary_row(e, mo, today) for e in emps.values()]
+            rows = [r_ for r_ in [await salary_row(e, mo, today) for e in emps.values()] if not r_["not_joined"]]
             paid = round(sum(r["net_payable"] for r in rows if r["payment_status"] == "paid"), 2)
             total = round(sum(r["net_payable"] for r in rows), 2)
             months.append({"month": mo, "label": datetime(year, m, 1).strftime("%b %Y"), "total": total, "paid": paid, "pending": round(total - paid, 2),
