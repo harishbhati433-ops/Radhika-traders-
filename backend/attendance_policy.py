@@ -12,7 +12,7 @@ from storage_service import put_object, STORAGE_URL, init_storage, APP_NAME
 logger = logging.getLogger("attendance.policy")
 MODES = ("normal", "gps", "gps_selfie")
 MODE_LABELS = {"normal": "Normal", "gps": "GPS only (within office radius)", "gps_selfie": "GPS + Selfie"}
-DEFAULT = {"mode": "normal", "office_lat": None, "office_lng": None, "radius_m": 150, "selfie_retention_days": 60, "office_label": "Radhika Traders, Agar"}
+DEFAULT = {"mode": "normal", "office_lat": 23.721839, "office_lng": 76.018929, "radius_m": 150, "selfie_retention_days": 60, "office_label": "Radhika Traders, Agar"}  # from owner's Google Maps link
 _P = dict(DEFAULT)
 MAX_SELFIE_BYTES = 600_000
 _DATA_URL = re.compile(r"^data:image/(jpeg|jpg|png|webp);base64,", re.I)
