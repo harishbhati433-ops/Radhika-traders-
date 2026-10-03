@@ -309,7 +309,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             return "Sunday Worked"
         return st.replace("_", " ").title()
 
-    async def notify_punch(emp: dict, rec: dict, kind: str) -> None:
+    async def notify_punch(emp: dict, rec: dict, kind: str, origin: str = "") -> None:
         full = await db.users.find_one({"_id": ObjectId(emp["id"])}) if ObjectId.is_valid(emp["id"]) else None
         if not full:
             return
@@ -318,6 +318,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         st = label(rec) + (" (Late)" if kind == "in" and rec.get("late") else "")
         hours = fmt_dur(rec.get("worked_minutes")) if kind == "out" else None
         extra = {"check_in": fmt_t(rec.get("check_in")), "check_out": fmt_t(rec.get("check_out")), "short_minutes": rec.get("short_minutes")} if kind != "in" else {}
+        gps = rec.get("gps_in" if kind == "in" else "gps_out")
+        if gps:
+            extra["gps"] = f"{int(gps['distance_m'])} m from office (within {gps['radius_m']} m · GPS ±{int(gps['accuracy_m'] or 0)} m)"
+        if kind == "in" and rec.get("selfie_url") and origin.startswith("https://"):
+            extra["selfie_link"] = f"{origin}{rec['selfie_url']}"
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
         targets = {a["email"].lower(): (a.get("name", "Admin"), True) for a in admins if a.get("email")}
         targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), ("Admin", True))
@@ -369,7 +374,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         gps_note = f" · GPS {int(extra['gps_in']['distance_m'])} m" if extra.get("gps_in") else ""
         await log_activity(emp, "attendance_check_in", request, entity_type="attendance", entity_id=today, status=rec["status"], detail=f"Check-in {fmt_t(rec['check_in'])}{gps_note}" + (" · selfie" if extra.get("selfie_url") else ""))
         saved = await db.attendance.find_one({"_id": res.inserted_id})
-        background.add_task(notify_punch, emp, saved, "in")
+        background.add_task(notify_punch, emp, saved, "in", (request.headers.get("origin") or str(request.base_url).rstrip("/")).replace("http://", "https://"))
         return out(saved)
 
     @r.post("/employee/attendance/check-out")
