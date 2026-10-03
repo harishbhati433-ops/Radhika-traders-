@@ -1,0 +1,9 @@
+crons:
+  - name: attendance-reminder
+    description: "Emails employees who have not checked in by 10:00 AM IST (Mon-Sat); Sunday is weekly off"
+    cron: "0 10 * * 1-6"
+    timezone: "Asia/Kolkata"
+    endpoint: "{{BASE_URL}}/api/cron/attendance-reminder"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

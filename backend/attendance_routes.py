@@ -1,8 +1,10 @@
 """Employee attendance (check-in/out, statuses) + monthly salary calculation, exports and dashboard summary."""
 import asyncio
 import calendar
+import hmac
 import io
 import logging
+import os
 from datetime import datetime, timezone, timedelta, date as ddate
 from typing import Optional
 from uuid import uuid4
@@ -13,7 +15,7 @@ from bson import ObjectId
 import pandas as pd
 
 import contact_settings
-from email_service import send_attendance_email, send_salary_paid_email, send_salary_published_email
+from email_service import send_attendance_email, send_attendance_reminder_email, send_salary_paid_email, send_salary_published_email
 
 logger = logging.getLogger("attendance")
 
@@ -761,5 +763,54 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             buf.seek(0)
             return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="salary_slip_{row["employee_code"] or employee_id}_{month}.pdf"'})
         return export([{"field": k, "value": v} for k, v in fields], [("field", "Field"), ("value", "Value")], f"Salary Slip {month}", format, f"salary_slip_{row['employee_code'] or employee_id}_{month}")
+
+    # ---------------- Cron: 10 AM attendance reminder ----------------
+    async def run_attendance_reminder(run_id: str, origin: str) -> None:
+        today = ist_today()
+        if is_sunday(today):
+            return
+        marked = {a["employee_id"] for a in await db.attendance.find({"date": today}, {"employee_id": 1}).to_list(1000)}
+        already = {x["employee_id"] for x in await db.attendance_reminders.find({"date": today}, {"employee_id": 1}).to_list(1000)}
+        d = datetime.fromisoformat(today).strftime("%d %b %Y")
+        link = f"{origin}/employee/attendance"
+        sent = 0
+        async for emp in db.users.find({"role": "employee", "account_status": {"$nin": ["deleted", "disabled", "inactive"]}}, {"name": 1, "email": 1, "employee_code": 1, "joining_date": 1, "created_at": 1}):
+            eid = str(emp["_id"])
+            joined = (emp.get("joining_date") or emp.get("created_at") or "")[:10]
+            if eid in marked or eid in already or not emp.get("email") or (joined and joined > today):
+                continue
+            try:
+                mid = await send_attendance_reminder_email(emp["email"], emp.get("name", ""), emp.get("employee_code", ""), d, link)
+            except Exception as e:
+                logger.warning(f"attendance reminder to {emp['email']} failed: {e}")
+                mid = None
+            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "email": emp["email"], "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
+            sent += 1
+        await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "sent": sent}})
+        logger.info(f"attendance reminder {run_id}: {sent} email(s) sent for {today}")
+
+    @r.post("/cron/attendance-reminder", status_code=202)
+    async def cron_attendance_reminder(request: Request, background: BackgroundTasks):
+        # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+        secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+        auth = request.headers.get("authorization", "")
+        token = auth[7:] if auth.lower().startswith("bearer ") else ""
+        if not secret or not token or not hmac.compare_digest(token, secret):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        try:
+            body = await request.json() if await request.body() else {}
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="Invalid request body")
+        run_id = request.headers.get("x-webhook-id") or body.get("run_id") or str(uuid4())
+        if await db.cron_runs.find_one({"run_id": run_id}):
+            return {"ok": True, "duplicate": True, "run_id": run_id}
+        await db.cron_runs.insert_one({"run_id": run_id, "schedule": "attendance-reminder", "started_at": now_utc().isoformat()})
+        origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+        if not origin.startswith("https://") and "localhost" not in origin and "127.0.0.1" not in origin:
+            origin = "https://" + origin.split("://", 1)[-1]
+        background.add_task(run_attendance_reminder, run_id, origin)
+        return {"ok": True, "queued": True, "run_id": run_id}
 
     return r

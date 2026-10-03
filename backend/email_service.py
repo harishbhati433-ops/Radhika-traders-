@@ -216,6 +216,20 @@ async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, em
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_attendance_reminder_email(to: str, name: str, emp_code: str, date_str: str, portal_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Reminder: you have not checked in yet — {date_str}"
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+             f'<p style="font-size:14px;color:#334155">It is past <b>10:00 AM</b> and your attendance for <b>{escape(date_str)}</b> has not been marked yet'
+             f'{" (" + escape(emp_code) + ")" if emp_code else ""}. Office hours are 10:00 AM – 5:00 PM · 7 hours of work = Full Day.</p>'
+             f'<p style="font-size:14px;color:#334155">Please open the Employee Panel and press <b>Check In</b> now. Arriving after 10:00 AM is recorded as a late mark, '
+             f'and a day with no check-in is counted as <b>Absent</b> after 6:00 PM.</p>'
+             f'<p style="margin:16px 0"><a href="{escape(portal_link)}" style="background:#991B1B;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">Check In Now</a></p>'
+             f'<p style="font-size:12px;color:#64748b">On leave or holiday today? Please inform the admin so your attendance can be marked correctly.</p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, device: str, reset_link: str, security_link: str) -> str | None:
     if not to:
         return None
