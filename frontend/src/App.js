@@ -67,6 +67,8 @@ const AdminWallets = lazy(() => import("./pages/admin/AdminWallets"));
 const AdminContact = lazy(() => import("./pages/admin/AdminContact"));
 const AdminTeam = lazy(() => import("./pages/admin/AdminTeam"));
 const AdminAttendance = lazy(() => import("./pages/admin/AdminAttendance"));
+const AdminEmployeeKyc = lazy(() => import("./pages/admin/AdminEmployeeKyc"));
+const EmployeeKyc = lazy(() => import("./pages/employee/EmployeeKyc"));
 const EmployeeAttendance = lazy(() => import("./pages/employee/EmployeeAttendance"));
 const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
 const EmployeeDashboard = lazy(() => import("./pages/employee/EmployeeDashboard"));
@@ -80,7 +82,7 @@ const Fallback = () => (
 // Warm all route chunks while the browser is idle so the first click on any menu item is instant.
 const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
 const ADMIN_CHUNKS = [() => import("./pages/admin/AdminDashboard"), () => import("./pages/admin/AdminCampaigns"), () => import("./pages/admin/AdminCustomers"), () => import("./pages/admin/AdminLeads"), () => import("./pages/admin/AdminKyc"), () => import("./pages/admin/AdminWithdrawals"), () => import("./pages/admin/AdminBanners"), () => import("./pages/admin/AdminBroadcast"), () => import("./pages/admin/AdminReports"), () => import("./pages/admin/AdminSecurity"), () => import("./pages/admin/AdminCategories"), () => import("./pages/admin/AdminDedicatedReferrals"),
-  () => import("./pages/admin/AdminEmployees"), () => import("./pages/admin/AdminAttendance"), () => import("./pages/admin/AdminActivityLogs"), () => import("./pages/admin/AdminWallets"), () => import("./pages/admin/AdminContact"), () => import("./pages/admin/AdminTeam")];
+  () => import("./pages/admin/AdminEmployees"), () => import("./pages/admin/AdminAttendance"), () => import("./pages/admin/AdminActivityLogs"), () => import("./pages/admin/AdminWallets"), () => import("./pages/admin/AdminContact"), () => import("./pages/admin/AdminTeam"), () => import("./pages/admin/AdminEmployeeKyc"), () => import("./pages/employee/EmployeeKyc")];
 function ChunkPrefetcher() {
   const { user } = useAuth();
   useEffect(() => {
@@ -162,6 +164,8 @@ function App() {
             <Route path="/admin/contact" element={A(<AdminContact />)} />
             <Route path="/admin/team" element={A(<AdminTeam />)} />
             <Route path="/admin/attendance" element={A(<AdminAttendance />)} />
+            <Route path="/admin/employee-kyc" element={A(<AdminEmployeeKyc />)} />
+            <Route path="/employee/kyc" element={E(<EmployeeKyc />)} />
             <Route path="/employee/attendance" element={E(<EmployeeAttendance />)} />
           </Routes>
         </Suspense>

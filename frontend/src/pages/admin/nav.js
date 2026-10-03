@@ -18,7 +18,9 @@ export const adminNav = [
   { to: "/admin/contact", label: "Contact & Support", icon: Headphones, adminOnly: true },
   { to: "/admin/team", label: "Team Photos", icon: Camera, adminOnly: true },
   { to: "/admin/attendance", label: "Attendance & Salary", icon: CalendarCheck, adminOnly: true },
+  { to: "/admin/employee-kyc", label: "Employee KYC", icon: ShieldCheck, adminOnly: true },
   { to: "/employee/attendance", label: "My Attendance", icon: CalendarCheck, employeeOnly: true },
+  { to: "/employee/kyc", label: "My KYC", icon: ShieldCheck, employeeOnly: true },
   { to: "/admin/security", label: "Security / Password", icon: Lock, adminOnly: true },
 ];
 

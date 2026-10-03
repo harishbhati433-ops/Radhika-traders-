@@ -238,6 +238,18 @@ async def send_attendance_reminder_email(to: str, name: str, emp_code: str, date
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_employee_kyc_email(to: str, name: str, status: str, reason: str, portal_link: str) -> str | None:
+    if not to:
+        return None
+    ok = status == "verified"
+    subject = "Your KYC has been verified" if ok else "Your KYC needs correction"
+    body = ("Your KYC details (identity + bank account) have been <b style=\"color:#15803d\">verified</b> by the admin. No further action is needed."
+            if ok else f"The admin could not verify your KYC. Reason: <b style=\"color:#991B1B\">{escape(reason or 'details did not match')}</b>. Please open the Employee Panel, correct the details and submit again.")
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p><p style="font-size:14px;color:#334155">{body}</p>'
+             f'<p style="margin:16px 0 6px"><a href="{escape(portal_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open My KYC</a></p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, device: str, reset_link: str, security_link: str) -> str | None:
     if not to:
         return None

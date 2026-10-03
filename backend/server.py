@@ -34,6 +34,7 @@ from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
+from employee_kyc_routes import build_router as build_employee_kyc_router
 from attendance_routes import build_router as build_attendance_router
 import office_timing
 import attendance_policy
@@ -2953,6 +2954,7 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 
 _emp_router = build_employee_router(db, require_admin, log_activity, public_user)
 api.include_router(_emp_router)
+api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.require_employee, log_activity, pan_error, aadhaar_error, lookup_ifsc_info))
 api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
