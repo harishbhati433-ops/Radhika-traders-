@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 26: Verified GET cache + prefetch + in-progress salary display end-to-end. Backend pytest 4/4 pass (salary_row fields payable_now/in_progress/as_of for current month 2026-10 and in_progress=false with payable_now==net_payable for 2026-09). UI flows all pass: admin login, Employees list, cached revisit, edit-mobile cache-invalidation (9876543210→9876543219→revert), Attendance/Salary Sheet/Yearly Summary tabs, Publish dialog shows '₹0 ... (Month still running: this is the amount for 1 paid days till today, not the full-month total ₹14,000.1.)', employee rahul.k /employee/attendance renders my-salary-2026-10 with basis='Salary till 3 Oct · 1 paid days' and amber progress note, Unpublish restores state. All other admin pages (activity-logs, wallets, contact, team) load cleanly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Multiple admin pages", "issues": ["React dev warning: '<span> cannot be a child of <option>' hydration warning. Likely a <select><option><span class=...>...</span></option></select> somewhere (e.g. filter dropdowns in attendance/employees). Non-blocking but pollutes console. Suggest moving icon/text out of <option> or replacing with Radix Select."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_26_salary_progress.py"
+  ],
+  "action_items": [
+    "(Low) Fix '<span> cannot be a child of <option>' hydration warning on admin pages."
+  ],
+  "critical_code_review_comments": [
+    "lib/api.js NO_CACHE regex uses path substrings; harmless today but if any new GET endpoint ever uses '/export' or '/slip' in its path non-blobbily, it will bypass cache (currently intentional). Consider a config.noCache flag per call for explicit control.",
+    "attendance_routes.py salary_row returns earned_to_date and payable_now; payable_now math caps at final (min). Good. Ensure Sunday-worked logic still contributes to paid_days consistently (verified for Rahul: 1 paid day on 2026-10-03 Saturday).",
+    "MySalary.jsx renders `null` while loading — brief flash; a 2-line skeleton would improve perceived speed when nothing is cached yet."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_26_salary_progress.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all requested flows)"},
+  "test_credentials": "admin bhatiharish276@gmail.com / Radhika@2023; employee rahul.k / Emp@1234",
+  "seed_data_creation": "Transient: Rahul mobile toggled 9876543210<->9876543219 (reverted). Rahul October 2026 salary published then unpublished (final state: UNpublished, as requested).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "IST test date is fixed at 2026-10-03 in backend. Rahul (emp_id 6aa4f62060cf8b2d2a38c56b, username rahul.k) has monthly=15000, 1 paid day in Oct (per_day=500), bonus=500, advance=1000 → payable_now=max(0, 500 - 1000 + 500) math caps at ₹0 and the full-month total is ₹14,000.1. Admin attendance tabs are plain <button> elements (not role=tab) — select via `button:has-text('Salary Sheet'|'Yearly Summary'|'Attendance')`. Publish button data-testid is `sal-publish-{employee_id}`. Employee MySalary cards use data-testid `my-salary-{YYYY-MM}`, `my-salary-final-{m}`, `my-salary-basis-{m}`, `my-salary-progress-{m}`. The frontend 30s GET cache (lib/api.js) is auto-cleared on any non-GET + on `rt:logout`; use `window.dispatchEvent(new Event('rt:logout'))` or just clearApiCache() if testing fresh data.",
+  "rca of the issue": "N/A — no bugs."
+}
