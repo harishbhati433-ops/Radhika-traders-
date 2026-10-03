@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only verification of Admin-configurable Office Timing card at /admin/attendance + employee attendance view. All 6 scripted scenarios passed: initial render + testids present, Save-disabled gating, successful update with success toast + rules-strip refresh, persistence across reload, validation (end < start+7h) with correct toast, validation (auto-close <= end) with correct toast, employee header + rules strip reflect dynamic office hours. Regression smoke tests (Salary Sheet tab, Yearly Summary tab, Employees page) all render. Timing restored to 10:00/17:00/18:00 at the end as required.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EmployeeAttendance Rules list (line 60)", "issue": "Rule item 'Forgot to check out? Session auto-closes at 6:00 PM' hard-codes 6:00 PM instead of using d?.office?.auto_close. When admin configured auto-close to 06:30 PM, the header + top strip updated correctly but this bullet still showed '6:00 PM', creating an inconsistency visible to employees.", "selector": "ul in EmployeeAttendance.jsx line 60", "priority": "LOW"},
+      {"component": "EmployeeAttendance checkout_missing banner (line 48)", "issue": "Message 'session auto-closed at 6:00 PM' also hard-codes 6:00 PM; should use d?.office?.auto_close for consistency with dynamic timing.", "selector": "p[data-testid='att-today-review']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin /admin/attendance (AttendanceTab filter)", "issues": ["React hydration console warning: <span> cannot be a child of <option> in AttendanceTab line 104 (data-testid att-filter-emp). Dev-mode only but should be cleaned up — remove the x-ve-dynamic span wrapper from option label or use plain string."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Make the 'Session auto-closes at <X> PM' bullet in EmployeeAttendance.jsx line 60 dynamic (use d?.office?.auto_close like line 43).",
+    "Make the checkout_missing message in EmployeeAttendance.jsx line 48 dynamic as well.",
+    "Fix React hydration warning: <span> inside <option> in AttendanceTab.jsx line 104 (att-filter-emp options)."
+  ],
+  "critical_code_review_comments": [
+    "OfficeTimingCard integration works end-to-end: PUT success → toast → refetch → rules-strip remount via key → employee page reflects new values on next load.",
+    "Minor DRY: 'auto-close 06:00 PM' default fallback is duplicated in 3 spots in EmployeeAttendance.jsx (lines 43, 48, 60). Centralize or fully drive from server state."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% on required scenarios; 2 minor cosmetic bugs noted"},
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023; Employee rahul.k / Emp@1234 (from /app/memory/test_credentials.md convention — login succeeded)",
+  "seed_data_creation": "None. Only office_timing settings were toggled 10:00/17:00/18:00 → 10:30/17:30/18:30 → 10:00/17:00/18:00 (RESTORED).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Office Timing feature verified green on admin + employee pages. Final state restored to 10:00 AM / 05:00 PM / 06:00 PM. Only remaining items are two cosmetic hard-coded '6:00 PM' strings in EmployeeAttendance.jsx (lines 48 & 60) and a dev-only hydration warning in AttendanceTab.jsx line 104 (span inside option).",
+  "rca of the issue": "n/a — feature works. Minor hard-coded strings in EmployeeAttendance Rules bullet + checkout_missing message bypass the dynamic office object; fix by referencing d?.office?.auto_close like line 43 already does."
+}
