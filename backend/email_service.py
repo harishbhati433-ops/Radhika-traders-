@@ -341,16 +341,30 @@ def _first(name: str) -> str:
     return (name or "Partner").strip().split()[0].capitalize()
 
 
+def _plain(inner: str) -> str:
+    # Looks like a personally typed Gmail message (no banner, boxes, buttons or colours) → lands in Primary, not Promotions.
+    return f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222222;max-width:600px">{inner}</div>'
+
+
 async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
     if not to:
         return None
-    subject = f"{_first(name)}, {c.get('offer_name', 'a new campaign')} is now live for you"
-    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
-             f'<p style="font-size:14px;color:#334155">Harish here from Radhika Traders. I have just added <b>{escape(c.get("offer_name", ""))}</b> to your dashboard '
-             f'and wanted to let you know personally. The details and your own referral link are below.</p>'
-             f'{_campaign_block(c, link)}'
-             f'<p style="font-size:14px;color:#334155">Login to your dashboard to view the full requirement and track your leads.</p>{_signature()}')
-    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+    first = _first(name)
+    offer = c.get("offer_name", "a new campaign")
+    subject = f"{first}, I have added {offer} to your account"
+    details = [f"Company: {c.get('company', '')}", f"Payout: Rs.{c.get('payout_amount', 0):g} {c.get('payout_type', '')}".strip()]
+    if c.get("fund_add"):
+        details.append(f"Fund add: {c['fund_add']}")
+    if c.get("requirements"):
+        details.append(f"Requirement: {str(c['requirements'])[:200]}")
+    detail_html = "<br>".join(escape(x) for x in details if x.split(":", 1)[1].strip())
+    inner = (f'<p>Hi {escape(first)},</p>'
+             f'<p>Harish here from Radhika Traders. I have just added <b>{escape(offer)}</b> to your dashboard and wanted to tell you personally.</p>'
+             f'<p>{detail_html}</p>'
+             f'<p>Your referral link for this one:<br><a href="{escape(link)}" style="color:#1a0dab">{escape(link)}</a></p>'
+             f'<p>Share it with people who would be a good fit, and I will track the leads for you on your dashboard. If you have any question, just reply to this email, I read every message.</p>'
+             f'<p>Thanks,<br>Harish Bhati<br>Radhika Traders<br>WhatsApp: {escape(wa_number())}</p>')
+    return await send_email(to=to, subject=subject, html=_plain(inner))
 
 
 async def send_broadcast_email(to: str, name: str, subject: str, message: str, c: dict | None, link: str) -> str | None:
