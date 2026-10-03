@@ -5,6 +5,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { toast } from "sonner";
 import { LogIn, LogOut, Clock, Loader2 } from "lucide-react";
 import { StatusPill, MonthSummary, thisMonth, dur, mins } from "../../components/attendance/shared";
+import { MySalary } from "../../components/attendance/MySalary";
 
 function Clockface() {
   const [t, setT] = useState(new Date());
@@ -56,7 +57,7 @@ export default function EmployeeAttendance() {
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
           <div className="mb-2 font-bold text-slate-900">Rules</div>
-          <ul className="space-y-1 list-disc pl-4"><li>Office <b>10:00 AM – 5:00 PM</b> · required <b>7 hours</b> of work</li><li>Work the full 7 hours = <b>Full Day</b>, whatever time you arrive (10:20 → 5:20, 11:00 → 6:00)</li><li>Less than 7 hours = <b>Short Hours</b> — only the missing minutes count</li><li>Always check out yourself — your time counts till your own check-out</li><li>Forgot to check out? Session auto-closes at <b>6:00 PM</b> as <b>Checkout Missing</b>; admin reviews your actual time</li><li>No check-in = Absent (admin can correct)</li></ul>
+          <ul className="space-y-1 list-disc pl-4"><li>Office <b>10:00 AM – 5:00 PM</b> · required <b>7 hours</b> of work</li><li>Work the full 7 hours = <b>Full Day</b>, whatever time you arrive (10:20 → 5:20, 11:00 → 6:00)</li><li>Less than 7 hours = <b>Short Hours</b> — only the missing minutes count</li><li><b>Sunday</b> = paid weekly off · working on Sunday = <b>Sunday Worked</b> (extra)</li><li>Always check out yourself — your time counts till your own check-out</li><li>Forgot to check out? Session auto-closes at <b>6:00 PM</b> as <b>Checkout Missing</b>; admin reviews your actual time</li></ul>
         </div>
       </div>
 
@@ -65,6 +66,7 @@ export default function EmployeeAttendance() {
         <input type="month" value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} data-testid="att-month" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm" />
       </div>
       {d && <MonthSummary s={d.summary} />}
+      <MySalary />
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">

@@ -5,6 +5,7 @@ import io
 import logging
 from datetime import datetime, timezone, timedelta, date as ddate
 from typing import Optional
+from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -20,9 +21,14 @@ IST = timezone(timedelta(hours=5, minutes=30))
 OFFICE_START, OFFICE_END = (10, 0), (17, 0)
 REQUIRED_MINUTES = 7 * 60
 AUTO_CLOSE = (18, 0)
-STATUSES = ("present", "late", "short_hours", "half_day", "absent", "leave", "holiday", "weekly_off", "checkout_missing")
-TIMED = ("present", "late", "short_hours", "half_day")
-PAID_FULL = ("present", "late", "holiday", "weekly_off")
+STATUSES = ("present", "late", "short_hours", "half_day", "absent", "leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing")
+TIMED = ("present", "late", "short_hours", "half_day", "sunday_worked")
+PAID_FULL = ("present", "late", "holiday", "weekly_off", "sunday_worked")
+SALARY_DAYS = 30  # fixed 30-day basis: daily rate = monthly / 30 regardless of calendar length
+
+
+def is_sunday(date_str: str) -> bool:
+    return ddate.fromisoformat(date_str).weekday() == 6
 
 
 def now_utc() -> datetime:
@@ -82,6 +88,8 @@ def derive(rec: dict) -> dict:
                     "adjusted_minutes": int(round(min(late, extra))), "short_minutes": int(round(short)),
                     "paid_fraction": round(min(1.0, worked / REQUIRED_MINUTES), 4)})
         rec["status"] = "present" if rec["short_minutes"] == 0 else "short_hours"
+        if rec.get("date") and is_sunday(rec["date"]):
+            rec["status"] = "sunday_worked"
     else:
         rec.update({"worked_minutes": None, "hours": None, "extra_minutes": 0, "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": None})
         if rec.get("status") != "checkout_missing":
@@ -129,9 +137,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         return d
 
     def per_day_of(emp: dict, month: str) -> float:
-        y, m = map(int, month.split("-"))
-        monthly = float((emp.get("salary") or {}).get("monthly") or 0)
-        return monthly / calendar.monthrange(y, m)[1]
+        return float((emp.get("salary") or {}).get("monthly") or 0) / SALARY_DAYS
 
     async def auto_close_stale() -> None:
         """Sessions without a manual check-out are closed at 6:00 PM IST and flagged for admin review (time is NOT auto-paid)."""
@@ -161,12 +167,15 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         days = calendar.monthrange(y, m)[1]
         counted = {i["date"] for i in items}
         last = min(days, int(today[8:])) if today[:7] == month else (days if today[:7] > month else 0)
-        s = {k: 0 for k in ("present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "checkout_missing", "late_marks",
+        s = {k: 0 for k in ("present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing", "late_marks",
                             "late_minutes_total", "extra_minutes_total", "adjusted_minutes_total", "short_minutes_total")}
         paid = 0.0
-        short_frac = 0.0
+        deduct_days = 0.0   # working-day shortfall in day units (absent=1, half=0.5, short=minutes/420, unpaid leave=1, checkout_missing=1)
+        sunday_extra_days = 0.0  # Sundays worked, in day units (full=1, half=0.5, short=worked/420)
+        sundays_off = 0
         for i in items:
             st = i.get("status")
+            sun = is_sunday(i["date"])
             if st == "leave":
                 s["paid_leave" if i.get("leave_paid") else "unpaid_leave"] += 1
             elif st in s:
@@ -175,14 +184,31 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 s["late_marks"] += 1
             for k in ("late_minutes", "extra_minutes", "adjusted_minutes", "short_minutes"):
                 s[f"{k}_total"] += int(i.get(k) or 0)
-            f = paid_fraction(i)
-            paid += f
-            if st == "short_hours":
-                short_frac += 1 - f
-        s["absent"] += sum(1 for d in range(1, last + 1) if f"{month}-{d:02d}" not in counted)
+            f = paid_fraction(i) if st != "sunday_worked" else float(i.get("paid_fraction") if i.get("paid_fraction") is not None else 1.0)
+            if sun:
+                if st in ("sunday_worked", "present", "late", "short_hours", "half_day"):
+                    sunday_extra_days += f
+                else:
+                    sundays_off += 1
+                paid += 1.0  # Sunday itself is always a paid weekly off
+            else:
+                paid += f
+                deduct_days += 1 - f
+        for d in range(1, last + 1):
+            ds = f"{month}-{d:02d}"
+            if ds not in counted:
+                if is_sunday(ds):
+                    sundays_off += 1
+                    paid += 1.0
+                else:
+                    s["absent"] += 1
+                    deduct_days += 1
+        s["weekly_off"] += sundays_off
         s["days_in_month"], s["days_elapsed"] = days, last
         s["paid_days"] = round(paid, 2)
-        s["short_day_fraction"] = round(short_frac, 4)
+        s["deduct_days"] = round(deduct_days, 4)
+        s["sunday_extra_days"] = round(sunday_extra_days, 4)
+        s["short_day_fraction"] = round(sum(1 - paid_fraction(i) for i in items if i.get("status") == "short_hours" and not is_sunday(i["date"])), 4)
         return s
 
     async def salary_row(emp: dict, month: str, today: str) -> dict:
@@ -190,18 +216,28 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         items = await db.attendance.find({"employee_id": eid, "date": {"$regex": f"^{month}"}}).to_list(100)
         s = summarize(items, month, today)
         monthly = float((emp.get("salary") or {}).get("monthly") or 0)
-        per_day = monthly / s["days_in_month"] if s["days_in_month"] else 0
+        per_day = monthly / SALARY_DAYS
         adj = await db.salary_adjustments.find_one({"employee_id": eid, "month": month}) or {}
-        earned = round(per_day * s["paid_days"], 2)
-        extras = float(adj.get("bonus") or 0) + float(adj.get("incentive") or 0)
-        cuts = float(adj.get("advance") or 0) + float(adj.get("deduction") or 0)
+        date_deds = adj.get("date_deductions") or []
+        date_ded_total = round(sum(float(x.get("amount") or 0) for x in date_deds), 2)
+        attendance_deduction = round(per_day * s["deduct_days"], 2)
+        sunday_extra = round(per_day * s["sunday_extra_days"], 2)
+        bonus, incentive = float(adj.get("bonus") or 0), float(adj.get("incentive") or 0)
+        advance, manual_ded = float(adj.get("advance") or 0), float(adj.get("deduction") or 0)
+        final = round(monthly + sunday_extra + bonus + incentive - attendance_deduction - advance - manual_ded - date_ded_total, 2)
         return {"employee_id": eid, "employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "username": emp.get("original_username") or emp.get("username"),
-                "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": earned,
-                "short_deduction": round(per_day * s["short_day_fraction"], 2), "absent_deduction": round(per_day * s["absent"], 2),
+                "month": month, "monthly_salary": monthly, "per_day": round(per_day, 2), **s, "earned": round(monthly - attendance_deduction, 2),
+                "attendance_deduction": attendance_deduction, "sunday_extra": sunday_extra, "short_deduction": round(per_day * s["short_day_fraction"], 2), "absent_deduction": round(per_day * s["absent"], 2),
                 "pending_review_deduction": round(per_day * s["checkout_missing"], 2),
-                "bonus": float(adj.get("bonus") or 0), "incentive": float(adj.get("incentive") or 0), "advance": float(adj.get("advance") or 0),
-                "deduction": float(adj.get("deduction") or 0), "note": adj.get("note", ""), "net_payable": round(earned + extras - cuts, 2),
+                "bonus": bonus, "incentive": incentive, "advance": advance, "deduction": manual_ded, "date_deductions": date_deds, "date_deduction_total": date_ded_total,
+                "manual_adjustment": round(advance + manual_ded + date_ded_total, 2), "note": adj.get("note", ""), "net_payable": final,
+                "published": bool(adj.get("published")), "published_at": adj.get("published_at", ""), "published_by": adj.get("published_by", ""),
                 "payment_status": adj.get("payment_status", "pending"), "payment_date": adj.get("payment_date", ""), "proof_url": adj.get("proof_url", ""), "utr": adj.get("utr", "")}
+
+    async def audit(emp: dict, month: str, kind: str, amount: float, prev_final: float, new_final: float, admin: dict, reason: str, extra: Optional[dict] = None) -> None:
+        await db.salary_audit.insert_one({"employee_id": str(emp["_id"]), "employee_name": emp.get("name"), "employee_code": emp.get("employee_code", ""), "month": month, "type": kind, "amount": round(float(amount), 2),
+                                          "previous_final": prev_final, "new_final": new_final, "admin_id": admin.get("id", ""), "admin_name": admin.get("name", ""), "reason": (reason or "")[:300],
+                                          "at": now_utc().isoformat(), **(extra or {})})
 
     def export(rows: list, cols: list, title: str, fmt: str, fname: str):
         df = pd.DataFrame([{c[1]: row.get(c[0], "") for c in cols} for row in rows]) if rows else pd.DataFrame(columns=[c[1] for c in cols])
@@ -231,9 +267,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
 
     ATT_COLS = [("date", "Date"), ("employee_name", "Employee"), ("employee_code", "Emp ID"), ("check_in_time", "Check-In"), ("check_out_time", "Manual Check-Out"), ("duration", "Working Duration"),
                 ("late_minutes", "Late Min"), ("extra_minutes", "Extra Min"), ("adjusted_minutes", "Adjusted Min"), ("short_minutes", "Short Min"), ("status_label", "Status"), ("deduction", "Deduction (Rs)"), ("note", "Note")]
-    SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Monthly Salary"), ("present", "Full Days"), ("short_hours", "Short Days"), ("half_day", "Half Day"), ("absent", "Absent"),
-                ("checkout_missing", "Checkout Missing"), ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("short_minutes_total", "Short Min"), ("short_deduction", "Short Deduction"), ("paid_days", "Paid Days"), ("earned", "Earned"),
-                ("bonus", "Bonus"), ("incentive", "Incentive"), ("advance", "Advance"), ("deduction", "Deduction"), ("net_payable", "Net Payable"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
+    SAL_COLS = [("employee_name", "Employee"), ("employee_code", "Emp ID"), ("month", "Month"), ("monthly_salary", "Base Salary"), ("per_day", "Daily Rate (/30)"), ("present", "Present"), ("short_hours", "Short Days"), ("half_day", "Half Day"), ("absent", "Absent"),
+                ("paid_leave", "Paid Leave"), ("unpaid_leave", "Unpaid Leave"), ("weekly_off", "Weekly Off"), ("sunday_worked", "Sunday Worked"), ("sunday_extra", "Sunday Extra"), ("checkout_missing", "Checkout Missing"), ("attendance_deduction", "Attendance Deduction"),
+                ("bonus", "Bonus"), ("incentive", "Incentive"), ("manual_adjustment", "Manual Adjustment"), ("net_payable", "Final Salary"), ("published", "Published"), ("payment_status", "Payment Status"), ("payment_date", "Payment Date")]
 
     def label(a: dict) -> str:
         st = a.get("status", "")
@@ -242,7 +278,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if st == "checkout_missing":
             return "Checkout Missing – Admin Review"
         if st == "present":
-            return "Full Day"
+            return "Present (Full Day)"
+        if st == "sunday_worked":
+            return "Sunday Worked"
         return st.replace("_", " ").title()
 
     async def notify_punch(emp: dict, rec: dict, kind: str) -> None:
@@ -431,6 +469,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
         prev = await db.salary_adjustments.find_one({"employee_id": employee_id, "month": month}) or {}
+        prev_row = await salary_row(emp, month, ist_today())
         upd = {"bonus": float(body.bonus or 0), "incentive": float(body.incentive or 0), "advance": float(body.advance or 0), "deduction": float(body.deduction or 0), "note": (body.note or "")[:200], "updated_at": now_utc().isoformat()}
         newly_paid = False
         if body.payment_status in ("pending", "paid"):
@@ -442,6 +481,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             newly_paid = body.payment_status == "paid" and prev.get("payment_status") != "paid"
         await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": upd, "$setOnInsert": {"employee_id": employee_id, "month": month}}, upsert=True)
         row = await salary_row(emp, month, ist_today())
+        changed = {k: (prev_row[k], row[k]) for k in ("bonus", "incentive", "advance", "deduction") if prev_row[k] != row[k]}
+        if changed or newly_paid or (body.payment_status == "pending" and prev.get("payment_status") == "paid"):
+            kind = "post_finalize_change" if prev.get("published") and changed else ("payment" if not changed else "monthly_adjustment")
+            await audit(emp, month, kind, sum(b - a for a, b in changed.values()) if changed else row["net_payable"], prev_row["net_payable"], row["net_payable"], admin, upd["note"],
+                        {"changes": {k: {"from": a, "to": b} for k, (a, b) in changed.items()}, "payment_status": row["payment_status"]})
         await log_activity(admin, "salary_adjusted", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", status=row["payment_status"], amount=row["net_payable"],
                            detail=f"bonus {upd['bonus']:g} · incentive {upd['incentive']:g} · advance {upd['advance']:g} · deduction {upd['deduction']:g} → net ₹{row['net_payable']:g}" + (" · marked PAID" if newly_paid else ""))
         if newly_paid and emp.get("email"):
@@ -452,7 +496,91 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             row["email_sent_to"] = emp["email"]
         return row
 
-    # ---------------- Exports ----------------
+    class DateDeductionIn(BaseModel):
+        date: str
+        amount: float
+        reason: Optional[str] = ""
+
+    @r.post("/admin/salary/{employee_id}/{month}/date-deduction")
+    async def add_date_deduction(employee_id: str, month: str, body: DateDeductionIn, request: Request, admin: dict = Depends(require_admin)):
+        emp = (await employees([employee_id])).get(employee_id)
+        if not emp or not body.date.startswith(month) or body.amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid employee, date (must be inside the month) or amount")
+        prev_row = await salary_row(emp, month, ist_today())
+        entry = {"id": uuid4().hex[:10], "date": body.date, "amount": round(body.amount, 2), "reason": (body.reason or "")[:200], "by": admin.get("name", ""), "at": now_utc().isoformat()}
+        await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$push": {"date_deductions": entry}, "$setOnInsert": {"employee_id": employee_id, "month": month}}, upsert=True)
+        row = await salary_row(emp, month, ist_today())
+        await audit(emp, month, "date_deduction" + ("_post_finalize" if row["published"] else ""), -body.amount, prev_row["net_payable"], row["net_payable"], admin, body.reason, {"date": body.date})
+        await log_activity(admin, "salary_date_deduction", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {body.date}", amount=body.amount, detail=f"₹{body.amount:g} deducted for {body.date}" + (f" · {body.reason}" if body.reason else ""))
+        return row
+
+    @r.delete("/admin/salary/{employee_id}/{month}/date-deduction/{ded_id}")
+    async def remove_date_deduction(employee_id: str, month: str, ded_id: str, request: Request, admin: dict = Depends(require_admin)):
+        emp = (await employees([employee_id])).get(employee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        prev_row = await salary_row(emp, month, ist_today())
+        gone = next((x for x in prev_row["date_deductions"] if x["id"] == ded_id), None)
+        if not gone:
+            raise HTTPException(status_code=404, detail="Deduction not found")
+        await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$pull": {"date_deductions": {"id": ded_id}}})
+        row = await salary_row(emp, month, ist_today())
+        await audit(emp, month, "date_deduction_removed", gone["amount"], prev_row["net_payable"], row["net_payable"], admin, gone.get("reason", ""), {"date": gone["date"]})
+        return row
+
+    class PublishIn(BaseModel):
+        published: bool
+
+    @r.put("/admin/salary/{employee_id}/{month}/publish")
+    async def publish_salary(employee_id: str, month: str, body: PublishIn, request: Request, admin: dict = Depends(require_admin)):
+        emp = (await employees([employee_id])).get(employee_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        row = await salary_row(emp, month, ist_today())
+        upd = {"published": body.published, "published_at": now_utc().isoformat() if body.published else "", "published_by": admin.get("name", "") if body.published else "",
+               "published_final": row["net_payable"] if body.published else None}
+        await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": upd, "$setOnInsert": {"employee_id": employee_id, "month": month}}, upsert=True)
+        await audit(emp, month, "published" if body.published else "unpublished", row["net_payable"], row["net_payable"], row["net_payable"], admin, "")
+        await log_activity(admin, "salary_published" if body.published else "salary_unpublished", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", amount=row["net_payable"])
+        return await salary_row(emp, month, ist_today())
+
+    @r.get("/admin/salary/audit")
+    async def salary_audit_log(month: Optional[str] = None, employee_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+        q = {k: v for k, v in (("month", month), ("employee_id", employee_id)) if v}
+        rows = await db.salary_audit.find(q, {"_id": 0}).sort("at", -1).to_list(500)
+        for x in rows:
+            x["at_label"] = datetime.fromisoformat(x["at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p")
+        return {"items": rows}
+
+    @r.post("/admin/salary/recalculate")
+    async def recalculate(month: Optional[str] = None, employee_id: Optional[str] = None, request: Request = None, admin: dict = Depends(require_admin)):
+        """Re-derive minute metrics & auto statuses for stored attendance (manual overrides untouched). Salary itself is always computed live on the fixed 30-day basis."""
+        q: dict = {"check_in": {"$ne": None}, "manual_override": {"$ne": True}}
+        if month:
+            q["date"] = {"$regex": f"^{month}"}
+        if employee_id:
+            q["employee_id"] = employee_id
+        n = 0
+        async for a in db.attendance.find(q):
+            if a.get("status") == "checkout_missing":
+                continue
+            new = derive(dict(a))
+            await db.attendance.update_one({"_id": a["_id"]}, {"$set": {k: new.get(k) for k in ("status", "late", "late_minutes", "worked_minutes", "hours", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction")}})
+            n += 1
+        await log_activity(admin, "salary_recalculated", request, entity_type="salary", entity_id=month or "all", detail=f"{n} attendance records re-derived · daily rate = monthly ÷ 30")
+        return {"ok": True, "records": n, "basis": f"Monthly ÷ {SALARY_DAYS}"}
+
+    # ---------------- Employee: published salary only ----------------
+    @r.get("/employee/salary")
+    async def my_salary(emp: dict = Depends(require_employee)):
+        pubs = await db.salary_adjustments.find({"employee_id": emp["id"], "published": True}).sort("month", -1).to_list(36)
+        full = await db.users.find_one({"_id": ObjectId(emp["id"])})
+        out_rows = []
+        for p in pubs:
+            r_ = await salary_row(full, p["month"], ist_today())
+            out_rows.append({k: r_[k] for k in ("month", "monthly_salary", "per_day", "present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "weekly_off", "holiday", "sunday_worked",
+                                                 "sunday_extra", "attendance_deduction", "manual_adjustment", "net_payable", "payment_status", "payment_date", "published_at")} | {"bonus_incentive": round(r_["bonus"] + r_["incentive"], 2)})
+        return {"items": out_rows}
     @r.get("/admin/attendance/export")
     async def export_attendance(format: str = "xlsx", date: Optional[str] = None, month: Optional[str] = None, employee_id: Optional[str] = None, admin: dict = Depends(require_admin)):
         data = await admin_attendance(date=date, month=month, employee_id=employee_id, status=None, admin=admin)
@@ -526,13 +654,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             r_["label"] = datetime.strptime(r_["month"], "%Y-%m").strftime("%b %Y")
             r_["full_days"] = r_["present"] + r_["late"]
             r_["extras"] = round(r_["bonus"] + r_["incentive"], 2)
-            r_["cuts"] = round(r_["advance"] + r_["deduction"], 2)
+            r_["cuts"] = round(r_["manual_adjustment"], 2)
             r_["status_label"] = ("Paid " + r_["payment_date"]) if r_["payment_status"] == "paid" else "Pending"
         tot = {k: round(sum(r_[k] for r_ in rows), 2) for k in ("full_days", "short_hours", "half_day", "absent", "paid_days", "earned", "extras", "cuts", "net_payable")}
         paid_total = round(sum(r_['net_payable'] for r_ in rows if r_['payment_status'] == 'paid'), 2)
         tot.update({"label": "TOTAL", "monthly_salary": "", "status_label": f"Paid ₹{paid_total:,.2f}"})
         cols = [("label", "Month"), ("monthly_salary", "Monthly Salary"), ("full_days", "Full Days"), ("short_hours", "Short Days"), ("half_day", "Half"), ("absent", "Absent"), ("paid_days", "Paid Days"),
-                ("earned", "Earned"), ("extras", "Bonus+Inc"), ("cuts", "Adv+Ded"), ("net_payable", "Net Payable"), ("status_label", "Payment")]
+                ("earned", "Base − Att. Ded."), ("extras", "Bonus+Inc"), ("cuts", "Manual Adj"), ("net_payable", "Final Salary"), ("status_label", "Payment")]
         title = f"Salary Statement {months[0] if months else from_month} to {months[-1] if months else to_month}"
         fname = f"salary_statement_{emp.get('employee_code') or employee_id}_{from_month}_{to_month}"
         if format != "pdf":
@@ -576,13 +704,14 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
         row = await salary_row(emp, month, ist_today())
-        fields = [("Employee Name", row["employee_name"]), ("Employee ID", row["employee_code"]), ("Salary Month", month), ("Monthly Salary", f"₹{row['monthly_salary']:,.2f}"), ("Per Day", f"₹{row['per_day']:,.2f}"),
-                  ("Full Days (7h+)", row["present"] + row["late"]), ("Short-Hour Days", row["short_hours"]), ("Total Short Minutes", row["short_minutes_total"]), ("Late Marks", row["late_marks"]), ("Half Days", row["half_day"]),
-                  ("Absent Days", row["absent"]), ("Checkout Missing (unpaid, pending review)", row["checkout_missing"]),
-                  ("Paid Leave", row["paid_leave"]), ("Unpaid Leave", row["unpaid_leave"]), ("Paid Days", row["paid_days"]), ("Short Working Deduction", f"₹{row['short_deduction']:,.2f}"), ("Earned Salary", f"₹{row['earned']:,.2f}"),
-                  ("Bonus / Incentive", f"₹{row['bonus'] + row['incentive']:,.2f}"), ("Advance", f"₹{row['advance']:,.2f}"), ("Other Deduction", f"₹{row['deduction']:,.2f}"),
-                  ("Net Payable Salary", f"₹{row['net_payable']:,.2f}"), ("Payment Status", row["payment_status"].title()), ("Payment Date", row["payment_date"] or "—")]
-        net_i = next(i for i, f in enumerate(fields) if f[0] == "Net Payable Salary")
+        fields = [("Employee Name", row["employee_name"]), ("Employee ID", row["employee_code"]), ("Salary Month", month), ("Base Monthly Salary", f"₹{row['monthly_salary']:,.2f}"), ("Daily Salary Rate (÷30)", f"₹{row['per_day']:,.2f}"),
+                  ("Present Days (7h+)", row["present"] + row["late"]), ("Short-Hour Days", row["short_hours"]), ("Total Short Minutes", row["short_minutes_total"]), ("Half Days", row["half_day"]),
+                  ("Absent Days", row["absent"]), ("Paid Leave", row["paid_leave"]), ("Unpaid Leave", row["unpaid_leave"]), ("Weekly Off (Sunday, paid)", row["weekly_off"]), ("Holiday", row["holiday"]),
+                  ("Checkout Missing (unpaid, pending review)", row["checkout_missing"]), ("Sunday Worked", row["sunday_worked"]), ("Sunday Extra (+)", f"₹{row['sunday_extra']:,.2f}"),
+                  ("Attendance Deduction (−)", f"₹{row['attendance_deduction']:,.2f}"), ("Bonus / Incentive (+)", f"₹{row['bonus'] + row['incentive']:,.2f}"),
+                  ("Manual Salary Adjustment (−)", f"₹{row['manual_adjustment']:,.2f}"),
+                  ("Final Payable Salary", f"₹{row['net_payable']:,.2f}"), ("Payment Status", row["payment_status"].title()), ("Payment Date", row["payment_date"] or "—")]
+        net_i = next(i for i, f in enumerate(fields) if f[0] == "Final Payable Salary")
         if format == "pdf":
             from reportlab.lib.pagesizes import A4
             from reportlab.lib import colors
