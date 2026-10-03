@@ -188,10 +188,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 s["late_marks"] += 1
             for k in ("late_minutes", "extra_minutes", "adjusted_minutes", "short_minutes"):
                 s[f"{k}_total"] += int(i.get(k) or 0)
-            f = paid_fraction(i) if st != "sunday_worked" else float(i.get("paid_fraction") if i.get("paid_fraction") is not None else 1.0)
+            f = paid_fraction(i)
             if sun:
                 if st in ("sunday_worked", "present", "late", "short_hours", "half_day"):
-                    sunday_extra_days += f
+                    sunday_extra_days += 0.5 if st == "half_day" else 1.0  # Sunday worked = +1 daily rate (half day = 50%), never minute-wise
                 else:
                     sundays_off += 1
                 paid += 1.0  # Sunday itself is always a paid weekly off
