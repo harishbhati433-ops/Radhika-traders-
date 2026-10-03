@@ -13,7 +13,7 @@ from bson import ObjectId
 import pandas as pd
 
 import contact_settings
-from email_service import send_attendance_email, send_salary_paid_email
+from email_service import send_attendance_email, send_salary_paid_email, send_salary_published_email
 
 logger = logging.getLogger("attendance")
 
@@ -488,11 +488,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                         {"changes": {k: {"from": a, "to": b} for k, (a, b) in changed.items()}, "payment_status": row["payment_status"]})
         await log_activity(admin, "salary_adjusted", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", status=row["payment_status"], amount=row["net_payable"],
                            detail=f"bonus {upd['bonus']:g} · incentive {upd['incentive']:g} · advance {upd['advance']:g} · deduction {upd['deduction']:g} → net ₹{row['net_payable']:g}" + (" · marked PAID" if newly_paid else ""))
+        if newly_paid and not prev.get("published"):  # paying implies finalizing → employee can see it
+            await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": {"published": True, "published_at": now_utc().isoformat(), "published_by": admin.get("name", ""), "published_final": row["net_payable"]}})
+            row = await salary_row(emp, month, ist_today())
         if newly_paid and emp.get("email"):
             origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
             link = f"{origin}{upd['proof_url']}" if upd["proof_url"].startswith("/") else upd["proof_url"]
-            background.add_task(send_salary_paid_email, emp["email"], emp.get("name", ""), month, row["net_payable"], row["monthly_salary"], row["paid_days"],
-                                row["bonus"] + row["incentive"], row["advance"] + row["deduction"], upd["payment_date"], link, upd["utr"])
+            background.add_task(send_salary_paid_email, emp["email"], emp.get("name", ""), row, upd["payment_date"], link, upd["utr"])
             row["email_sent_to"] = emp["email"]
         return row
 
@@ -532,7 +534,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         published: bool
 
     @r.put("/admin/salary/{employee_id}/{month}/publish")
-    async def publish_salary(employee_id: str, month: str, body: PublishIn, request: Request, admin: dict = Depends(require_admin)):
+    async def publish_salary(employee_id: str, month: str, body: PublishIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_admin)):
         emp = (await employees([employee_id])).get(employee_id)
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
@@ -542,7 +544,12 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": upd, "$setOnInsert": {"employee_id": employee_id, "month": month}}, upsert=True)
         await audit(emp, month, "published" if body.published else "unpublished", row["net_payable"], row["net_payable"], row["net_payable"], admin, "")
         await log_activity(admin, "salary_published" if body.published else "salary_unpublished", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", amount=row["net_payable"])
-        return await salary_row(emp, month, ist_today())
+        final = await salary_row(emp, month, ist_today())
+        if body.published and emp.get("email") and final["payment_status"] != "paid":
+            origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
+            background.add_task(send_salary_published_email, emp["email"], emp.get("name", ""), final, f"{origin}/employee/attendance")
+            final["email_sent_to"] = emp["email"]
+        return final
 
     @r.get("/admin/salary/audit")
     async def salary_audit_log(month: Optional[str] = None, employee_id: Optional[str] = None, admin: dict = Depends(require_admin)):
@@ -579,7 +586,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         for p in pubs:
             r_ = await salary_row(full, p["month"], ist_today())
             out_rows.append({k: r_[k] for k in ("month", "monthly_salary", "per_day", "present", "late", "short_hours", "half_day", "absent", "paid_leave", "unpaid_leave", "weekly_off", "holiday", "sunday_worked",
-                                                 "sunday_extra", "attendance_deduction", "manual_adjustment", "net_payable", "payment_status", "payment_date", "published_at")} | {"bonus_incentive": round(r_["bonus"] + r_["incentive"], 2)})
+                                                 "sunday_extra", "attendance_deduction", "manual_adjustment", "net_payable", "payment_status", "payment_date", "published_at", "utr", "proof_url")} | {"bonus_incentive": round(r_["bonus"] + r_["incentive"], 2)})
         return {"items": out_rows}
     @r.get("/admin/attendance/export")
     async def export_attendance(format: str = "xlsx", date: Optional[str] = None, month: Optional[str] = None, employee_id: Optional[str] = None, admin: dict = Depends(require_admin)):

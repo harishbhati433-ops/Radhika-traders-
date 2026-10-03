@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import api from "../../lib/api";
-import { IndianRupee, Lock } from "lucide-react";
+import api, { fileUrl } from "../../lib/api";
+import { IndianRupee, Lock, Receipt } from "lucide-react";
 import { inr } from "./shared";
 
 export function MySalary() {
@@ -15,7 +15,8 @@ export function MySalary() {
         {items.map((s) => (
           <div key={s.month} className="rounded-2xl border border-slate-200 bg-white p-5" data-testid={`my-salary-${s.month}`}>
             <div className="flex items-start justify-between"><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">{new Date(`${s.month}-01`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</div><div className="mt-1 font-mono text-2xl font-bold text-slate-900" data-testid={`my-salary-final-${s.month}`}>{inr(s.net_payable)}</div><div className="text-[11px] text-slate-500">Final Salary</div></div>
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${s.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{s.payment_status === "paid" ? `Paid ${s.payment_date}` : "Payment pending"}</span></div>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${s.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`} data-testid={`my-salary-pay-${s.month}`}>{s.payment_status === "paid" ? `✓ Paid ${s.payment_date}` : "Payment pending"}</span></div>
+            {s.payment_status === "paid" && (s.utr || s.proof_url) && <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800" data-testid={`my-salary-proof-${s.month}`}>{s.utr && <span>UTR / Ref: <b className="font-mono">{s.utr}</b></span>}{s.proof_url && <a href={fileUrl(s.proof_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold underline"><Receipt className="h-3 w-3" /> View payment proof</a>}</div>}
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
               <dt>Base Salary</dt><dd className="text-right font-mono">{inr(s.monthly_salary)}</dd>
               <dt>Sunday Extra ({s.sunday_worked} worked)</dt><dd className="text-right font-mono text-teal-700">+{inr(s.sunday_extra)}</dd>
