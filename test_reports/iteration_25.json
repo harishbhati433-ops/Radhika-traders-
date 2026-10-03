@@ -1,0 +1,25 @@
+{
+  "summary": "FINAL salary spec (Monthly ÷ 30 basis) end-to-end verified. 18/18 backend pytest cases pass, admin SalaryTab UI validated (columns, recalc, publish toggle, date-deduction add/remove, Base Salary focus-retention), employee MySalary panel validated (shows only published months, zero ₹ amounts outside my-salary, Sunday Worked + Weekly Off cells present in monthly summary). Salary slip PDF contains 'Daily Salary Rate', 'Sunday Extra' and 'Final Payable Salary'. Audit entries created for date_deduction, date_deduction_removed, published, unpublished with previous_final/new_final/admin_name.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_salary_final_spec.py",
+    "/app/test_reports/pytest/iter25_salary.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "attendance_routes.py is 740+ lines — consider splitting admin/employee/export sub-routers for maintainability.",
+    "SalaryTab.jsx AdjustDialog close button relies on unlabeled lucide-X <button>; add data-testid='sal-dialog-close' for stable automation.",
+    "MySalary.jsx: items===null returns null → consider a lightweight skeleton to avoid blank flash."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_salary_final_spec.py"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100%"},
+  "test_credentials": "admin bhatiharish276@gmail.com/Radhika@2023; employee rahul.k/Emp@1234 (both from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Transient: Aug 2026 attendance (02 sunday_worked, 09 half_day on Sunday, 16 sunday-auto-promoted-from-short_hours), one date_deduction, publish/unpublish cycle. ALL CLEANED UP: db.attendance / salary_adjustments / salary_audit for rahul month 2026-08 are empty; salary restored to ₹15,000.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Spec verified: per_day=monthly/30 exact (400.0 at ₹12k, 200.0 at ₹6k, 500.0 at ₹15k). Sunday-worked logic (full/half) adds +rate / +0.5*rate to 'sunday_extra'. Remaining Sundays accumulate into weekly_off without deduction. derive() auto-promotes any check-in on Sunday to 'sunday_worked'. Employee /api/employee/salary endpoint intentionally omits note/date_deductions/reason keys (verified). All salary audit types present. PDF slip tested via pypdf extraction (installed to venv as it was missing). Admin login requires portal:'admin' in /api/auth/login body; both tokens returned under 'token' (not 'access_token').",
+  "rca of the issue": "N/A — no bugs found."
+}
