@@ -20,6 +20,7 @@ load_dotenv(ROOT_DIR / ".env")
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Form, Query, Header, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
@@ -2955,6 +2956,7 @@ api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 app.include_router(api)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2967,8 +2969,11 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _fresh_contact(request: Request, call_next):
-    await contact_settings.refresh_if_stale(db)
-    return await call_next(request)
+    await contact_settings.refresh_if_stale(db, ttl=60.0)
+    response = await call_next(request)
+    if request.url.path.startswith("/api/files/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
+    return response
 
 
 @app.on_event("startup")
@@ -2986,9 +2991,10 @@ async def startup():
         await db.login_attempts.create_index("identifier", unique=True)
         await db.reports.create_index("expires_at")
         await db.campaigns.create_index("slug")
-        for coll, key in (("users", "referral_code"), ("users", "mobile"), ("leads", "partner_id"), ("leads", "created_at"), ("leads", "campaign_id"),
-                          ("transactions", "user_id"), ("withdrawals", "user_id"), ("notifications", "user_id"), ("clicks", "user_id"),
-                          ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id"),
+        for coll, key in (("users", "referral_code"), ("users", "mobile"), ("users", "role"), ("leads", "partner_id"), ("leads", "created_at"), ("leads", "campaign_id"), ("leads", "status"), ("leads", "user_id"),
+                          ("transactions", "user_id"), ("transactions", "created_at"), ("withdrawals", "user_id"), ("withdrawals", "status"), ("withdrawals", "created_at"), ("notifications", "user_id"), ("clicks", "user_id"),
+                          ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id"), ("attendance", "date"), ("attendance", "status"), ("salary_audit", "employee_id"), ("salary_audit", "month"),
+                          ("login_history", "user_id"), ("security_logs", "user_id"), ("files", "storage_path"),
                           ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id")):
             await db[coll].create_index(key)
         await db.users.create_index("username", unique=True, partialFilterExpression={"username": {"$type": "string"}})
