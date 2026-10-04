@@ -13,7 +13,7 @@ const api = axios.create({ baseURL: API });
 // Short-lived GET cache: revisiting a panel renders instantly; any write clears it so lists never go stale after an action.
 const GET_TTL_MS = 30000;
 const getCache = new Map();
-const NO_CACHE = /\/(notifications|auth\/me|files\/|cron\/|statement|export|slip|download)/;
+const NO_CACHE = /\/(notifications|auth\/me|files\/|cron\/|statement|export|slip|download|employee\/attendance|attendance\/settings|attendance\/policy)/;
 const cacheKey = (c) => `${c.url}?${JSON.stringify(c.params || {})}`;
 const cacheable = (c) => (c.method || "get").toLowerCase() === "get" && !c.responseType && !c.noCache && !NO_CACHE.test(c.url || "");
 export const clearApiCache = () => getCache.clear();

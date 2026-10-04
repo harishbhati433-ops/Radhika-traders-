@@ -2974,6 +2974,9 @@ app.add_middleware(
 @app.middleware("http")
 async def _fresh_contact(request: Request, call_next):
     await contact_settings.refresh_if_stale(db, ttl=60.0)
+    if request.url.path.startswith("/api/"):
+        await office_timing.refresh(db)
+        await attendance_policy.refresh(db)
     response = await call_next(request)
     if request.url.path.startswith("/api/files/"):
         response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")

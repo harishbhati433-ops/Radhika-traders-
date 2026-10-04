@@ -428,9 +428,17 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         rows = [out(a, emps.get(a["employee_id"]), per_day_of(emps[a["employee_id"]], a["date"][:7])) for a in items if a["employee_id"] in emps]
 
         def absent_row(eid, e, d):
-            pd_ = per_day_of(e, d[:7])
-            return {"id": "", "employee_id": eid, "date": d, "status": "absent", "check_in_time": "", "check_out_time": "", "hours": None, "duration": "", "late": False, "late_minutes": 0, "extra_minutes": 0,
-                    "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": 0, "deduction": round(pd_, 2) if pd_ else None, "note": "", "virtual": True,
+            # No record for the day: Sunday → paid weekly off; today before auto-close → "not in yet"; otherwise absent (1 day deducted)
+            today_, now_ist = ist_today(), now_utc().astimezone(IST)
+            if is_sunday(d):
+                st, ded, pf = "weekly_off", None, 1
+            elif d == today_ and (now_ist.hour, now_ist.minute) < ot.auto_close():
+                st, ded, pf = "not_in", None, None
+            else:
+                pd_ = per_day_of(e, d[:7])
+                st, ded, pf = "absent", (round(pd_, 2) if pd_ else None), 0
+            return {"id": "", "employee_id": eid, "date": d, "status": st, "status_label": {"weekly_off": "Weekly Off", "not_in": "Not in yet"}.get(st, "Absent"), "check_in_time": "", "check_out_time": "", "hours": None, "duration": "", "late": False, "late_minutes": 0, "extra_minutes": 0,
+                    "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": pf, "deduction": ded, "note": "", "virtual": True,
                     "employee_name": e.get("name"), "employee_code": e.get("employee_code", ""), "username": e.get("username")}
         if date and not status:  # show employees with no record as Absent for that day
             have = {a["employee_id"] for a in items}

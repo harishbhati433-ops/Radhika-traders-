@@ -8,6 +8,7 @@ export const STATUS_META = {
   leave: ["Leave", "bg-violet-50 text-violet-700 border-violet-200"],
   holiday: ["Holiday", "bg-slate-100 text-slate-700 border-slate-200"],
   weekly_off: ["Weekly Off", "bg-slate-100 text-slate-600 border-slate-200"],
+  not_in: ["Not in yet", "bg-sky-50 text-sky-700 border-sky-200"],
   checkout_missing: ["Checkout Missing – Admin Review", "bg-orange-50 text-orange-700 border-orange-300"],
 };
 export const EDIT_STATUSES = ["present", "late", "half_day", "absent", "leave", "holiday", "weekly_off", "sunday_worked", "short_hours"];

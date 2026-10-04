@@ -53,6 +53,17 @@ async def load(db) -> None:
     for k in DEFAULT:
         if _HHMM.match(str(doc.get(k) or "")):
             _T[k] = doc[k]
+    global _loaded_at
+    _loaded_at = datetime.now(timezone.utc)
+
+
+_loaded_at = None
+
+
+async def refresh(db, ttl_seconds: int = 5) -> None:
+    """Re-read from DB every few seconds so every worker/replica sees admin changes immediately."""
+    if _loaded_at is None or (datetime.now(timezone.utc) - _loaded_at).total_seconds() > ttl_seconds:
+        await load(db)
 
 
 async def save(db, start_s: str, end_s: str, close_s: str, by: str) -> dict:

@@ -89,6 +89,17 @@ async def load(db) -> None:
             _P[k] = doc[k]
     if _P["mode"] not in MODES:
         _P["mode"] = "normal"
+    global _loaded_at
+    _loaded_at = datetime.now(timezone.utc)
+
+
+_loaded_at = None
+
+
+async def refresh(db, ttl_seconds: int = 5) -> None:
+    """Re-read from DB every few seconds so every worker/replica sees admin changes immediately."""
+    if _loaded_at is None or (datetime.now(timezone.utc) - _loaded_at).total_seconds() > ttl_seconds:
+        await load(db)
 
 
 async def save(db, body: dict, by: str) -> dict:

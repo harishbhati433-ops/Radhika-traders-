@@ -102,7 +102,7 @@ export function AttendanceTab() {
         {mode === "date" && <input type="date" value={date} max={todayIST()} onChange={(e) => setDate(e.target.value)} data-testid="att-filter-date" className={sel} />}
         {mode === "month" && <input type="month" value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} data-testid="att-filter-month" className={sel} />}
         <select value={emp} onChange={(e) => setEmp(e.target.value)} data-testid="att-filter-emp" className={sel}><option value="">All employees</option>{d.employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.employee_code})</option>)}</select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} data-testid="att-filter-status" className={sel}><option value="">All statuses</option>{Object.entries(STATUS_META).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} data-testid="att-filter-status" className={sel}><option value="">All statuses</option>{Object.entries(STATUS_META).filter(([k]) => k !== "not_in").map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
         <ExportButtons path="/admin/attendance/export" params={{ ...(mode === "month" ? { month } : { date: mode === "today" ? todayIST() : date }), ...(emp ? { employee_id: emp } : {}) }} testId="att-export" />
       </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
