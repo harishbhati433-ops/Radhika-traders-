@@ -36,6 +36,7 @@ const Campaigns = lazy(() => import("./pages/Campaigns"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const Partners = lazy(() => import("./pages/Partners"));
 const Signup = lazy(() => import("./pages/auth/Signup"));
+const Terms = lazy(() => import("./pages/Terms"));
 const AdminLogin = lazy(() => import("./pages/auth/AdminLogin"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ForgotEmail = lazy(() => import("./pages/auth/ForgotEmail"));
@@ -129,6 +130,7 @@ function App() {
 
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/terms" element={<Terms />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/employee/login" element={<EmployeeLogin />} />
             <Route path="/employee" element={E(<EmployeeDashboard />)} />

@@ -139,6 +139,8 @@ class RegisterIn(BaseModel):
     password: str
     address: Optional[str] = ""
     referred_by: Optional[str] = ""
+    accepted_terms: bool = False
+    terms_version: Optional[str] = ""
 
 
 class SettingsIn(BaseModel):
@@ -439,6 +441,8 @@ async def register(body: RegisterIn):
         raise HTTPException(status_code=503, detail={"code": "shutdown", **(await shutdown_state())})
     email = body.email.lower()
     mobile = _norm_mobile(body.mobile)
+    if not body.accepted_terms:
+        raise HTTPException(status_code=400, detail="Please accept the Partner Declaration & Terms to create your account.")
     if len(mobile) != 10:
         raise HTTPException(status_code=400, detail="Please enter a valid 10-digit mobile number.")
     existing = await db.users.find_one({"email": email})
@@ -458,6 +462,7 @@ async def register(body: RegisterIn):
         "password_hash": hash_password(body.password),
         "role": "customer",
         "email_verified": False,
+        "terms_accepted": {"version": (body.terms_version or "")[:20], "accepted_at": datetime.now(timezone.utc).isoformat()},
         "referral_code": generate_referral_code(),
         "kyc": {"status": "not_submitted"},
         "bank": {},
