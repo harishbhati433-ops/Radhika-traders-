@@ -49,7 +49,7 @@ def _now() -> str:
 
 
 def employee_out(u: dict) -> dict:
-    return {"id": str(u["_id"]), "name": u.get("name"), "username": u.get("username"), "mobile": u.get("mobile", ""),
+    return {"id": str(u["_id"]), "name": u.get("name"), "username": u.get("username"), "mobile": u.get("mobile", ""), "email": u.get("email", ""),
             "employee_code": u.get("employee_code", ""), "permissions": normalize_permissions(u.get("permissions")),
             "account_status": u.get("account_status", "active"), "created_at": u.get("created_at"), "last_login_at": u.get("last_login_at"),
             "created_by": u.get("created_by", "")}

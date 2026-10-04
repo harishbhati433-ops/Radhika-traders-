@@ -62,6 +62,12 @@ def is_late(check_in_iso: str) -> bool:
     return _ist_minutes(check_in_iso) > ot.start_min()
 
 
+def real_email(u: dict) -> str:
+    """Employee's real inbox; the auto placeholder (username@employee.radhikatraders.net) can't receive mail."""
+    e = (u.get("email") or "").strip().lower()
+    return "" if not e or e.endswith("@employee.radhikatraders.net") else e
+
+
 def paid_fraction(rec: dict) -> float:
     """Share of a day's salary earned by this record (1.0 = full day)."""
     st = rec.get("status")
@@ -332,8 +338,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
         targets = {a["email"].lower(): (a.get("name", "Admin"), True) for a in admins if a.get("email")}
         targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), ("Admin", True))
-        if full.get("email"):
-            targets.setdefault(full["email"].lower(), (full.get("name", ""), False))
+        if real_email(full):
+            targets.setdefault(real_email(full), (full.get("name", ""), False))
         for to, (name, for_admin) in targets.items():
             try:
                 await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
@@ -569,11 +575,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if newly_paid and not prev.get("published"):  # paying implies finalizing → employee can see it
             await db.salary_adjustments.update_one({"employee_id": employee_id, "month": month}, {"$set": {"published": True, "published_at": now_utc().isoformat(), "published_by": admin.get("name", ""), "published_final": row["payable_now"]}})
             row = await salary_row(emp, month, ist_today())
-        if newly_paid and emp.get("email"):
+        if newly_paid and real_email(emp):
             origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
             link = f"{origin}{upd['proof_url']}" if upd["proof_url"].startswith("/") else upd["proof_url"]
-            background.add_task(send_salary_paid_email, emp["email"], emp.get("name", ""), employee_view(row), upd["payment_date"], link, upd["utr"])
-            row["email_sent_to"] = emp["email"]
+            background.add_task(send_salary_paid_email, real_email(emp), emp.get("name", ""), employee_view(row), upd["payment_date"], link, upd["utr"])
+            row["email_sent_to"] = real_email(emp)
         return row
 
     class DateDeductionIn(BaseModel):
@@ -623,10 +629,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await audit(emp, month, "published" if body.published else "unpublished", row["payable_now"], row["payable_now"], row["payable_now"], admin, "")
         await log_activity(admin, "salary_published" if body.published else "salary_unpublished", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", amount=row["payable_now"])
         final = await salary_row(emp, month, ist_today())
-        if body.published and emp.get("email") and final["payment_status"] != "paid":
+        if body.published and real_email(emp) and final["payment_status"] != "paid":
             origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
-            background.add_task(send_salary_published_email, emp["email"], emp.get("name", ""), employee_view(final), f"{origin}/employee/attendance")
-            final["email_sent_to"] = emp["email"]
+            background.add_task(send_salary_published_email, real_email(emp), emp.get("name", ""), employee_view(final), f"{origin}/employee/attendance")
+            final["email_sent_to"] = real_email(emp)
         return final
 
     @r.get("/admin/salary/audit")
@@ -937,7 +943,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         async for emp in db.users.find({"role": "employee", "account_status": {"$nin": ["deleted", "disabled", "inactive"]}}, {"name": 1, "email": 1, "employee_code": 1, "joining_date": 1, "created_at": 1}):
             eid = str(emp["_id"])
             joined = (emp.get("joining_date") or emp.get("created_at") or "")[:10]
-            if not emp.get("email") or (joined and joined > today):
+            if not real_email(emp) or (joined and joined > today):
                 continue
             rec = recs.get(eid)
             kind = None
@@ -948,12 +954,12 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             if not kind:
                 continue
             try:
-                mid = await (send_attendance_reminder_email(emp["email"], emp.get("name", ""), emp.get("employee_code", ""), d, link) if kind == "checkin"
-                             else send_checkout_reminder_email(emp["email"], emp.get("name", ""), d, fmt_t(rec["check_in"]), link))
+                mid = await (send_attendance_reminder_email(real_email(emp), emp.get("name", ""), emp.get("employee_code", ""), d, link) if kind == "checkin"
+                             else send_checkout_reminder_email(real_email(emp), emp.get("name", ""), d, fmt_t(rec["check_in"]), link))
             except Exception as e:
                 logger.warning(f"{kind} reminder to {emp['email']} failed: {e}")
                 mid = None
-            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": emp["email"], "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
+            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": real_email(emp), "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
             sent += 1
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "sent": sent}})
         logger.info(f"attendance nudges {run_id}: {sent} email(s) sent for {today}")
