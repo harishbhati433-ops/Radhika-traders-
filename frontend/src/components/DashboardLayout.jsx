@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { Menu, X, LogOut, Download } from "lucide-react";
+import { Menu, X, LogOut, Download, ChevronDown } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
 import { canUser } from "../lib/perm";
@@ -60,24 +60,77 @@ export function DashboardLayout({ nav, children, title }) {
   const items = navForUser(nav, user);
   const routePerm = ROUTE_PERM[loc.pathname];
   const viewOnly = isEmp && routePerm && !canUser(user, routePerm, "edit");
+  const activeGroup = items.find((n) => n.to === loc.pathname)?.group || null;
+  const [openGroup, setOpenGroup] = useState(activeGroup);
+  useEffect(() => { setOpenGroup(activeGroup); setOpen(false); }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
 
   const doLogout = () => { logout(); navigate(isEmp ? "/employee/login" : user?.role === "admin" ? "/admin/login" : "/login", { replace: true }); };
 
+  // Preserve order: ungrouped items stand alone; grouped items collapse into accordion sections (one open at a time)
+  const sections = [];
+  for (const n of items) {
+    if (!n.group) { sections.push({ item: n }); continue; }
+    const g = sections.find((s) => s.group === n.group);
+    if (g) g.items.push(n); else sections.push({ group: n.group, items: [n] });
+  }
+
+  const LinkRow = ({ n, nested }) => {
+    const active = loc.pathname === n.to;
+    const Icon = n.icon;
+    return (
+      <Link to={n.to} data-testid={`side-${n.label.toLowerCase().replace(/[\s/]+/g, "-")}`} onClick={() => setOpen(false)}
+        className={`flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-semibold transition-colors ${nested ? "pl-9 pr-3" : "px-3"} ${active ? "bg-red-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>
+        <Icon style={{ width: 16, height: 16 }} className="shrink-0" /> <span className="truncate">{n.label}</span>
+      </Link>
+    );
+  };
+
   const SideLinks = () => (
-    <nav className="flex flex-col gap-1">
-      {items.map((n) => {
-        const active = loc.pathname === n.to;
-        const Icon = n.icon;
+    <nav className="flex flex-col gap-0.5" data-testid="sidebar-nav">
+      {sections.map((s) => {
+        if (s.item) return <LinkRow key={s.item.to} n={s.item} />;
+        const isOpen = openGroup === s.group;
+        const hasActive = s.items.some((n) => n.to === loc.pathname);
+        const GIcon = s.items[0].icon;
+        const id = s.group.toLowerCase().replace(/[^a-z]+/g, "-");
         return (
-          <Link key={n.to} to={n.to} data-testid={`side-${n.label.toLowerCase().replace(/\s/g, "-")}`}
-            onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-              active ? "bg-red-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>
-            <Icon className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} /> {n.label}
-          </Link>
+          <div key={s.group} className="rounded-lg">
+            <button type="button" onClick={() => setOpenGroup(isOpen ? null : s.group)} aria-expanded={isOpen} data-testid={`side-group-${id}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-bold transition-colors ${hasActive && !isOpen ? "bg-red-50 text-red-700" : "text-slate-800 hover:bg-slate-100"}`}>
+              <GIcon style={{ width: 16, height: 16 }} className={`shrink-0 ${hasActive ? "text-red-600" : "text-slate-500"}`} />
+              <span className="flex-1 truncate">{s.group}</span>
+              <span className="rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-500">{s.items.length}</span>
+              <ChevronDown style={{ width: 14, height: 14 }} className={`shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+            <div className={`grid transition-[grid-template-rows] duration-200 ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+              <div className="overflow-hidden"><div className="flex flex-col gap-0.5 py-0.5">{s.items.map((n) => <LinkRow key={n.to} n={n} nested />)}</div></div>
+            </div>
+          </div>
         );
       })}
     </nav>
+  );
+
+  const SidebarCard = () => (
+    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="mb-3 hidden lg:block"><Link to="/"><Logo size="sm" /></Link></div>
+      <div className="mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-3 text-white">
+        <SidebarAvatarButton />
+        <div className="min-w-0">
+          <div className="text-[11px] text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
+          <div className="truncate text-sm font-display font-bold">{user?.name}</div>
+          <div className="truncate text-[11px] text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]"><SideLinks /></div>
+      <div className="mt-2 border-t border-slate-100 pt-2">
+        <button onClick={doLogout} data-testid="dash-logout" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50">
+          <LogOut style={{ width: 16, height: 16 }} /> Logout
+        </button>
+        <InstallButton />
+      </div>
+    </div>
   );
 
   return (
@@ -87,32 +140,24 @@ export function DashboardLayout({ nav, children, title }) {
         <Link to="/"><Logo size="sm" /></Link>
         <div className="flex items-center gap-2">
           <ThemeToggle compact />
-          <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" className="rounded-lg p-2 text-slate-700">
+          <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" aria-label="Open menu" className="rounded-lg p-2 text-slate-700">
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
-        {/* Sidebar */}
-        <aside className={`${open ? "block" : "hidden"} lg:block fixed lg:sticky inset-x-0 top-14 lg:top-6 z-30 lg:z-auto lg:h-[calc(100vh-3rem)] w-full lg:w-60 shrink-0`}>
-          <div className="mx-4 lg:mx-0 rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="mb-4 hidden lg:block"><Link to="/"><Logo size="sm" /></Link></div>
-            <div className="mb-4 flex items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-4 text-white">
-              <SidebarAvatarButton />
-              <div className="min-w-0">
-                <div className="text-xs text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
-                <div className="truncate font-display font-bold">{user?.name}</div>
-                <div className="truncate text-xs text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
-              </div>
-            </div>
-            <SideLinks />
-            <button onClick={doLogout} data-testid="dash-logout" className="mt-2 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">
-              <LogOut style={{ width: 18, height: 18 }} /> Logout
-            </button>
-            <InstallButton />
-          </div>
+      {/* Mobile drawer */}
+      <div className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+        <div onClick={() => setOpen(false)} data-testid="dash-drawer-backdrop" className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"}`} />
+        <aside data-testid="dash-drawer" className={`absolute inset-y-0 left-0 flex w-[82vw] max-w-xs flex-col p-3 transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+          <div className="mb-2 flex items-center justify-between px-1"><Logo size="sm" /><button onClick={() => setOpen(false)} data-testid="dash-drawer-close" aria-label="Close menu" className="rounded-lg bg-white p-2 text-slate-700 shadow"><X className="h-5 w-5" /></button></div>
+          <div className="min-h-0 flex-1"><SidebarCard /></div>
         </aside>
+      </div>
+
+      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
+        {/* Desktop sidebar: fixed height, scrolls inside */}
+        <aside className="hidden lg:block sticky top-6 h-[calc(100vh-3rem)] w-60 shrink-0"><SidebarCard /></aside>
 
         {/* Content */}
         <main className="min-w-0 flex-1">
