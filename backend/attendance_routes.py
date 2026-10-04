@@ -193,17 +193,19 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             for k in ("late_minutes", "extra_minutes", "adjusted_minutes", "short_minutes"):
                 s[f"{k}_total"] += int(i.get(k) or 0)
             f = paid_fraction(i)
+            pf_stored = i.get("paid_fraction")
+            sun_f = 0.5 if st == "half_day" else (min(1.0, float(pf_stored)) if pf_stored is not None and i.get("check_out") else 1.0)  # Sunday extra is minute-wise (7h = full), manual status without times = full
             if sun:
                 if st in ("sunday_worked", "present", "late", "short_hours", "half_day"):
-                    sunday_extra_days += 0.5 if st == "half_day" else 1.0  # Sunday worked = +1 daily rate (half day = 50%), never minute-wise
+                    sunday_extra_days += sun_f
                 else:
                     sundays_off += 1
                 paid += 1.0  # Sunday itself is always a paid weekly off
             else:
                 paid += f
                 deduct_days += 1 - f
-                if st == "sunday_worked":  # admin marked a non-Sunday (holiday/off day) as "Sunday Worked" → honour the +1 extra
-                    sunday_extra_days += 1.0
+                if st == "sunday_worked":  # admin marked a non-Sunday (holiday/off day) as "Sunday Worked" → honour the extra
+                    sunday_extra_days += sun_f
         s["pre_joining_days"] = 0
         for d in range(1, last + 1):
             ds = f"{month}-{d:02d}"
