@@ -17,7 +17,7 @@ import pandas as pd
 import contact_settings
 import office_timing as ot
 import attendance_policy as ap
-from email_service import send_attendance_email, send_attendance_reminder_email, send_salary_paid_email, send_salary_published_email
+from email_service import send_attendance_email, send_attendance_reminder_email, send_checkout_reminder_email, send_salary_paid_email, send_salary_published_email
 
 logger = logging.getLogger("attendance")
 
@@ -412,7 +412,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         month = month or today[:7]
         items = await db.attendance.find({"employee_id": emp["id"], "date": {"$regex": f"^{month}"}}).sort("date", -1).to_list(100)
         rec = await db.attendance.find_one({"employee_id": emp["id"], "date": today})
-        return {"today": out(rec) if rec else None, "date": today, "month": month, "items": [out(a) for a in items], "summary": summarize(items, month, today),
+        return {"today": out(rec) if rec else None, "date": today, "month": month, "items": [out(a) for a in items], "summary": summarize(items, month, today), "nudge": nudge_for(rec, today),
                 "office": {"start": ot.start_12(), "end": ot.end_12(), "required_hours": REQUIRED_MINUTES / 60, "auto_close": ot.auto_close_12()},
                 "policy": ap.employee_policy(await db.users.find_one({"_id": ObjectId(emp["id"])}, {"attendance_mode": 1}) if ObjectId.is_valid(emp["id"]) else None)}
 
@@ -909,30 +909,56 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         return {"ok": True, "queued": True, "run_id": run_id}
 
     # ---------------- Cron: 10 AM attendance reminder ----------------
-    async def run_attendance_reminder(run_id: str, origin: str) -> None:
+    def nudge_for(rec: Optional[dict], today: str) -> Optional[dict]:
+        """In-app reminder shown on every employee page: check-in missing after office start, or check-out missing after office end."""
+        if is_sunday(today):
+            return None
+        now_m = int(_ist_minutes(now_utc().isoformat()))
+        if not rec:
+            if now_m >= ot.start_min() and now_m < ot.auto_close_min():
+                late = now_m - ot.start_min()
+                return {"type": "checkin", "title": "You have not checked in today", "message": f"Office started at {ot.start_12()}" + (f" — you are {late} min late. " if late else ". ") + "Press Check In now so today is not counted as Absent.", "cta": "Check In now"}
+            return None
+        if rec.get("check_in") and not rec.get("check_out") and rec.get("status") != "checkout_missing" and now_m >= ot.end_min():
+            return {"type": "checkout", "title": "Don't forget to check out", "message": f"Office ended at {ot.end_12()}. Check out before {ot.auto_close_12()} — otherwise today goes to admin review and stays unpaid until approved.", "cta": "Check Out now"}
+        return None
+
+    async def run_attendance_nudges(run_id: str, origin: str) -> None:
+        """Every 15 min (Mon–Sat): email check-in reminders after office start, check-out reminders after office end. One of each per employee per day."""
         today = ist_today()
         if is_sunday(today):
             return
-        marked = {a["employee_id"] for a in await db.attendance.find({"date": today}, {"employee_id": 1}).to_list(1000)}
-        already = {x["employee_id"] for x in await db.attendance_reminders.find({"date": today}, {"employee_id": 1}).to_list(1000)}
+        now_m = _ist_minutes(now_utc().isoformat())
+        recs = {a["employee_id"]: a for a in await db.attendance.find({"date": today}).to_list(1000)}
+        sent_kinds = {(x["employee_id"], x.get("kind", "checkin")) for x in await db.attendance_reminders.find({"date": today}, {"employee_id": 1, "kind": 1}).to_list(2000)}
         d = datetime.fromisoformat(today).strftime("%d %b %Y")
         link = f"{origin}/employee/attendance"
         sent = 0
         async for emp in db.users.find({"role": "employee", "account_status": {"$nin": ["deleted", "disabled", "inactive"]}}, {"name": 1, "email": 1, "employee_code": 1, "joining_date": 1, "created_at": 1}):
             eid = str(emp["_id"])
             joined = (emp.get("joining_date") or emp.get("created_at") or "")[:10]
-            if eid in marked or eid in already or not emp.get("email") or (joined and joined > today):
+            if not emp.get("email") or (joined and joined > today):
+                continue
+            rec = recs.get(eid)
+            kind = None
+            if not rec and ot.start_min() <= now_m < ot.auto_close_min() and (eid, "checkin") not in sent_kinds:
+                kind = "checkin"
+            elif rec and rec.get("check_in") and not rec.get("check_out") and rec.get("status") != "checkout_missing" and now_m >= ot.end_min() and (eid, "checkout") not in sent_kinds:
+                kind = "checkout"
+            if not kind:
                 continue
             try:
-                mid = await send_attendance_reminder_email(emp["email"], emp.get("name", ""), emp.get("employee_code", ""), d, link)
+                mid = await (send_attendance_reminder_email(emp["email"], emp.get("name", ""), emp.get("employee_code", ""), d, link) if kind == "checkin"
+                             else send_checkout_reminder_email(emp["email"], emp.get("name", ""), d, fmt_t(rec["check_in"]), link))
             except Exception as e:
-                logger.warning(f"attendance reminder to {emp['email']} failed: {e}")
+                logger.warning(f"{kind} reminder to {emp['email']} failed: {e}")
                 mid = None
-            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "email": emp["email"], "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
+            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": emp["email"], "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
             sent += 1
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "sent": sent}})
-        logger.info(f"attendance reminder {run_id}: {sent} email(s) sent for {today}")
+        logger.info(f"attendance nudges {run_id}: {sent} email(s) sent for {today}")
 
+    @r.post("/cron/attendance-nudges", status_code=202)
     @r.post("/cron/attendance-reminder", status_code=202)
     async def cron_attendance_reminder(request: Request, background: BackgroundTasks):
         # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
@@ -950,11 +976,11 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         run_id = request.headers.get("x-webhook-id") or body.get("run_id") or str(uuid4())
         if await db.cron_runs.find_one({"run_id": run_id}):
             return {"ok": True, "duplicate": True, "run_id": run_id}
-        await db.cron_runs.insert_one({"run_id": run_id, "schedule": "attendance-reminder", "started_at": now_utc().isoformat()})
+        await db.cron_runs.insert_one({"run_id": run_id, "schedule": "attendance-nudges", "started_at": now_utc().isoformat()})
         origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
         if not origin.startswith("https://") and "localhost" not in origin and "127.0.0.1" not in origin:
             origin = "https://" + origin.split("://", 1)[-1]
-        background.add_task(run_attendance_reminder, run_id, origin)
+        background.add_task(run_attendance_nudges, run_id, origin)
         return {"ok": True, "queued": True, "run_id": run_id}
 
     return r

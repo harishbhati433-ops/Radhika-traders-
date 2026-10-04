@@ -1,9 +1,9 @@
 crons:
-  - name: attendance-reminder
-    description: "Emails employees who have not checked in by 10:00 AM IST (Mon-Sat); Sunday is weekly off"
-    cron: "0 10 * * 1-6"
+  - name: attendance-nudges
+    description: "Every 15 min Mon-Sat 9 AM-7 PM IST: emails check-in reminders after office start and check-out reminders after office end (one of each per employee per day)"
+    cron: "*/15 9-19 * * 1-6"
     timezone: "Asia/Kolkata"
-    endpoint: "{{BASE_URL}}/api/cron/attendance-reminder"
+    endpoint: "{{BASE_URL}}/api/cron/attendance-nudges"
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true

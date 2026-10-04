@@ -250,6 +250,17 @@ async def send_employee_kyc_email(to: str, name: str, status: str, reason: str, 
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
+async def send_checkout_reminder_email(to: str, name: str, date_str: str, check_in_time: str, portal_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Reminder: please check out — {date_str}"
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+             f'<p style="font-size:14px;color:#334155">Office hours are over ({ot.start_12()} – {ot.end_12()}). You checked in at <b>{escape(check_in_time)}</b> today but have not checked out yet.</p>'
+             f'<p style="font-size:14px;color:#334155">Please press <b>Check Out</b> before <b>{ot.auto_close_12()}</b>. If you do not, the day is marked <b>Checkout Missing</b>, goes to admin review and stays unpaid until approved.</p>'
+             f'<p style="margin:16px 0"><a href="{escape(portal_link)}" style="background:#991B1B;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">Check Out Now</a></p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
 async def send_login_alert_email(to: str, name: str, when_ist: str, ip: str, device: str, reset_link: str, security_link: str) -> str | None:
     if not to:
         return None

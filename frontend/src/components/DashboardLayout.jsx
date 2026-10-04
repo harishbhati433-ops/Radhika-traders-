@@ -10,6 +10,7 @@ import { ROUTE_PERM } from "../pages/admin/nav";
 import { getTheme, setTheme, applyTheme } from "../lib/theme";
 import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
 import { SidebarAvatarButton } from "./AvatarUpload";
+import { AttendanceNudge } from "./AttendanceNudge";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -127,6 +128,7 @@ export function DashboardLayout({ nav, children, title }) {
               <Eye className="h-4 w-4" /> View-only access — you can see this module but cannot make changes. Ask the Super Admin for edit permission.
             </div>
           )}
+          {isEmp && <AttendanceNudge />}
           {children}
         </main>
       </div>
