@@ -430,3 +430,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Sidebar redesign (Oct 4): nav.js items carry `group` (Campaigns / Customers / Payments / Communication / Team & HR / Website & Settings; Dashboard standalone). DashboardLayout: accordion (one group open; active route group auto-opens; testids side-group-<slug>, side-<label-slug>), compact 13px rows, desktop sticky w-60 with internal scroll, mobile = slide-in drawer (dash-drawer, dash-drawer-backdrop, dash-drawer-close) with body scroll lock; closes on route change. Customer/employee flat navs render unchanged (no groups).
 - iteration_31: sidebar verified desktop+mobile (accordion, drawer, no overflow, logout). Fix: employee nav now flat (group stripped in navForUser) per spec.
 - Signup Terms consent (Oct 5, customer only): components/PartnerTerms.jsx (15 clauses, PARTNER_TERMS_VERSION 2026-10), TermsConsent.jsx (collapsible scroll box + single checkbox, testids terms-consent/terms-toggle/terms-scroll/terms-checkbox/terms-link), public /terms page. Signup: Send OTP disabled until checkbox; backend /auth/register requires accepted_terms (400 otherwise) and stores users.terms_accepted {version, accepted_at}. Admin panel untouched.
+
+
+## Remember Me (Login details save) — Oct 2026
+- Checkbox "Login details save rakho (baar-baar na mange)" on Customer (/login), Admin (/admin/login) and Employee (/employee/login) pages.
+- Ticked → identifier+password stored (base64) in localStorage key `rt_remember_<portal>`; form auto-fills next visit, checkbox stays ticked. Unticked → cleared. Logout does not clear it.
+- Files: `src/lib/rememberLogin.js`, `src/components/RememberMeCheckbox.jsx`. Test IDs: login-remember / admin-remember / employee-remember.

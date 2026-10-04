@@ -8,10 +8,15 @@ import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
+import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
+import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
+
+const saved = () => loadRemembered("customer");
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(() => saved()?.identifier || "");
+  const [password, setPassword] = useState(() => saved()?.password || "");
+  const [remember, setRemember] = useState(() => !!saved());
   const [loading, setLoading] = useState(false);
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
@@ -21,6 +26,7 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password, portal: "customer" });
+      if (remember) saveRemembered("customer", email, password); else clearRemembered("customer");
       loginWithToken(data.token, data.user);
       toast.success(`Welcome back, ${data.user.name}!`);
       nav("/dashboard");
@@ -46,6 +52,7 @@ export default function Login() {
           </div>
           <PasswordInput id="password" data-testid="login-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="••••••••" />
         </div>
+        <RememberMeCheckbox checked={remember} onChange={setRemember} testId="login-remember" />
         <button type="submit" data-testid="login-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />} Login
         </button>
