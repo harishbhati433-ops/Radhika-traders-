@@ -54,10 +54,15 @@ async def main():
         r = await c.post(f"{API}/employee/attendance/check-in", headers=E, json={"lat": OFFICE[0], "lng": OFFICE[1], "accuracy": 8, "selfie": selfie_data_url()})
         ok(r.status_code == 200 and r.json().get("selfie_url", "").startswith("/api/files/"), f"selfie check-in OK → {r.json().get('selfie_url')}")
         url = r.json()["selfie_url"]
+        r = await c.post(f"{API}/employee/attendance/check-out", headers=E, json={"lat": OFFICE[0], "lng": OFFICE[1], "accuracy": 8})
+        ok(r.status_code == 400 and "selfie" in r.json()["detail"].lower(), f"check-out without selfie → blocked: {r.json().get('detail')}")
+        r = await c.post(f"{API}/employee/attendance/check-out", headers=E, json={"lat": OFFICE[0], "lng": OFFICE[1], "accuracy": 8, "selfie": selfie_data_url()})
+        ok(r.status_code == 200 and r.json().get("selfie_out_url", "").startswith("/api/files/"), f"selfie check-out OK → {r.json().get('selfie_out_url')}")
+        url_out = r.json()["selfie_out_url"]
         img = await c.get(API.replace("/api", "") + url)
         ok(img.status_code == 200 and img.headers["content-type"].startswith("image/"), f"selfie served ({len(img.content)} bytes)")
         rows = (await c.get(f"{API}/admin/attendance", headers=A, params={"date": today, "employee_id": EMP})).json()["items"]
-        ok(rows and rows[0].get("selfie_url") == url and "selfie" in rows[0]["gps_label"], f"admin row gps_label: {rows[0]['gps_label']}")
+        ok(rows and rows[0].get("selfie_url") == url and rows[0].get("selfie_out_url") == url_out and "selfie in" in rows[0]["gps_label"] and "selfie out" in rows[0]["gps_label"], f"admin row gps_label: {rows[0]['gps_label']}")
 
         # retention: backdate record to 61 days ago and run cleanup
         await db.attendance.update_one({"employee_id": EMP, "date": today}, {"$set": {"date": "2026-07-01"}})
@@ -66,9 +71,10 @@ async def main():
         ok(r.status_code == 202, "cleanup cron accepted")
         await asyncio.sleep(3)
         rec = await db.attendance.find_one({"employee_id": EMP, "date": "2026-07-01"})
-        ok(rec and rec.get("selfie_url") is None and rec.get("selfie_expired"), "selfie removed after retention, record kept")
+        ok(rec and rec.get("selfie_url") is None and rec.get("selfie_out_url") is None and rec.get("selfie_expired"), "both selfies removed after retention, record kept")
         img = await c.get(API.replace("/api", "") + url)
-        ok(img.status_code == 404, "expired selfie no longer served")
+        img2 = await c.get(API.replace("/api", "") + url_out)
+        ok(img.status_code == 404 and img2.status_code == 404, "expired selfies no longer served")
         await db.attendance.delete_many({"employee_id": EMP, "date": "2026-07-01"})
         await db.cron_runs.delete_many({"run_id": "sim-selfie-1"})
 

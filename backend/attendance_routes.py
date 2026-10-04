@@ -23,6 +23,7 @@ logger = logging.getLogger("attendance")
 
 IST = timezone(timedelta(hours=5, minutes=30))
 REQUIRED_MINUTES = ot.REQUIRED_MINUTES  # office start/end/auto-close are admin-configurable via office_timing
+HALF_DAY_MINUTES = 210  # under 3.5h worked → auto "Half Day" mark (salary still minute-wise)
 STATUSES = ("present", "late", "short_hours", "half_day", "absent", "leave", "holiday", "weekly_off", "sunday_worked", "checkout_missing")
 TIMED = ("present", "late", "short_hours", "half_day", "sunday_worked")
 PAID_FULL = ("present", "late", "holiday", "weekly_off", "sunday_worked")
@@ -69,7 +70,7 @@ def paid_fraction(rec: dict) -> float:
     if st == "short_hours":
         return float(rec.get("paid_fraction") or 0)
     if st == "half_day":
-        return 0.5
+        return float(rec["paid_fraction"]) if rec.get("auto_half_day") and rec.get("paid_fraction") is not None else 0.5  # auto half day (<3.5h) stays minute-wise; manual half day = 50%
     if st == "leave":
         return 1.0 if rec.get("leave_paid") else 0.0
     return 0.0  # absent, checkout_missing (pending admin review)
@@ -90,6 +91,9 @@ def derive(rec: dict) -> dict:
                     "adjusted_minutes": int(round(min(late, extra))), "short_minutes": int(round(short)),
                     "paid_fraction": round(min(1.0, worked / REQUIRED_MINUTES), 4)})
         rec["status"] = "present" if rec["short_minutes"] == 0 else "short_hours"
+        rec["auto_half_day"] = False
+        if rec["status"] == "short_hours" and worked < HALF_DAY_MINUTES:  # under 3.5h → automatically marked Half Day (pay stays minute-wise)
+            rec["status"], rec["auto_half_day"] = "half_day", True
         if rec.get("date") and is_sunday(rec["date"]):
             rec["status"] = "sunday_worked"
     else:
@@ -133,7 +137,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                   "duration": fmt_dur(a.get("worked_minutes")), "paid_fraction": frac, "deduction": round(per_day * (1 - frac), 2) if per_day else None,
                   "auto_closed_time": fmt_t(a.get("auto_closed_at")) if a.get("auto_closed_at") else "",
                   "gps_label": " · ".join(x for x in [f"In {int(a['gps_in']['distance_m'])} m" if a.get("gps_in") else "", f"Out {int(a['gps_out']['distance_m'])} m" if a.get("gps_out") else "",
-                                                       "selfie" if a.get("selfie_url") else ("selfie expired" if a.get("selfie_expired") else "")] if x),
+                                                       "selfie in" if a.get("selfie_url") else ("selfie expired" if a.get("selfie_expired") else ""), "selfie out" if a.get("selfie_out_url") else ""] if x),
                   "edited_at_label": datetime.fromisoformat(a["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if a.get("edited_at") else "",
                   "status_history": [{**h, "edited_at_label": datetime.fromisoformat(h["edited_at"]).astimezone(IST).strftime("%d %b %Y, %I:%M %p") if h.get("edited_at") else ""} for h in (a.get("status_history") or [])]})
         if emp:
@@ -226,7 +230,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         s["paid_days"] = round(paid, 2)
         s["deduct_days"] = round(min(deduct_days, SALARY_DAYS), 4)
         s["sunday_extra_days"] = round(sunday_extra_days, 4)
-        s["short_day_fraction"] = round(sum(1 - paid_fraction(i) for i in items if i.get("status") == "short_hours" and not is_sunday(i["date"])), 4)
+        s["short_day_fraction"] = round(sum(1 - paid_fraction(i) for i in items if (i.get("status") == "short_hours" or (i.get("status") == "half_day" and i.get("auto_half_day"))) and not is_sunday(i["date"])), 4)
         return s
 
     async def salary_row(emp: dict, month: str, today: str) -> dict:
@@ -323,8 +327,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         gps = rec.get("gps_in" if kind == "in" else "gps_out")
         if gps:
             extra["gps"] = f"{int(gps['distance_m'])} m from office (within {gps['radius_m']} m · GPS ±{int(gps['accuracy_m'] or 0)} m)"
-        if kind == "in" and rec.get("selfie_url") and origin.startswith("https://"):
-            extra["selfie_link"] = f"{origin}{rec['selfie_url']}"
+        if rec.get("selfie_url" if kind == "in" else "selfie_out_url") and origin.startswith("https://"):
+            extra["selfie_link"] = f"{origin}{rec['selfie_url' if kind == 'in' else 'selfie_out_url']}"
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
         targets = {a["email"].lower(): (a.get("name", "Admin"), True) for a in admins if a.get("email")}
         targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), ("Admin", True))
@@ -354,14 +358,14 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if err:
             raise HTTPException(status_code=403, detail=err)
         extra = {"verify_mode": mode, f"gps_{kind}": gps}
-        if mode == "gps_selfie" and kind == "in":
+        if mode == "gps_selfie":  # live selfie on BOTH check-in and check-out
             if not b.selfie:
-                raise HTTPException(status_code=400, detail="A live selfie is required for check-in.")
+                raise HTTPException(status_code=400, detail=f"A live selfie is required for check-{kind}.")
             try:
-                extra["selfie_url"] = await ap.store_selfie(db, b.selfie, emp["id"])
+                extra["selfie_url" if kind == "in" else "selfie_out_url"] = await ap.store_selfie(db, b.selfie, emp["id"])
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
-            extra["selfie_at"] = now_utc().isoformat()
+            extra["selfie_at" if kind == "in" else "selfie_out_at"] = now_utc().isoformat()
         return extra
 
     @r.post("/employee/attendance/check-in")
@@ -398,7 +402,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await db.attendance.update_one({"_id": rec["_id"]}, {"$set": {k: rec.get(k) for k in ("check_out", "hours", "status", "late", "late_minutes", "worked_minutes", "extra_minutes", "adjusted_minutes", "short_minutes", "paid_fraction", "auto_status")} | {"updated_at": now_utc().isoformat()} | {k: v for k, v in extra.items() if k != "verify_mode"}})
         await log_activity(emp, "attendance_check_out", request, entity_type="attendance", entity_id=rec["date"], status=rec["status"], detail=f"Check-out {fmt_t(rec['check_out'])} · {fmt_dur(rec['worked_minutes'])}" + (f" · short {rec['short_minutes']} min" if rec["short_minutes"] else ""))
         saved = await db.attendance.find_one({"_id": rec["_id"]})
-        background.add_task(notify_punch, emp, saved, "out")
+        background.add_task(notify_punch, emp, saved, "out", (request.headers.get("origin") or str(request.base_url).rstrip("/")).replace("http://", "https://"))
         return out(saved)
 
     @r.get("/employee/attendance")

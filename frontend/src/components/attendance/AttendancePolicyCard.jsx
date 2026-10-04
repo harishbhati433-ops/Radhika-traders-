@@ -7,7 +7,7 @@ const ICONS = { normal: ShieldCheck, gps: MapPin, gps_selfie: Camera };
 const HINTS = {
   normal: "Current behaviour — tap Check In / Out from anywhere. Nothing changes.",
   gps: "Check-in / out allowed only when the phone's live GPS is within the office radius.",
-  gps_selfie: "GPS check + a live camera selfie at check-in (visible to you in the attendance table).",
+  gps_selfie: "GPS check + a live camera selfie at check-in AND check-out (both visible to you in the attendance table).",
 };
 
 function ModePicker({ value, onChange, disabledGps }) {

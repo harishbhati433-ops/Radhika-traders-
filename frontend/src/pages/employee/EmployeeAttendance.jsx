@@ -26,6 +26,7 @@ export default function EmployeeAttendance() {
   const [d, setD] = useState(null);
   const [busy, setBusy] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
+  const [selfieKind, setSelfieKind] = useState("check-in");
   const load = () => api.get("/employee/attendance", { params: { month } }).then(({ data }) => setD(data)).catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail)));
   useEffect(() => { load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -40,13 +41,13 @@ export default function EmployeeAttendance() {
     try {
       if (pol.mode === "normal") return await punch(kind);
       const pos = await getLivePosition();
-      if (kind === "check-in" && pol.selfie_required_on_checkin) { window.__rtPos = pos; setSelfieOpen(true); return; }
+      if (pol.mode === "gps_selfie") { window.__rtPos = pos; setSelfieKind(kind); setSelfieOpen(true); return; }
       await punch(kind, pos);
     } catch (e) { toast.error(e?.response ? formatApiErrorDetail(e.response?.data?.detail) : e.message, { duration: 8000 }); } finally { setBusy(false); }
   };
   const onSelfie = async (dataUrl) => {
     setSelfieOpen(false); setBusy(true);
-    try { await punch("check-in", { ...(window.__rtPos || {}), selfie: dataUrl }); }
+    try { await punch(selfieKind, { ...(window.__rtPos || {}), selfie: dataUrl }); }
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail), { duration: 8000 }); } finally { setBusy(false); }
   };
 
@@ -58,7 +59,7 @@ export default function EmployeeAttendance() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wider text-amber-300">Today · {d?.date} · Office {d?.office?.start || "10:00 AM"} – {d?.office?.end || "05:00 PM"} · 7h required · auto-close {d?.office?.auto_close || "06:00 PM"}</div>
-              {d?.policy?.mode && d.policy.mode !== "normal" && <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-amber-200" data-testid="att-policy-chip">📍 Live GPS required within {d.policy.radius_m} m of office{d.policy.selfie_required_on_checkin ? " · selfie at check-in" : ""}</div>}
+              {d?.policy?.mode && d.policy.mode !== "normal" && <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-amber-200" data-testid="att-policy-chip">📍 Live GPS required within {d.policy.radius_m} m of office{d.policy.selfie_required_on_checkin ? " · selfie at check-in & check-out" : ""}</div>}
               <Clockface />
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
                 {today ? <><span>In <b data-testid="att-today-in">{today.check_in_time || "—"}</b></span><span>·</span><span>Out <b data-testid="att-today-out">{today.check_out_time || (today.status === "checkout_missing" ? "Missing" : "—")}</b></span>{today.worked_minutes != null && <><span>·</span><span>Worked <b data-testid="att-today-dur">{dur(today.worked_minutes)}</b></span></>}{today.short_minutes > 0 && <><span>·</span><span className="text-amber-300">Short <b>{today.short_minutes} min</b></span></>}<StatusPill s={today.status} paid={today.leave_paid} testId="att-today-status" /></> : <span data-testid="att-today-none">Not checked in yet</span>}
@@ -100,7 +101,7 @@ export default function EmployeeAttendance() {
           </tbody>
         </table>
       </div>
-      <SelfieDialog open={selfieOpen} onCapture={onSelfie} onClose={() => { setSelfieOpen(false); setBusy(false); }} />
+      <SelfieDialog open={selfieOpen} kind={selfieKind} onCapture={onSelfie} onClose={() => { setSelfieOpen(false); setBusy(false); }} />
     </DashboardLayout>
   );
 }

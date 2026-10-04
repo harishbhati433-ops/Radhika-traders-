@@ -219,7 +219,7 @@ async def send_attendance_email(to: str, name: str, kind: str, emp_name: str, em
         foot = "Open Admin Panel → Attendance &amp; Salary to review or correct." if for_admin else "If anything looks wrong, please inform the admin."
     inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p><p style="font-size:14px;color:#334155">{lead}</p>'
              f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{table}</table>'
-             + (f'<p style="margin:0 0 14px"><a href="{escape(selfie_link)}" style="color:#991B1B;font-weight:bold;font-size:13px">View check-in selfie</a></p>' if selfie_link else "")
+             + (f'<p style="margin:0 0 14px"><a href="{escape(selfie_link)}" style="color:#991B1B;font-weight:bold;font-size:13px">View {"check-in" if kind == "in" else "check-out"} selfie</a></p>' if selfie_link else "")
              + f'<p style="font-size:12px;color:#64748b">{foot}</p>')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 

@@ -32,7 +32,7 @@ def mode_for(user: dict | None) -> str:
 
 def employee_policy(user: dict | None) -> dict:
     m = mode_for(user)
-    return {"mode": m, "mode_label": MODE_LABELS[m], "radius_m": _P["radius_m"], "gps_required": m != "normal", "selfie_required_on_checkin": m == "gps_selfie",
+    return {"mode": m, "mode_label": MODE_LABELS[m], "radius_m": _P["radius_m"], "gps_required": m != "normal", "selfie_required_on_checkin": m == "gps_selfie", "selfie_required_on_checkout": m == "gps_selfie",
             "office_label": _P["office_label"], "override": (user or {}).get("attendance_mode") in MODES}
 
 
@@ -135,14 +135,17 @@ def _delete_object(path: str) -> None:
 
 
 async def cleanup_selfies(db) -> int:
-    """Removes selfies older than the retention window (skips entries still pending admin review)."""
+    """Removes check-in/out selfies older than the retention window (skips entries still pending admin review)."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=int(_P["selfie_retention_days"]))).date().isoformat()
-    cur = db.attendance.find({"selfie_url": {"$nin": [None, ""]}, "date": {"$lt": cutoff}, "status": {"$ne": "checkout_missing"}}, {"selfie_url": 1})
+    cur = db.attendance.find({"$or": [{"selfie_url": {"$nin": [None, ""]}}, {"selfie_out_url": {"$nin": [None, ""]}}], "date": {"$lt": cutoff}, "status": {"$ne": "checkout_missing"}}, {"selfie_url": 1, "selfie_out_url": 1})
     n = 0
     async for a in cur:
-        path = a["selfie_url"].replace("/api/files/", "", 1)
-        await db.files.update_one({"storage_path": path}, {"$set": {"is_deleted": True, "deleted_at": datetime.now(timezone.utc).isoformat()}})
-        _delete_object(path)
-        await db.attendance.update_one({"_id": a["_id"]}, {"$set": {"selfie_url": None, "selfie_expired": True}})
-        n += 1
+        for url in (a.get("selfie_url"), a.get("selfie_out_url")):
+            if not url:
+                continue
+            path = url.replace("/api/files/", "", 1)
+            await db.files.update_one({"storage_path": path}, {"$set": {"is_deleted": True, "deleted_at": datetime.now(timezone.utc).isoformat()}})
+            _delete_object(path)
+            n += 1
+        await db.attendance.update_one({"_id": a["_id"]}, {"$set": {"selfie_url": None, "selfie_out_url": None, "selfie_expired": True}})
     return n
