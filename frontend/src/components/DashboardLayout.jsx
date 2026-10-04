@@ -33,7 +33,7 @@ function ThemeToggle({ compact }) {
 
 function navForUser(nav, user) {
   if (user?.role !== "employee") return nav.filter((n) => !n.employeeOnly);
-  return [{ to: "/employee", label: "My Workspace", icon: LayoutDashboard }, ...nav.filter((n) => n.employeeOnly || (n.perm && canUser(user, n.perm, "view")))];
+  return [{ to: "/employee", label: "My Workspace", icon: LayoutDashboard }, ...nav.filter((n) => n.employeeOnly || (n.perm && canUser(user, n.perm, "view"))).map(({ group, ...n }) => n)]; // employees get a flat list
 }
 
 function InstallButton() {
