@@ -170,8 +170,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         for a in stale:
             asyncio.create_task(notify_punch({"id": a["employee_id"]}, {**a, "status": "checkout_missing", "auto_closed_at": ts}, "auto"))
 
-    async def employees(ids: Optional[list] = None) -> dict:
+    async def employees(ids: Optional[list] = None, active_only: bool = False) -> dict:
         q = {"role": "employee", "account_status": {"$ne": "deleted"}}
+        if active_only:
+            q["account_status"] = {"$nin": ["deleted", "disabled", "inactive"]}  # ex-employees: no absent rows, no reminders, not in today's headcount
         if ids is not None:
             q = {"role": "employee", "_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}}
         return {str(u["_id"]): u for u in await db.users.find(q).sort("name", 1).to_list(1000)}
@@ -452,14 +454,15 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             return {"id": "", "employee_id": eid, "date": d, "status": st, "status_label": {"weekly_off": "Weekly Off", "not_in": "Not in yet"}.get(st, "Absent"), "check_in_time": "", "check_out_time": "", "hours": None, "duration": "", "late": False, "late_minutes": 0, "extra_minutes": 0,
                     "adjusted_minutes": 0, "short_minutes": None, "paid_fraction": pf, "deduction": ded, "note": "", "virtual": True,
                     "employee_name": e.get("name"), "employee_code": e.get("employee_code", ""), "username": e.get("username")}
-        if date and not status:  # show employees with no record as Absent for that day
+        active = {eid for eid, e in emps.items() if e.get("account_status", "active") not in ("disabled", "inactive")}
+        if date and not status:  # show active employees with no record as Absent for that day
             have = {a["employee_id"] for a in items}
             for eid, e in emps.items():
-                if eid not in have and (not employee_id or employee_id == eid) and date <= ist_today():
+                if eid in active and eid not in have and (not employee_id or employee_id == eid) and date <= ist_today():
                     rows.append(absent_row(eid, e, date))
         if status == "absent" and date:
             have = {a["employee_id"] for a in await db.attendance.find({"date": date}).to_list(1000)}
-            rows = [absent_row(eid, e, date) for eid, e in emps.items() if eid not in have and (not employee_id or employee_id == eid)] + rows
+            rows = [absent_row(eid, e, date) for eid, e in emps.items() if eid in active and eid not in have and (not employee_id or employee_id == eid)] + rows
         return {"items": rows, "employees": [{"id": k, "name": v.get("name"), "employee_code": v.get("employee_code", "")} for k, v in emps.items()],
                 "rules": {"office_start": ot.start_12(), "office_end": ot.end_12(), "required_minutes": REQUIRED_MINUTES, "auto_close": ot.auto_close_12()}}
 
@@ -514,7 +517,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
     async def attendance_dashboard(admin: dict = Depends(require_admin)):
         await auto_close_stale()
         today = ist_today()
-        emps = await employees()
+        emps = await employees(active_only=True)
         todays = await db.attendance.find({"date": today}).to_list(1000)
         by = {a["employee_id"]: a for a in todays if a["employee_id"] in emps}
         rows = [await salary_row(e, today[:7], today) for e in emps.values()]
