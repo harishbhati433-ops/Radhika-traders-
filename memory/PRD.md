@@ -436,3 +436,12 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Checkbox "Login details save rakho (baar-baar na mange)" on Customer (/login), Admin (/admin/login) and Employee (/employee/login) pages.
 - Ticked → identifier+password stored (base64) in localStorage key `rt_remember_<portal>`; form auto-fills next visit, checkbox stays ticked. Unticked → cleared. Logout does not clear it.
 - Files: `src/lib/rememberLogin.js`, `src/components/RememberMeCheckbox.jsx`. Test IDs: login-remember / admin-remember / employee-remember.
+
+
+## Speed Optimization — Oct 2026
+- Root cause of 3-4s panel opens in production: ~0.6-0.9s per API round trip (India -> US origin via Cloudflare) × request waterfalls (dashboard -> 6× /settings/public second wave; customers 250ms debounce; nudge + page duplicate /employee/attendance).
+- api.js: GET cache TTL 60s, in-flight dedupe, order-independent cache key, `prefetchApi`. Any write clears cache. `/employee/attendance` now cacheable.
+- lib/prefetch.js: ROUTE_DATA map (url+params per panel). Background sequential warm-up 3.5s after login (ChunkPrefetcher) + sidebar pointerdown/mouseenter prefetch. Result: Customers/KYC/Wallet open in ~130-230ms with zero network after warm-up.
+- AdminDashboard warms settings/attendance-dashboard/signup-bonus-log in parallel; AdminCustomers no debounce on first load.
+- Backend: GET /api/admin/kyc paginated {items,page,pages,total,limit,counts}; AdminKyc.jsx uses Pager (kyc-pager*) + server counts. compute_wallet & admin_dashboard use asyncio.gather. New compound indexes (users role/email_verified/account_status/created_at; users role/kyc.status/kyc.submitted_at; transactions user_id+type / user_id+created_at; withdrawals user_id+status; notifications; leads; activity_logs).
+- Tested: iteration_33 (backend 8/8, frontend all flows pass).

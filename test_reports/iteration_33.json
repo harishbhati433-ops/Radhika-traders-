@@ -1,0 +1,45 @@
+{
+  "summary": "Regression testing after site-wide speed refactor (api.js GET cache+dedupe, prefetch.js, paginated /api/admin/kyc, parallel admin_dashboard/compute_wallet). Backend: 8/8 pytest cases passed (KYC pagination shape, status filter, out-of-range page, limit clamp 10..200, /api/wallet keys, /api/admin/dashboard keys). Frontend: Admin dashboard, KYC Management (count cards, 5 tabs, pager, search by PAN TSTCU1234F, Deactivate→Activate round-trip restored Test Customer to Verified/Approved), Admin Customers (search 'test' filters correctly, Credit ₹1 then Adjust/Deduct ₹1 restored balance to ₹45 with instant UI update), Customer dashboard+Wallet+Withdrawals+MyLeads all load with correct data, Employee attendance Check-In→Check-Out works with immediate state transitions (cache cleared by POST). All critical flows pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/kyc", "issue": "counts object only includes statuses with n>0 (e.g. {verified:1} when others are 0). Review spec implies all 4 keys {pending,verified,rejected,deactivated}; FE AdminKyc must default missing to 0. Confirmed FE renders '0' correctly so no user-facing impact, but contract is thinner than spec."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_behavior": [
+    "GET /api/admin/kyc returns {items,page,pages,total,limit,counts}; ?status=verified total==counts.verified; page=999 -> empty items same total; limit=1 clamped to 10, limit=500 clamped to 200.",
+    "GET /api/wallet returns balance,total_earnings,total_credited,total_withdrawn,pending_withdrawal,bonus_locked.",
+    "GET /api/admin/dashboard returns all 9 keys listed in review request.",
+    "Admin dashboard /admin: all KPI cards, Money owed, Attendance & Salary summary, Withdrawal Requests (OPEN + schedule), Minimum Withdrawal (₹100), Referral Limits (2/day,10/month), Signup Bonus (ON, ₹20), Refer & Earn (₹20) all render with current values.",
+    "AdminKyc counts cards (Pending=0,Verified=1,Rejected=0,Deactivated=0), tabs with inline count badges (Verified 1), kyc-pager-info 'Showing 1-1 of 1', search PAN TSTCU1234F -> Test Customer, Reset clears.",
+    "KYC Deactivate -> Verified->0, Deactivated->1, badge changes to Deactivated, button becomes Verify/Activate; Activate -> back to Verified->1 Approved badge. Counts update instantly via POST cache invalidation.",
+    "Admin Customers: Rahul Sharma, Test Customer, harish bhati rows load fast; search 'test' narrows list; Credit₹1 -> balance ₹45->₹46 instantly (toast '₹1 credited to Test Customer'); Adjust/Deduct₹1 with reason 'Test credit reversed' -> balance ₹46->₹45 (toast). Final test state preserved: ₹45 balance, Verified KYC.",
+    "Customer dashboard: ₹45 available balance, bonus wallet ₹20, earnings ₹1342, campaigns slider, referral code RTA12499, 'People joined from your link (1)' section render. Wallet page: Main Wallet ₹45, transaction history 20+ entries including new 'Wallet adjustment (deducted) · Test credit reversed -₹1'. Withdrawals + My Leads (9 total) load fine.",
+    "Employee attendance: Check In button triggers immediate transition to Check Out (POST cleared cache -> status refreshes without reload); Check Out triggers toast 'Checked out at 01:22 AM · worked 0h 00m · short by 420 min' with Monthly summary + Rules + My Salary panel all rendered. Day complete badge appears."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_perf_refactor.py",
+    "/app/test_reports/pytest/perf_refactor.xml"
+  ],
+  "action_items": [
+    "Minor: Backend /api/admin/kyc counts could include all 4 keys defaulted to 0 to exactly match the review-request contract. Currently thinned to only >0 keys; FE handles gracefully but contract-level fix would be cleaner."
+  ],
+  "critical_code_review_comments": [
+    "api.js adapter does getCache.clear() on ANY non-GET; this is coarse but intentional. Note: for a logged-in multi-tab scenario, a write in tab A will not invalidate the in-memory cache of tab B (no cross-tab signal). Not blocking but worth adding a BroadcastChannel in future.",
+    "api.js adapter mutates response objects shallow-cloning via spread; if any caller mutates res.data it will corrupt the cached entry. Low likelihood but a deep-copy or Object.freeze on cache set would be safer."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_perf_refactor.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all flows pass)"},
+  "test_credentials": "admin bhatiharish276@gmail.com/Radhika@2023, customer testcust@example.com/Test@1234, employee rahul.k/Emp@1234",
+  "seed_data_creation": "No new seed data. Credit+Deduct ₹1 performed and reversed. Test Customer wallet balance restored to ₹45 (verified in UI + Customer wallet). KYC status restored to Verified/Approved. Note: total_earnings advanced by ₹1 (₹1341 -> ₹1342) as the Credit side-effect was not reversed by the Adjust/Deduct flow — this is design: Adjust does not touch earnings counter. Minor artifact only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Perf refactor regression verified. Test Customer balance=₹45, KYC Verified. Admin login path requires wait_for_function location.pathname==='/admin' (not wait_for_url '/admin**' which matches /admin/login too). AdminKyc exact='Deactivated' tab button has label 'Deactivated' when count=0 but 'Deactivated 1' when non-zero — use substring match. KYC rows render as cards but Playwright's locator('tr',has_text=..) still works on the Customers page (actual <tr>) but NOT on AdminKyc page where rows are divs."
+}
