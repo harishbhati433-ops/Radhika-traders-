@@ -161,6 +161,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         await db.app_lock_otps.insert_one({"user_id": user["id"], "code": code, "used": False, "attempts": 0, "expires_at": _iso(_now() + timedelta(minutes=OTP_MINUTES)), "created_at": _iso()})
         sent = await send_otp_email(email, u.get("name") or "", code, "app_lock")
         if not sent:
+            await db.app_lock_otps.delete_many({"user_id": user["id"]})
             raise HTTPException(status_code=502, detail="Could not send the OTP email right now. Please try again.")
         return {"ok": True, "email_masked": _mask(email), "message": f"OTP sent to {_mask(email)}"}
 

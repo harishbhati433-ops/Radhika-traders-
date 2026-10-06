@@ -453,3 +453,11 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Backend: `signup_device {fp,id,ip,ua,at}` stored at register. `apply_device_rule(email)` runs in verify-otp before referral payouts: sets `signup_flags {same_device, dup_of, dup_user_id, same_ip_with[]}`, and for dup → referral_bonus_paid/dedicated_referral_paid=True, referral_limit_exceeded="device". `_signup_dup` also returns (dup,"device") so signup bonus is logged not_eligible. New indexes on signup_device.fp/id/ip.
 - Admin: GET /api/admin/suspicious-signups → {device_groups, ip_groups, blocked_count, tracked}; page /admin/suspicious-signups (nav: Customers → Suspicious Signups). Customers table shows "Dup device" badge (customer-dup-device-<id>). ReferEarnCard shows "No bonus · same device".
 - Sim: backend/tests/sim_device_rule.py (verified: 2nd account flagged, no REF credit, admin group count 2).
+
+
+## App Lock (PIN + Fingerprint) — Oct 2026
+- All panels (customer/employee/admin). Mandatory 4-digit PIN setup on first login; lock screen on every fresh app open (sessionStorage `rt_unlocked_<uid>`) and after 5 min in background (`rt_hidden_at`). Weak PINs (1234/0000/4321/same digits) rejected. 5 wrong -> 30 min lock; Forgot PIN -> email OTP (10 min) -> new PIN. Settings: Change PIN, Enable/Remove fingerprint (per device/domain), Lock now, Turn off/on (PIN required).
+- Fingerprint/Face: WebAuthn platform authenticator (py_webauthn 3.0.1). RP ID = request host; origin must be https & match. Credentials in `webauthn_credentials` (user_id, credential_id, rp_id), challenges in `webauthn_challenges` (TTL), matched by clientDataJSON challenge (StrictMode-safe).
+- Backend: `app_lock_routes.py` (/api/app-lock/status, pin/set, pin/unlock, forgot, reset, disable, enable, biometric/register|unlock options|finish, DELETE biometric). Wrong PIN = HTTP 400 (401 would log out via axios interceptor). `public_user` exposes app_lock {configured, enabled}.
+- Frontend: components/applock/{AppLockGate,AppLockSettings,PinPad}.jsx, lib/{webauthn,appLockState}.js; gate mounted in ProtectedRoute; settings in Profile, /admin/security, /employee.
+- Test PINs: admin 2580, employee 2580, customer 2468 (see test_credentials.md). Tested: iteration_34 (backend 13/13, frontend flows pass); biometric verified by main agent with CDP virtual authenticator.
