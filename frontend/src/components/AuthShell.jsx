@@ -2,8 +2,9 @@ import { Link } from "react-router-dom";
 import { Logo } from "./Logo";
 import { MessageCircle, Mail } from "lucide-react";
 import { useContact, waLink, fmtWa } from "../lib/contact";
+import { InstallAppCard } from "./InstallAppCard";
 
-export function AuthShell({ title, subtitle, children }) {
+export function AuthShell({ title, subtitle, children, showInstall = true }) {
   const contact = useContact();
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -31,6 +32,7 @@ export function AuthShell({ title, subtitle, children }) {
               <a href={`mailto:${contact.support_email}`} data-testid="auth-support-email" className="inline-flex items-center gap-1 break-all font-semibold text-red-700 hover:underline"><Mail className="h-3.5 w-3.5" /> {contact.support_email}</a>
             </div>
           </div>
+          {showInstall && <InstallAppCard />}
         </div>
       </div>
     </div>

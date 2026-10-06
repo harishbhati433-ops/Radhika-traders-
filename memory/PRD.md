@@ -485,3 +485,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - components/NetworkBanner.jsx (mounted in App): offline (dark) / weak connection (amber, "showing saved data from HH:MM") with Retry; auto-hides on first successful request.
 - sw.js v4: navigation network-first with 4s timeout → cached shell; hashed JS/CSS/images cache-first; Google Fonts stale-while-revalidate.
 - Verified: wallet page offline shows ₹45 + transactions from saved copy with banner; back online banner disappears; offline write shows clear message; retry succeeded after reconnect.
+
+
+## Install App card on Login/Signup — Oct 2026
+- components/InstallAppCard.jsx rendered at bottom of AuthShell (customer Login/Signup/Forgot pages; hidden on Admin & Employee login via showInstall={false}; hidden inside the installed app). Android/Chrome: one-tap install via captured beforeinstallprompt (`triggerInstall`), else toast with Chrome menu steps; iPhone: Share → Add to Home Screen guide. Test id install-app-card / install-app-btn / install-app-ios.

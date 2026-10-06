@@ -45,7 +45,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <AuthShell title="Admin Access" subtitle="Restricted — Radhika Traders control panel">
+    <AuthShell showInstall={false} title="Admin Access" subtitle="Restricted — Radhika Traders control panel">
       <form onSubmit={submit} className="space-y-4">
         <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-3 text-sm text-amber-300"><Lock className="h-4 w-4" /> Authorised personnel only</div>
         {lockMsg && (

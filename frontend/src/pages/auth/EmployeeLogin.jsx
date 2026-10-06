@@ -36,7 +36,7 @@ export default function EmployeeLogin() {
   };
 
   return (
-    <AuthShell title="Employee Login" subtitle="Radhika Traders team workspace">
+    <AuthShell showInstall={false} title="Employee Login" subtitle="Radhika Traders team workspace">
       <form onSubmit={submit} className="space-y-4" data-testid="employee-login-form">
         <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-3 text-sm text-amber-300"><BadgeCheck className="h-4 w-4" /> Use the username given by your Super Admin</div>
         <div><Label>Username</Label><Input data-testid="employee-username" autoCapitalize="none" required value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} className="mt-1.5" placeholder="e.g. rahul.k" /></div>
