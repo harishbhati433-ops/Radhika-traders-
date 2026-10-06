@@ -21,7 +21,7 @@ export function InstallAppCard() {
 
   const install = () => {
     if (triggerInstall()) return;
-    toast.info(ios ? "iPhone: Share button → 'Add to Home Screen' पर tap करें" : "Chrome menu (⋮) → 'Install app' / 'Add to Home screen' चुनें", { duration: 7000 });
+    toast.info(ios ? "On iPhone: tap Share → Add to Home Screen." : "Open the Chrome menu (⋮) and choose 'Install app' or 'Add to Home screen'.", { duration: 7000 });
   };
 
   return (
@@ -29,20 +29,20 @@ export function InstallAppCard() {
       <div className="flex items-center gap-3">
         <img src="/icons/icon-192.png" alt="Radhika Traders app" className="h-12 w-12 shrink-0 rounded-xl ring-1 ring-amber-400/50" />
         <div className="min-w-0 flex-1">
-          <div className="font-display text-sm font-extrabold leading-tight">Radhika Traders App download करें</div>
-          <div className="mt-0.5 text-[11px] text-slate-300">Free · सिर्फ़ 1 MB · सीधे Dashboard खुलता है · weak network पर भी चलता है</div>
+          <div className="font-display text-sm font-extrabold leading-tight">Get the Radhika Traders App</div>
+          <div className="mt-0.5 text-[11px] text-slate-300">Official partner app · Faster, secure access to campaigns, wallet & earnings</div>
         </div>
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-200">
-        {["One-tap open", "Fingerprint / PIN lock", "Fast & offline-ready", "Earnings alerts"].map((f) => <li key={f} className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> {f}</li>)}
+        {["Opens straight to your dashboard", "PIN & fingerprint protection", "Reliable on slow networks", "Instant earning updates"].map((f) => <li key={f} className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> {f}</li>)}
       </ul>
       {ios ? (
         <div data-testid="install-app-ios" className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-[11px] leading-relaxed text-slate-100">
-          <b>iPhone:</b> नीचे <Share className="inline h-3.5 w-3.5 text-sky-300" /> <b>Share</b> दबाएँ → <PlusSquare className="inline h-3.5 w-3.5" /> <b>Add to Home Screen</b> → <b>Add</b>
+          <b>iPhone:</b> tap <Share className="inline h-3.5 w-3.5 text-sky-300" /> <b>Share</b> → <PlusSquare className="inline h-3.5 w-3.5" /> <b>Add to Home Screen</b> → <b>Add</b>
         </div>
       ) : (
         <button type="button" onClick={install} data-testid="install-app-btn" className="rt-gradient-btn mt-3 flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold">
-          {ready ? <Download className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />} {ready ? "Install App (1 tap)" : "Download App"}
+          {ready ? <Download className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />} Install App
         </button>
       )}
     </div>
