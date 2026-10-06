@@ -5,14 +5,51 @@ import { Label } from "./ui/label";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { formatPan, formatAadhaar, formatIfsc, panError, aadhaarError, ifscError, upiError } from "../lib/validators";
 import { toast } from "sonner";
-import { UserCog, Loader2, History } from "lucide-react";
+import { UserCog, Loader2, History, Mail, AlertTriangle } from "lucide-react";
 import { IfscBankInfo } from "./IfscBankInfo";
+import { useAuth } from "../context/AuthContext";
+
+// Admin-only: change a customer's login email; the customer must verify the new email by OTP at next login.
+function EmailField({ d, customerId, isAdmin, onChanged }) {
+  const [edit, setEdit] = useState(false);
+  const [email, setEmail] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const pend = d.pending_email_verification;
+  const save = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Enter a valid email");
+    if (!window.confirm(`Change login email for ${d.name}?\n\n${d.email} → ${email.toLowerCase()}\n\nCustomer will be logged out and must verify the new email with an OTP at next login.`)) return;
+    setBusy(true);
+    try { const { data } = await api.put(`/admin/customers/${customerId}/email`, { new_email: email.trim(), reason }); toast.success(data.message); setEdit(false); setEmail(""); setReason(""); await onChanged(); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between"><Label>Email (login)</Label>{isAdmin && !edit && <button type="button" onClick={() => setEdit(true)} data-testid="cust-edit-email-change" className="text-xs font-bold text-red-600 hover:underline">Change email</button>}</div>
+      <Input value={d.email} disabled data-testid="cust-edit-email" className="mt-1.5 bg-slate-50" />
+      {pend && <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800" data-testid="cust-edit-email-pending"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span><b>Verification pending</b> — changed from {pend.old_email} on {fmt(pend.changed_at)} by {pend.changed_by}. Customer must enter the OTP sent to the new email at next login.</span></div>}
+      {edit && (
+        <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50/60 p-3" data-testid="cust-edit-email-form">
+          <div><Label className="text-xs">New email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="cust-edit-email-new" placeholder="new.email@gmail.com" className="mt-1 bg-white" autoFocus /></div>
+          <div><Label className="text-xs">Reason (optional)</Label><Input value={reason} onChange={(e) => setReason(e.target.value)} data-testid="cust-edit-email-reason" placeholder="Old Gmail blocked / password forgotten" className="mt-1 bg-white" /></div>
+          <p className="text-[11px] text-slate-600">Customer is logged out everywhere; at next login an OTP goes to the new email and must be verified before continuing. A notice is sent to the old email.</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={save} disabled={busy} data-testid="cust-edit-email-save" className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Update email</button>
+            <button type="button" onClick={() => setEdit(false)} data-testid="cust-edit-email-cancel" className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const TABS = [["profile", "Profile"], ["kyc", "KYC & Bank"], ["history", "Change Log"]];
 const fmt = (iso) => (iso || "").slice(0, 16).replace("T", " ");
 const KYC_LABELS = { pan: "PAN", aadhaar: "Aadhaar", bank_account: "Bank A/C", ifsc: "IFSC", upi: "UPI", account_holder: "Holder" };
 
 export function CustomerEditDialog({ customerId, open, onClose, onDone, initialTab = "profile" }) {
+  const { user: me } = useAuth();
   const [tab, setTab] = useState(initialTab);
   const [d, setD] = useState(null);
   const [p, setP] = useState({});
@@ -57,7 +94,7 @@ export function CustomerEditDialog({ customerId, open, onClose, onDone, initialT
         {d && tab === "profile" && (
           <form onSubmit={saveProfile} className="space-y-3">
             <div><Label>Full Name</Label>{inp(p, setP, "name", { "data-testid": "cust-edit-name", required: true })}</div>
-            <div><Label>Email (login — not editable)</Label><Input value={d.email} disabled className="mt-1.5 bg-slate-50" /></div>
+            <EmailField d={d} customerId={customerId} isAdmin={me?.role === "admin"} onChanged={async () => { await load(); onDone?.(); }} />
             <div><Label>Mobile</Label>{inp(p, setP, "mobile", { "data-testid": "cust-edit-mobile", inputMode: "numeric" })}</div>
             <div><Label>Address</Label>{inp(p, setP, "address", { "data-testid": "cust-edit-address" })}</div>
             <div><Label>Date of Birth</Label>{inp(p, setP, "dob", { "data-testid": "cust-edit-dob", type: "date" })}</div>
@@ -82,6 +119,7 @@ export function CustomerEditDialog({ customerId, open, onClose, onDone, initialT
         )}
         {d && tab === "history" && (
           <div className="space-y-4 text-sm" data-testid="cust-edit-history">
+            <Section title="Login email changes" items={d.email_history} render={(h) => <div><span className="text-slate-500 line-through">{h.old_email}</span> → <b>{h.new_email}</b>{h.reason ? ` · ${h.reason}` : ""} · verified {fmt(h.verified_at)}</div>} byKey="changed_by" atKey="changed_at" />
             <Section title="Profile changes" items={d.profile_history} render={(h) => Object.entries(h.changes || {}).map(([f, c]) => <div key={f}><b className="capitalize">{f}</b>: <span className="text-slate-500 line-through">{c.from || "—"}</span> → <b>{c.to}</b></div>)} />
             <Section title="KYC changes" items={d.kyc_history} render={(h) => Object.keys(h.changes || {}).length ? Object.entries(h.changes).map(([f, c]) => <div key={f}><b>{KYC_LABELS[f] || f}</b>: <span className="text-slate-500 line-through">{c.from || "—"}</span> → <b>{c.to}</b></div>) : <div>KYC submitted · status {h.status}</div>} />
             <Section title="Wallet adjustments" items={d.wallet_adjustments} render={(a) => <div><b className="capitalize">{a.mode}</b> ₹{a.amount} · ₹{a.balance_before} → ₹{a.balance_after} · {a.reason}</div>} byKey="admin_email" atKey="created_at" />

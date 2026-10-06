@@ -29,7 +29,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp, needs_rehash,
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
@@ -104,6 +104,7 @@ def public_user(u: dict) -> dict:
         "kyc": u.get("kyc", {"status": "not_submitted"}),
         "bank": u.get("bank", {}),
         "signup_flags": u.get("signup_flags"),
+        "email_change_pending": bool(u.get("pending_email_verification")),
         "app_lock": {"configured": bool((u.get("app_lock") or {}).get("pin_hash")), "enabled": (u.get("app_lock") or {}).get("enabled", True)},
         "created_at": u.get("created_at"),
         "username": u.get("username"),
@@ -272,6 +273,15 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str
     portal: str = "customer"
+
+
+class LoginEmailOtpIn(LoginIn):
+    code: str
+
+
+class AdminEmailChangeIn(BaseModel):
+    new_email: EmailStr
+    reason: str = ""
 
 
 class ForgotIn(BaseModel):
@@ -760,6 +770,14 @@ async def login(body: LoginIn, request: Request, background: BackgroundTasks):
         raise HTTPException(status_code=403, detail="Admin accounts cannot log in here. Please use the Admin Login page.")
     if user["role"] == "customer" and not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="Please verify your email first")
+    if user["role"] == "customer" and user.get("pending_email_verification"):
+        await _send_email_change_otp(user)
+        return {"otp_required": True, "email": email, "message": "Your login email was updated by Radhika Traders. Enter the OTP sent to this new email to continue."}
+    return await _finish_login(user, body, request, background)
+
+
+async def _finish_login(user: dict, body: LoginIn, request: Request, background: BackgroundTasks):
+    email = user["email"]
     token = create_access_token(str(user["_id"]), email, user["role"], user.get("token_version", 0))
     if user["role"] == "admin":
         origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
@@ -768,6 +786,76 @@ async def login(body: LoginIn, request: Request, background: BackgroundTasks):
         new_hash = await asyncio.to_thread(hash_password, body.password)
         await db.users.update_one({"_id": user["_id"], "password_hash": user["password_hash"]}, {"$set": {"password_hash": new_hash}})
     return {"token": token, "user": public_user(user)}
+
+
+async def _send_email_change_otp(user: dict) -> bool:
+    """OTP to the admin-set new email; throttled to one per 45s so repeated logins don't spam."""
+    email = user["email"]
+    recent = await db.otp_codes.find_one({"email": email, "purpose": "email_change", "used": False, "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()}})
+    if recent:
+        return True
+    code = generate_otp()
+    await db.otp_codes.delete_many({"email": email, "purpose": "email_change"})
+    await db.otp_codes.insert_one({"email": email, "code": code, "purpose": "email_change", "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(), "used": False, "created_at": now_iso()})
+    sent = await send_otp_email(email, user.get("name", ""), code, "email_change")
+    logger.info(f"[OTP email_change] {email} -> {code} (sent={bool(sent)})")
+    return bool(sent)
+
+
+@api.post("/auth/login/resend-email-otp")
+async def login_resend_email_otp(body: LoginIn):
+    user = await db.users.find_one({"email": body.email.lower()})
+    if not user or not await asyncio.to_thread(verify_password, body.password, user.get("password_hash", "")) or not user.get("pending_email_verification"):
+        raise HTTPException(status_code=400, detail="Invalid request.")
+    if not await _send_email_change_otp(user):
+        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please try again in a minute.")
+    return {"message": "OTP sent"}
+
+
+@api.post("/auth/login/verify-email-otp")
+async def login_verify_email_otp(body: LoginEmailOtpIn, request: Request, background: BackgroundTasks):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not await asyncio.to_thread(verify_password, body.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    pend = user.get("pending_email_verification")
+    if not pend:
+        return await _finish_login(user, body, request, background)
+    rec = await db.otp_codes.find_one({"email": email, "purpose": "email_change", "used": False})
+    if not rec or rec["code"] != body.code.strip():
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    hist = {**pend, "verified_at": now_iso(), "new_email": email}
+    await db.users.update_one({"_id": user["_id"]}, {"$unset": {"pending_email_verification": ""}, "$set": {"email_verified": True}, "$push": {"email_history": hist}})
+    await _log_security(str(user["_id"]), "email_change_verified", request, f"{pend.get('old_email')} → {email}")
+    user = await db.users.find_one({"_id": user["_id"]})
+    return await _finish_login(user, body, request, background)
+
+
+@api.put("/admin/customers/{uid}/email")
+async def admin_change_customer_email(uid: str, body: AdminEmailChangeIn, request: Request, admin: dict = Depends(require_admin)):
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(status_code=404, detail="Customer not found")
+    u = await db.users.find_one({"_id": ObjectId(uid), "role": "customer"})
+    if not u:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    new_email = body.new_email.lower().strip()
+    if new_email == u["email"]:
+        raise HTTPException(status_code=400, detail="This is already the customer's email.")
+    if await db.users.find_one({"email": new_email}):
+        raise HTTPException(status_code=400, detail="This email is already used by another account.")
+    old_email = u["email"]
+    pend = {"old_email": old_email, "changed_by": admin.get("email") or admin.get("username", ""), "changed_at": now_iso(), "reason": body.reason.strip()[:200]}
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"email": new_email, "pending_email_verification": pend}, "$inc": {"token_version": 1}})
+    await db.otp_codes.delete_many({"email": old_email})
+    await _log_security(uid, "email_changed_by_admin", request, f"{old_email} → {new_email}")
+    await log_activity(admin, "customer_email_changed", request, entity_type="customer", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="updated", detail=f"{old_email} → {new_email}")
+    if not old_email.endswith("@employee.radhikatraders.net"):
+        asyncio.create_task(send_email(to=old_email, subject="Your Radhika Traders login email was changed",
+                                       html=_wrap("Login email changed", f"<p>Hi {u.get('name', '')},</p><p>Radhika Traders updated the login email on your partner account to <b>{new_email}</b>. From now on, please log in with the new email. If you did not request this, contact us immediately at radhikatradersofficial@gmail.com.</p>")))
+    return {"ok": True, "email": new_email, "message": f"Email updated. {u.get('name', 'Customer')} must verify {new_email} with an OTP at next login."}
 
 
 @api.get("/auth/me")
@@ -2500,6 +2588,8 @@ async def admin_customer_detail(uid: str, admin: dict = Depends(require_perm("cl
     pu["wallet"] = await compute_wallet(uid)
     pu["profile_history"] = list(reversed(u.get("profile_history", [])))[:50]
     pu["kyc_history"] = list(reversed(u.get("kyc_history", [])))[:50]
+    pu["email_history"] = list(reversed(u.get("email_history", [])))[:20]
+    pu["pending_email_verification"] = u.get("pending_email_verification")
     adj = await db.wallet_adjustments.find({"user_id": uid}).sort("created_at", -1).to_list(50)
     pu["wallet_adjustments"] = [{**{k: v for k, v in a.items() if k != "_id"}, "id": str(a["_id"])} for a in adj]
     txns = await db.transactions.find({"user_id": uid}).sort("created_at", -1).to_list(30)

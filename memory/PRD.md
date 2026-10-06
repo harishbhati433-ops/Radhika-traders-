@@ -467,3 +467,10 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Reference: user shared a Click2Track video; wanted a professional opening. Implemented inline HTML splash in public/index.html (#rt-splash: dark #0B0F17, red radial glow, grain, logo mark pop with 2 pulsing rings, wordmark, tagline, gradient progress bar, footer chips). Renders before JS; min 1.3s; fades 0.5s; safety auto-dismiss 9s.
 - Handover: App.js `SplashDismiss` + `Fallback` (holds splash until first lazy route renders; Fallback itself is a light logo-pulse + top progress bar). `window.__rtSplashDone()`.
 - Entrance motion: `.rt-enter` (+ -1/-2/-3 stagger) in index.css; applied to AuthShell (logo/title/form/support box), DashboardLayout <main> (keyed by pathname), lock screen card. App-lock loading state shows pulsing logo on dark. sw.js cache bumped to rt-pwa-v3. PWA manifest background matches splash (#0B0F17).
+
+
+## Admin: Change Customer Login Email (OTP-gated) — Oct 2026
+- PUT /api/admin/customers/{uid}/email {new_email, reason} (super admin only): validates unique/different, sets `email` + `pending_email_verification {old_email, changed_by, changed_at, reason}`, bumps token_version (logs customer out everywhere), notifies OLD email, security log + activity log.
+- Login: password OK + pending flag -> returns {otp_required:true} and sends OTP (purpose email_change, 10 min, 45s throttle) to the NEW email. POST /api/auth/login/verify-email-otp {email,password,code} -> clears flag, pushes `email_history`, returns token. POST /api/auth/login/resend-email-otp.
+- UI: CustomerEditDialog Profile tab -> "Change email" (admin only) inline form + pending banner; Change Log tab shows "Login email changes"; Customers table badge "Email unverified" (customer-email-pending-<id>). Login.jsx shows "Verify your new email" OTP step (login-email-otp*, back/resend).
+- Note: OTP emails to @example.com are rejected by provider (test env); testers read code from otp_codes collection.

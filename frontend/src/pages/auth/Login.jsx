@@ -6,7 +6,7 @@ import { Label } from "../../components/ui/label";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
 import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
 import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
@@ -18,24 +18,57 @@ export default function Login() {
   const [password, setPassword] = useState(() => saved()?.password || "");
   const [remember, setRemember] = useState(() => !!saved());
   const [loading, setLoading] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState("");
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
+
+  const finish = (data) => {
+    if (remember) saveRemembered("customer", email, password); else clearRemembered("customer");
+    loginWithToken(data.token, data.user);
+    toast.success(`Welcome back, ${data.user.name}!`);
+    nav("/dashboard");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password, portal: "customer" });
-      if (remember) saveRemembered("customer", email, password); else clearRemembered("customer");
-      loginWithToken(data.token, data.user);
-      toast.success(`Welcome back, ${data.user.name}!`);
-      nav("/dashboard");
+      if (data.otp_required) { setOtpStep(true); toast.info(data.message, { duration: 7000 }); return; }
+      finish(data);
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Login failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const verifyOtp = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try { const { data } = await api.post("/auth/login/verify-email-otp", { email, password, portal: "customer", code: otp }); toast.success("New email verified"); finish(data); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Verification failed"); }
+    finally { setLoading(false); }
+  };
+  const resend = async () => {
+    try { await api.post("/auth/login/resend-email-otp", { email, password, portal: "customer" }); toast.success("OTP sent again"); }
+    catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
+  };
+
+  if (otpStep) return (
+    <AuthShell title="Verify your new email" subtitle={`Your login email was updated to ${email}. Enter the OTP we just sent there to continue.`}>
+      <form onSubmit={verifyOtp} className="space-y-4" data-testid="login-email-otp-form">
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> One-time verification: after this, all updates and notifications go to your new email.</div>
+        <div>
+          <Label htmlFor="otp">6-digit OTP</Label>
+          <Input id="otp" data-testid="login-email-otp" inputMode="numeric" autoFocus required value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-1.5 text-center font-mono text-xl tracking-[0.4em]" placeholder="••••••" />
+        </div>
+        <button type="submit" data-testid="login-email-otp-submit" disabled={loading || otp.length !== 6} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">{loading && <Loader2 className="h-4 w-4 animate-spin" />} Verify & Login</button>
+        <div className="flex justify-between text-xs font-semibold"><button type="button" onClick={() => setOtpStep(false)} data-testid="login-email-otp-back" className="text-slate-500 hover:underline">← Back</button><button type="button" onClick={resend} data-testid="login-email-otp-resend" className="text-red-600 hover:underline">Resend OTP</button></div>
+      </form>
+    </AuthShell>
+  );
 
   return (
     <AuthShell title="Welcome back" subtitle="Login to your Radhika Traders account">

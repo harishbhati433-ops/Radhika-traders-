@@ -131,7 +131,7 @@ def _wrap(title: str, inner: str) -> str:
 
 
 async def send_otp_email(to: str, name: str, code: str, purpose: str) -> str | None:
-    reason = {"signup": "verify your account", "app_lock": "reset your App Lock PIN"}.get(purpose, "reset your password")
+    reason = {"signup": "verify your account", "app_lock": "reset your App Lock PIN", "email_change": "verify your new login email"}.get(purpose, "reset your password")
     subject = f"{code} is your Radhika Traders verification code"
     inner = (
         f'<p style="font-size:15px;color:#0B0F17">Hi {escape(name or "there")},</p>'

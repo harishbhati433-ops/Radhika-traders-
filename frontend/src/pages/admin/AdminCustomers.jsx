@@ -7,7 +7,7 @@ import { Label } from "../../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { toast } from "sonner";
 import { PhoneLink, EmailLink } from "../../components/ContactLinks";
-import { Search, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2, SlidersHorizontal, UserCog, FileText } from "lucide-react";
+import { Search, Mail, Wallet, ShieldCheck, ShieldAlert, ShieldQuestion, Plus, Loader2, SlidersHorizontal, UserCog, FileText } from "lucide-react";
 import { Pager } from "../../components/Pager";
 import { CustomerStatementDialog } from "../../components/CustomerStatementDialog";
 import { AccountStatusControl, ACCOUNT_TONE } from "../../components/AccountStatusControl";
@@ -69,7 +69,7 @@ export default function AdminCustomers() {
           <tbody className="divide-y divide-slate-100">
             {filtered.map((c) => (
               <tr key={c.id} data-testid={`customer-row-${c.id}`} className={c.account_status && c.account_status !== "active" ? "bg-slate-50/60" : ""}>
-                <td className="p-4"><div className="flex items-center gap-2.5"><UserAvatar user={c} size={34} /><div><div className="flex items-center gap-1.5 font-semibold text-slate-800">{c.name}{c.signup_flags?.same_device && <span title={`Same device as ${c.signup_flags.dup_of} — no referral / signup bonus`} data-testid={`customer-dup-device-${c.id}`} className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"><ShieldAlert className="h-3 w-3" /> Dup device</span>}</div><div className="mt-1"><EmailLink value={c.email} testId={`customer-email-${c.id}`} /></div><div className="mt-1 font-mono text-[10px] text-slate-400">{c.referral_code}</div></div></div></td>
+                <td className="p-4"><div className="flex items-center gap-2.5"><UserAvatar user={c} size={34} /><div><div className="flex items-center gap-1.5 font-semibold text-slate-800">{c.name}{c.signup_flags?.same_device && <span title={`Same device as ${c.signup_flags.dup_of} — no referral / signup bonus`} data-testid={`customer-dup-device-${c.id}`} className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"><ShieldAlert className="h-3 w-3" /> Dup device</span>}{c.email_change_pending && <span title="Login email changed by admin — OTP verification pending at next login" data-testid={`customer-email-pending-${c.id}`} className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"><Mail className="h-3 w-3" /> Email unverified</span>}</div><div className="mt-1"><EmailLink value={c.email} testId={`customer-email-${c.id}`} /></div><div className="mt-1 font-mono text-[10px] text-slate-400">{c.referral_code}</div></div></div></td>
                 <td className="p-4"><PhoneLink value={c.mobile} testId={`customer-phone-${c.id}`} /></td>
                 <td className="p-4"><span className="inline-flex items-center gap-1 text-xs font-semibold capitalize">{kycIcon(c.kyc?.status)} {c.kyc?.status?.replace("_", " ")}</span></td>
                 <td className="p-4">
