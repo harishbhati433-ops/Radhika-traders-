@@ -474,3 +474,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Login: password OK + pending flag -> returns {otp_required:true} and sends OTP (purpose email_change, 10 min, 45s throttle) to the NEW email. POST /api/auth/login/verify-email-otp {email,password,code} -> clears flag, pushes `email_history`, returns token. POST /api/auth/login/resend-email-otp.
 - UI: CustomerEditDialog Profile tab -> "Change email" (admin only) inline form + pending banner; Change Log tab shows "Login email changes"; Customers table badge "Email unverified" (customer-email-pending-<id>). Login.jsx shows "Verify your new email" OTP step (login-email-otp*, back/resend).
 - Note: OTP emails to @example.com are rejected by provider (test env); testers read code from otp_codes collection.
+
+
+## PWA Direct-to-Dashboard — Oct 2026
+- Installed app (standalone display-mode / navigator.standalone / ?source=pwa) opening at "/" redirects to the user's panel (customer /dashboard, employee /employee, admin /admin) or /login if logged out. Website visits in browser unchanged. Component: components/PwaEntry.jsx (mounted in App.js). manifest shortcuts now Dashboard / My Wallet / My Leads with ?source=pwa. Website still reachable from the app via logo/menu links.

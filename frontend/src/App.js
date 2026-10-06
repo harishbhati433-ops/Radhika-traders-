@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
+import { PwaEntry } from "./components/PwaEntry";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
@@ -130,6 +131,7 @@ function App() {
         <ShutdownGate>
         <Suspense fallback={<Fallback />}>
           <SplashDismiss />
+          <PwaEntry />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/maintenance" element={<MaintenanceRoute />} />

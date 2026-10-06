@@ -17,8 +17,8 @@
     { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Campaigns", "url": "/campaigns", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "My Wallet", "url": "/wallet", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "My Leads", "url": "/my-leads", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Dashboard", "url": "/dashboard?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My Wallet", "url": "/wallet?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My Leads", "url": "/my-leads?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
