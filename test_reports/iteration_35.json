@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only verification of the 3-PWA split (customer /app/*, admin /admin/*, employee /employee/*) and legacy redirects. All critical requirements pass: legacy /login, /signup?ref=..., /forgot-password, /forgot-email, and protected customer paths (/dashboard, /wallet, /profile, /my-leads, /withdrawals, /statements, /reports, /welcome-letter, /my-campaigns) redirect to /app/<same path> with query preserved. Logged-out visits to legacy protected paths chain through /app/<path> -> ProtectedRoute -> /app/login (correct behaviour; verified while logged in that final URL is /app/<same path>). Customer login (testcust@example.com) + App Lock PIN 2468 lands on /app/dashboard; all sidebar routes resolve without hidden-page/404. Logout returns to /app/login. Admin gate /rt-control-hb27 -> /admin/login, login + PIN 2580 -> /admin, manifest switches to /manifest-admin.json; /admin/security shows hidden-links-card with ADMIN PANEL and EMPLOYEE PANEL entries, each with a Copy button. Employee gate /rt-team-9k4e -> /employee/login (data-testid employee-username/password/submit present), login + PIN 2580 -> /employee, manifest-employee.json confirmed. Public pages (/, /campaigns, /about, /terms, /partners) NOT redirected. Home navbar links to /app/login and /app/signup. In fresh contexts /admin/login and /employee/login show data-testid hidden-page; ?source=pwa bypass works and lands on respective /login (not hidden). /app/dashboard?source=pwa logged out -> /app/login. All three manifests have correct scope and start_url. install-app-card + install-app-btn present on /app/login, /admin/login (after gate) and /employee/login (after gate) with the three correct titles.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_warnings": [
+      {"page": "Customer dashboard / nav routes", "issue": "5 React 'Encountered two children with the same key' warnings emitted when navigating customer pages. Non-blocking but should be fixed to avoid duplicated/omitted children; likely in a list rendering (consider campaigns/leads/withdrawals list key).", "priority": "LOW"}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Trace the React 'duplicate key' warnings fired on /app/dashboard & customer list pages — likely a .map() using non-unique key (e.g. id collision or missing key)."
+  ],
+  "critical_code_review_comments": [
+    "App.js LegacyRedirect correctly preserves useLocation().search, so /signup?ref=RTA12499 forwards to /app/signup?ref=RTA12499 — verified.",
+    "PortalSync.manifest switch runs on every pathname change — good; verified href flips to /manifest-admin.json on /admin/* and /manifest-employee.json on /employee/*.",
+    "isStandalone() includes ?source=pwa, so PWA launchers correctly bypass the hidden-page gate — verified for /admin/?source=pwa and /employee/?source=pwa.",
+    "PinPad testIds are 'unlock-pin-key-{d}'/'setup-pin-key-{d}'/'reset-pin-key-{d}' (not 'app-lock-key-{d}') — consistent in code but worth documenting for future test agents."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped)", "frontend": "100%" },
+  "test_credentials": "Customer testcust@example.com/Test@1234 PIN 2468; Admin bhatiharish276@gmail.com/Radhika@2023 PIN 2580; Employee rahul.k/Emp@1234 PIN 2580.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PinPad data-testids are '{setup|unlock|reset}-pin-key-{digit}'. Admin gate link /rt-control-hb27, employee /rt-team-9k4e; use fresh browser contexts because localStorage keys rt_gate_admin / rt_gate_employee persist. Legacy protected routes (/dashboard etc.) when hit while logged out resolve to /app/login via /app/<path> -> ProtectedRoute; verify as logged in to confirm first-hop redirect to /app/<path>."
+}
