@@ -162,6 +162,6 @@ export function AppLockGate({ children }) {
   if (!user) return children;
   if (needsSetup) return <SetupScreen user={user} logout={logout} onDone={() => { setOpen(true); refresh(); }} />;
   if (!enabled || open) return children;
-  if (bio === null) return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F17]" data-testid="app-lock-loading"><img src="/images/logo-mark.jpeg" alt="" className="h-16 w-16 animate-pulse rounded-2xl object-cover shadow-[0_20px_60px_rgba(220,38,38,0.35)] ring-1 ring-amber-500/40" /></div>;
+  if (bio === null) return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F17]" data-testid="app-lock-loading"><img src="/images/logo-tile.png" alt="" className="h-16 w-16 animate-pulse rounded-2xl object-cover shadow-[0_20px_60px_rgba(220,38,38,0.35)] ring-1 ring-amber-500/40" /></div>;
   return <LockScreen user={user} bio={bio} logout={logout} onUnlocked={() => setOpen(true)} />;
 }

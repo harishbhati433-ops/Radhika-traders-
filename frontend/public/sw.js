@@ -1,5 +1,5 @@
-const CACHE = "rt-pwa-v4";
-const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-mark.jpeg"];
+const CACHE = "rt-pwa-v5";
+const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png"];
 const NAV_TIMEOUT_MS = 4000;
 
 self.addEventListener("install", (e) => {
