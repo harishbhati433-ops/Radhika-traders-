@@ -461,3 +461,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Backend: `app_lock_routes.py` (/api/app-lock/status, pin/set, pin/unlock, forgot, reset, disable, enable, biometric/register|unlock options|finish, DELETE biometric). Wrong PIN = HTTP 400 (401 would log out via axios interceptor). `public_user` exposes app_lock {configured, enabled}.
 - Frontend: components/applock/{AppLockGate,AppLockSettings,PinPad}.jsx, lib/{webauthn,appLockState}.js; gate mounted in ProtectedRoute; settings in Profile, /admin/security, /employee.
 - Test PINs: admin 2580, employee 2580, customer 2468 (see test_credentials.md). Tested: iteration_34 (backend 13/13, frontend flows pass); biometric verified by main agent with CDP virtual authenticator.
+
+
+## Professional App Opening (Splash) — Oct 2026
+- Reference: user shared a Click2Track video; wanted a professional opening. Implemented inline HTML splash in public/index.html (#rt-splash: dark #0B0F17, red radial glow, grain, logo mark pop with 2 pulsing rings, wordmark, tagline, gradient progress bar, footer chips). Renders before JS; min 1.3s; fades 0.5s; safety auto-dismiss 9s.
+- Handover: App.js `SplashDismiss` + `Fallback` (holds splash until first lazy route renders; Fallback itself is a light logo-pulse + top progress bar). `window.__rtSplashDone()`.
+- Entrance motion: `.rt-enter` (+ -1/-2/-3 stagger) in index.css; applied to AuthShell (logo/title/form/support box), DashboardLayout <main> (keyed by pathname), lock screen card. App-lock loading state shows pulsing logo on dark. sw.js cache bumped to rt-pwa-v3. PWA manifest background matches splash (#0B0F17).

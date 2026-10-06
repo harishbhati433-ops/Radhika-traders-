@@ -161,7 +161,7 @@ export function DashboardLayout({ nav, children, title }) {
         <aside className="hidden lg:block sticky top-6 h-[calc(100vh-3rem)] w-60 shrink-0"><SidebarCard /></aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1">
+        <main className="rt-enter min-w-0 flex-1" key={loc.pathname}>
           <div className="mb-6 flex items-start justify-between gap-4">
             {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             <div className="flex items-center gap-2">

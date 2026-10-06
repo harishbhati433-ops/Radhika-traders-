@@ -18,7 +18,30 @@
         <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
         <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" /></noscript>
         <link rel="preload" as="image" href="%PUBLIC_URL%/images/logo-mark.jpeg" />
-        <style>#root:empty{min-height:100vh;background:#F8FAFC}#root:empty::after{content:"";position:fixed;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border:4px solid #DC2626;border-top-color:transparent;border-radius:50%;animation:rtspin .8s linear infinite}@keyframes rtspin{to{transform:rotate(360deg)}}</style>
+        <style>
+#rt-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0B0F17;color:#fff;font-family:'Outfit','Plus Jakarta Sans',system-ui,sans-serif;overflow:hidden;transition:opacity .5s ease,visibility .5s}
+#rt-splash.out{opacity:0;visibility:hidden}
+#rt-splash .glow{position:absolute;width:90vmax;height:90vmax;border-radius:50%;background:radial-gradient(circle,rgba(220,38,38,.30) 0%,rgba(220,38,38,.08) 35%,transparent 62%);top:50%;left:50%;transform:translate(-50%,-58%);animation:rtGlow 2.6s ease-in-out infinite}
+#rt-splash .grain{position:absolute;inset:0;opacity:.07;background-image:radial-gradient(rgba(255,255,255,.9) .6px,transparent .6px);background-size:3px 3px}
+#rt-splash .wrap{position:relative;width:104px;height:104px;animation:rtPop .75s cubic-bezier(.2,.8,.2,1) both}
+#rt-splash .ring{position:absolute;inset:0;border-radius:30px;border:2px solid rgba(239,68,68,.55);animation:rtRing 1.9s cubic-bezier(.2,.6,.3,1) infinite}
+#rt-splash .ring.r2{animation-delay:.6s}
+#rt-splash .mark{position:absolute;inset:0;border-radius:30px;overflow:hidden;box-shadow:0 24px 70px rgba(220,38,38,.38),0 0 0 1px rgba(245,158,11,.45)}
+#rt-splash .mark img{width:100%;height:100%;object-fit:cover;display:block}
+#rt-splash .name{margin-top:28px;font-weight:800;font-size:27px;letter-spacing:-.6px;line-height:1;animation:rtUp .65s .3s cubic-bezier(.2,.8,.2,1) both}
+#rt-splash .name b{color:#EF4444;font-weight:800}
+#rt-splash .tag{margin-top:10px;font-size:10px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#FCD34D;animation:rtUp .65s .45s cubic-bezier(.2,.8,.2,1) both}
+#rt-splash .bar{position:absolute;bottom:72px;width:132px;height:3px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;animation:rtUp .6s .6s both}
+#rt-splash .bar i{display:block;height:100%;width:45%;border-radius:99px;background:linear-gradient(90deg,#DC2626,#F59E0B);animation:rtBar 1.15s cubic-bezier(.4,0,.2,1) infinite}
+#rt-splash .foot{position:absolute;bottom:30px;display:flex;gap:14px;font-size:10.5px;font-weight:600;letter-spacing:.06em;color:rgba(148,163,184,.85);animation:rtUp .6s .75s both}
+#rt-splash .foot span::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:#F59E0B;margin:0 7px 2px 0}
+@keyframes rtPop{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
+@keyframes rtUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes rtRing{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+@keyframes rtGlow{0%,100%{opacity:.75}50%{opacity:1}}
+@keyframes rtBar{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){#rt-splash *{animation:none!important}}
+        </style>
         <!--
         manifest.json provides metadata used when your web app is installed on a
         user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -39,6 +62,23 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        <div id="rt-splash" aria-hidden="true">
+            <div class="glow"></div><div class="grain"></div>
+            <div class="wrap"><div class="ring"></div><div class="ring r2"></div><div class="mark"><img src="%PUBLIC_URL%/images/logo-mark.jpeg" alt="" /></div></div>
+            <div class="name">RADHIKA <b>TRADERS</b></div>
+            <div class="tag">Trusted Partner for Financial Growth</div>
+            <div class="bar"><i></i></div>
+            <div class="foot"><span>Secure</span><span>Transparent</span><span>Paid on time</span></div>
+        </div>
+        <script>
+            window.__rtSplashStart = Date.now();
+            window.__rtSplashDone = function () {
+                var s = document.getElementById("rt-splash"); if (!s) return;
+                var wait = Math.max(0, 1300 - (Date.now() - window.__rtSplashStart));
+                setTimeout(function () { s.classList.add("out"); setTimeout(function () { s.remove(); }, 550); }, wait);
+            };
+            setTimeout(window.__rtSplashDone, 9000);
+        </script>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

@@ -76,11 +76,21 @@ const EmployeeAttendance = lazy(() => import("./pages/employee/EmployeeAttendanc
 const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
 const EmployeeDashboard = lazy(() => import("./pages/employee/EmployeeDashboard"));
 
-const Fallback = () => (
-  <div className="flex min-h-screen items-center justify-center" data-testid="route-loading">
-    <div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
-  </div>
-);
+// Keeps the branded splash up until the first route chunk has rendered, then hands over with a fade.
+const Fallback = () => {
+  useEffect(() => { window.__rtHoldSplash = true; return () => { window.__rtHoldSplash = false; window.__rtSplashDone?.(); }; }, []);
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#0B0F17]" data-testid="route-loading">
+      <div className="fixed inset-x-0 top-0 h-0.5 overflow-hidden bg-slate-200/60"><div className="rt-topbar h-full w-2/5 rounded-full bg-gradient-to-r from-red-600 to-amber-500" /></div>
+      <img src="/images/logo-mark.jpeg" alt="" className="h-14 w-14 animate-pulse rounded-2xl object-cover shadow-lg ring-1 ring-amber-500/40" />
+    </div>
+  );
+};
+
+function SplashDismiss() {
+  useEffect(() => { const t = setTimeout(() => { if (!window.__rtHoldSplash) window.__rtSplashDone?.(); }, 80); return () => clearTimeout(t); }, []);
+  return null;
+}
 
 // Warm all route chunks while the browser is idle so the first click on any menu item is instant.
 const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
@@ -119,6 +129,7 @@ function App() {
       <BrowserRouter>
         <ShutdownGate>
         <Suspense fallback={<Fallback />}>
+          <SplashDismiss />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/maintenance" element={<MaintenanceRoute />} />

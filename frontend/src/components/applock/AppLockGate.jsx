@@ -11,7 +11,7 @@ import { isUnlocked, markUnlocked, wireIdleLock } from "../../lib/appLockState";
 const Shell = ({ title, subtitle, children, footer }) => (
   <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-y-auto bg-[#0B0F17] px-5 py-8 text-white" data-testid="app-lock-screen">
     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.25),transparent_55%)]" />
-    <div className="relative w-full max-w-sm text-center">
+    <div className="relative w-full max-w-sm text-center rt-enter">
       <div className="mb-6 flex justify-center"><Logo size="sm" light /></div>
       <h1 className="font-display text-2xl font-extrabold tracking-tight" data-testid="app-lock-title">{title}</h1>
       {subtitle && <p className="mt-1.5 text-sm text-slate-400" data-testid="app-lock-subtitle">{subtitle}</p>}
@@ -162,6 +162,6 @@ export function AppLockGate({ children }) {
   if (!user) return children;
   if (needsSetup) return <SetupScreen user={user} logout={logout} onDone={() => { setOpen(true); refresh(); }} />;
   if (!enabled || open) return children;
-  if (bio === null) return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F17]" data-testid="app-lock-loading"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div>;
+  if (bio === null) return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0F17]" data-testid="app-lock-loading"><img src="/images/logo-mark.jpeg" alt="" className="h-16 w-16 animate-pulse rounded-2xl object-cover shadow-[0_20px_60px_rgba(220,38,38,0.35)] ring-1 ring-amber-500/40" /></div>;
   return <LockScreen user={user} bio={bio} logout={logout} onUnlocked={() => setOpen(true)} />;
 }
