@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api from "../../lib/api";
+import { prefetchRoute } from "../../lib/prefetch";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ReferralBonusSetting } from "../../components/ReferralBonusSetting";
 import { MinWithdrawalSetting } from "../../components/MinWithdrawalSetting";
@@ -25,7 +26,7 @@ function KPI({ icon: Icon, label, value, tone }) {
 
 export default function AdminDashboard() {
   const [d, setD] = useState(null);
-  useEffect(() => { api.get("/admin/dashboard").then(({ data }) => setD(data)); }, []);
+  useEffect(() => { prefetchRoute("/admin"); api.get("/admin/dashboard").then(({ data }) => setD(data)); }, []);
 
   return (
     <DashboardLayout nav={adminNav} title="Admin Dashboard">

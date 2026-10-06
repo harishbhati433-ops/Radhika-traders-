@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ShieldCheck, ShieldX, ShieldOff, Clock, Eye, X, Pencil, Search, RotateCcw, Loader2 } from "lucide-react";
 import { CustomerEditDialog } from "../../components/CustomerEditDialog";
 import { CopyValue } from "../../components/CopyValue";
+import { Pager } from "../../components/Pager";
 
 const TABS = [["", "All"], ["pending", "Pending"], ["verified", "Verified"], ["rejected", "Rejected"], ["deactivated", "Deactivated"]];
 const TONE = { pending: "bg-amber-50 text-amber-700 border-amber-200", verified: "bg-emerald-50 text-emerald-700 border-emerald-200", rejected: "bg-rose-50 text-rose-700 border-rose-200", deactivated: "bg-slate-100 text-slate-600 border-slate-200", not_submitted: "bg-slate-50 text-slate-500 border-slate-200" };
@@ -15,14 +16,18 @@ const STATUS_LABEL = { pending: "Pending", verified: "Approved", rejected: "Reje
 export default function AdminKyc() {
   const [tab, setTab] = useState("");
   const [list, setList] = useState([]);
+  const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 25 });
+  const [counts, setCounts] = useState({});
   const [view, setView] = useState(null);
   const [edit, setEdit] = useState(null);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState(null);
   const [searching, setSearching] = useState(false);
 
-  const load = () => api.get("/admin/kyc", { params: tab ? { status: tab } : {} }).then(({ data }) => setList(data));
-  useEffect(() => { load(); }, [tab]);
+  const load = (page = pg.page) => api.get("/admin/kyc", { params: { ...(tab ? { status: tab } : {}), page: Number(page) || 1, limit: pg.limit } })
+    .then(({ data }) => { setList(data.items); setCounts(data.counts || {}); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); })
+    .catch((err) => toast.error(formatApiErrorDetail(err.response?.data?.detail)));
+  useEffect(() => { load(1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runSearch = async (e) => {
     e?.preventDefault();
@@ -42,8 +47,6 @@ export default function AdminKyc() {
     try { await api.patch(`/admin/kyc/${u.id}`, { status, note }); toast.success(`KYC ${status}`); setView(null); load(); if (search) runSearch(); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
   };
-
-  const counts = list.reduce((m, u) => ({ ...m, [u.kyc.status]: (m[u.kyc.status] || 0) + 1 }), {});
 
   return (
     <DashboardLayout nav={adminNav} title="KYC Management">
@@ -71,11 +74,11 @@ export default function AdminKyc() {
       {!search && (<>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[["pending", "Pending", Clock], ["verified", "Verified", ShieldCheck], ["rejected", "Rejected", ShieldX], ["deactivated", "Deactivated", ShieldOff]].map(([k, l, I]) => (
-          <div key={k} className={`rounded-2xl border p-4 ${TONE[k]}`} data-testid={`kyc-count-${k}`}><I className="h-4 w-4" /><div className="mt-1 font-mono text-2xl font-bold">{tab ? (tab === k ? list.length : "–") : counts[k] || 0}</div><div className="text-xs font-semibold">{l}</div></div>
+          <div key={k} className={`rounded-2xl border p-4 ${TONE[k]}`} data-testid={`kyc-count-${k}`}><I className="h-4 w-4" /><div className="mt-1 font-mono text-2xl font-bold">{counts[k] || 0}</div><div className="text-xs font-semibold">{l}</div></div>
         ))}
       </div>
       <div className="mb-4 flex flex-wrap gap-2">
-        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} data-testid={`kyc-tab-${k || "all"}`} className={`rounded-full px-4 py-1.5 text-xs font-bold ${tab === k ? "bg-red-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{l}</button>)}
+        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} data-testid={`kyc-tab-${k || "all"}`} className={`rounded-full px-4 py-1.5 text-xs font-bold ${tab === k ? "bg-red-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{l}{k && counts[k] ? <span className="ml-1.5 opacity-70">{counts[k]}</span> : null}</button>)}
       </div>
       </>)}
       <div className="space-y-3">
@@ -107,6 +110,7 @@ export default function AdminKyc() {
           </div>
         ))}
       </div>
+      {!search && <div className="mt-3 rounded-2xl border border-slate-200 bg-white"><Pager {...pg} onChange={(p) => load(p)} testId="kyc-pager" /></div>}
 
       {view && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="kyc-detail-modal">
@@ -129,7 +133,7 @@ export default function AdminKyc() {
           </div>
         </div>
       )}
-      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={load} initialTab="kyc" />
+      <CustomerEditDialog customerId={edit?.id} open={!!edit} onClose={() => setEdit(null)} onDone={() => load()} initialTab="kyc" />
     </DashboardLayout>
   );
 }

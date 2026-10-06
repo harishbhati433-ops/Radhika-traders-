@@ -9,7 +9,8 @@ export function AttendanceNudge() {
   const loc = useLocation();
   useEffect(() => {
     let alive = true;
-    const load = () => api.get("/employee/attendance", { noCache: true }).then(({ data }) => alive && setN(data.nudge || null)).catch(() => {});
+    const month = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 7);
+    const load = () => api.get("/employee/attendance", { params: { month } }).then(({ data }) => alive && setN(data.nudge || null)).catch(() => {});
     load();
     const t = setInterval(load, 5 * 60 * 1000);
     return () => { alive = false; clearInterval(t); };

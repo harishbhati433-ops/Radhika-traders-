@@ -1629,11 +1629,12 @@ async def admin_signup_bonus_backfill(request: Request, admin: dict = Depends(re
 
 
 async def compute_wallet(user_id: str) -> dict:
-    txns = await db.transactions.find({"user_id": user_id}).to_list(5000)
+    txns, wds = await asyncio.gather(
+        db.transactions.find({"user_id": user_id}, {"amount": 1, "type": 1, "status": 1}).to_list(5000),
+        db.withdrawals.find({"user_id": user_id}, {"amount": 1, "status": 1}).to_list(5000))
     total_credited = sum(t["amount"] for t in txns if t["type"] == "credit")
     total_debited = sum(t["amount"] for t in txns if t["type"] == "debit")
     bonus_locked = sum(t["amount"] for t in txns if t["type"] == "bonus" and t.get("status") == "locked")
-    wds = await db.withdrawals.find({"user_id": user_id}).to_list(5000)
     total_withdrawn = sum(w["amount"] for w in wds if w["status"] == "paid")
     pending_withdrawal = sum(w["amount"] for w in wds if w["status"] in ("pending", "approved"))
     # Paid withdrawals are already recorded as debit transactions, so they are
@@ -2206,20 +2207,22 @@ async def admin_search_kyc(q: str, admin: dict = Depends(require_perm("clients",
 
 
 @api.get("/admin/kyc")
-async def admin_list_kyc(status: Optional[str] = None, admin: dict = Depends(require_perm("clients", "view"))):
-    q = {"role": "customer", "email_verified": True}
-    if status:
-        q["kyc.status"] = status
-    else:
-        q["kyc.status"] = {"$ne": "not_submitted"}
-    users = await db.users.find(q).sort("kyc.submitted_at", -1).to_list(5000)
+async def admin_list_kyc(status: Optional[str] = None, page: int = 1, limit: int = 25, admin: dict = Depends(require_perm("clients", "view"))):
+    base = {"role": "customer", "email_verified": True}
+    q = {**base, "kyc.status": status} if status else {**base, "kyc.status": {"$ne": "not_submitted"}}
+    page, limit = _paged(page, limit)
+    total, users, counts = await asyncio.gather(
+        db.users.count_documents(q),
+        db.users.find(q).sort("kyc.submitted_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit),
+        db.users.aggregate([{"$match": {**base, "kyc.status": {"$in": ["pending", "verified", "rejected", "deactivated"]}}}, {"$group": {"_id": "$kyc.status", "n": {"$sum": 1}}}]).to_list(10),
+    )
     out = []
     for u in users:
         pu = public_user(u)
         pu["kyc"] = {**u.get("kyc", {}), "status": u.get("kyc", {}).get("status", "not_submitted")}
         pu["bank"] = u.get("bank", {})
         out.append(pu)
-    return out
+    return {"items": out, "page": page, "pages": max(1, -(-total // limit)), "total": total, "limit": limit, "counts": {c["_id"]: c["n"] for c in counts}}
 
 
 @api.patch("/admin/kyc/{uid}")
@@ -2486,14 +2489,17 @@ async def admin_dashboard(admin: dict = Depends(require_admin)):
     total_campaigns, live, paused, closed, enabled = await asyncio.gather(
         db.campaigns.count_documents(cq), db.campaigns.count_documents({**cq, "status": "live"}), db.campaigns.count_documents({**cq, "status": "paused"}),
         db.campaigns.count_documents({**cq, "status": "closed"}), db.campaigns.count_documents({**cq, "offer_enabled": True}))
-    total_customers = await db.users.count_documents({"role": "customer", "email_verified": True})
-    earn = await db.transactions.aggregate([{"$match": {"type": "credit"}}, {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
+    total_customers, earn, cust_oids, money, recent = await asyncio.gather(
+        db.users.count_documents({"role": "customer", "email_verified": True}),
+        db.transactions.aggregate([{"$match": {"type": "credit"}}, {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1),
+        db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}}),
+        wallet_rows("holding"),
+        db.campaigns.find(cq).sort("updated_at", -1).to_list(5))
     total_earnings = float(earn[0]["s"]) if earn else 0.0
-    cust_ids = [str(i) for i in await db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}})]
+    cust_ids = [str(i) for i in cust_oids]
     wd = {r["_id"]: r for r in await db.withdrawals.aggregate([{"$match": {"user_id": {"$in": cust_ids}}},
                                                                  {"$group": {"_id": "$status", "n": {"$sum": 1}, "s": {"$sum": "$amount"}}}]).to_list(20)}
-    money = (await wallet_rows("holding"))["summary"]
-    recent = await db.campaigns.find(cq).sort("updated_at", -1).to_list(5)
+    money = money["summary"]
     return {
         "total_campaigns": total_campaigns, "live": live, "paused": paused, "closed": closed,
         "enabled_offers": enabled, "disabled_offers": total_campaigns - enabled,
@@ -3021,6 +3027,10 @@ async def startup():
         await db.admin_devices.create_index([("user_id", 1), ("fingerprint", 1)], unique=True)
         await db.attendance.create_index([("employee_id", 1), ("date", 1)], unique=True)
         await db.salary_adjustments.create_index([("employee_id", 1), ("month", 1)], unique=True)
+        for coll, keys in (("users", [("role", 1), ("email_verified", 1), ("account_status", 1), ("created_at", -1)]), ("users", [("role", 1), ("kyc.status", 1), ("kyc.submitted_at", -1)]),
+                           ("transactions", [("user_id", 1), ("type", 1)]), ("transactions", [("user_id", 1), ("created_at", -1)]), ("withdrawals", [("user_id", 1), ("status", 1)]),
+                           ("notifications", [("user_id", 1), ("created_at", -1)]), ("leads", [("partner_id", 1), ("created_at", -1)]), ("activity_logs", [("actor_id", 1), ("created_at", -1)])):
+            await db[coll].create_index(keys)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

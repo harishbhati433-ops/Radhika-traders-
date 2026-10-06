@@ -11,6 +11,7 @@ import { getTheme, setTheme, applyTheme } from "../lib/theme";
 import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
 import { SidebarAvatarButton } from "./AvatarUpload";
 import { AttendanceNudge } from "./AttendanceNudge";
+import { prefetchRoute } from "../lib/prefetch";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -79,7 +80,7 @@ export function DashboardLayout({ nav, children, title }) {
     const active = loc.pathname === n.to;
     const Icon = n.icon;
     return (
-      <Link to={n.to} data-testid={`side-${n.label.toLowerCase().replace(/[\s/]+/g, "-")}`} onClick={() => setOpen(false)}
+      <Link to={n.to} data-testid={`side-${n.label.toLowerCase().replace(/[\s/]+/g, "-")}`} onClick={() => setOpen(false)} onPointerDown={() => prefetchRoute(n.to)} onMouseEnter={() => prefetchRoute(n.to)}
         className={`flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-semibold transition-colors ${nested ? "pl-9 pr-3" : "px-3"} ${active ? "bg-red-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>
         <Icon style={{ width: 16, height: 16 }} className="shrink-0" /> <span className="truncate">{n.label}</span>
       </Link>

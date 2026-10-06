@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -31,7 +31,11 @@ export default function AdminCustomers() {
   const load = (page = pg.page) => api.get("/admin/customers", { params: { include_deleted: showDeleted, search: search || undefined, page: Number(page) || 1, limit: pg.limit } })
     .then(({ data }) => { setCustomers(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); })
     .catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Could not load customers"));
-  useEffect(() => { const t = setTimeout(() => load(1), 250); return () => clearTimeout(t); }, [showDeleted, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; load(1); return; }
+    const t = setTimeout(() => load(1), 250); return () => clearTimeout(t);
+  }, [showDeleted, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const credit = async (e) => {
     e.preventDefault(); setBusy(true);

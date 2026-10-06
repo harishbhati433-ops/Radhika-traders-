@@ -11,10 +11,13 @@ export const API = `${BACKEND_URL}/api`;
 const api = axios.create({ baseURL: API });
 
 // Short-lived GET cache: revisiting a panel renders instantly; any write clears it so lists never go stale after an action.
-const GET_TTL_MS = 30000;
+// Identical in-flight GETs are de-duplicated so N components asking for the same thing cost one round trip.
+const GET_TTL_MS = 60000;
 const getCache = new Map();
-const NO_CACHE = /\/(notifications|auth\/me|files\/|cron\/|statement|export|slip|download|employee\/attendance|attendance\/settings|attendance\/policy)/;
-const cacheKey = (c) => `${c.url}?${JSON.stringify(c.params || {})}`;
+const inflight = new Map();
+const NO_CACHE = /\/(notifications|auth\/me|files\/|cron\/|statement|export|slip|download|attendance\/settings|attendance\/policy)/;
+const stableParams = (p) => (p ? JSON.stringify(Object.keys(p).filter((k) => p[k] !== undefined).sort().reduce((o, k) => ({ ...o, [k]: p[k] }), {})) : "{}");
+const cacheKey = (c) => `${c.url}?${stableParams(c.params)}`;
 const cacheable = (c) => (c.method || "get").toLowerCase() === "get" && !c.responseType && !c.noCache && !NO_CACHE.test(c.url || "");
 export const clearApiCache = () => getCache.clear();
 window.addEventListener("rt:logout", clearApiCache);
@@ -29,10 +32,17 @@ api.defaults.adapter = async (config) => {
   const key = cacheKey(config);
   const hit = getCache.get(key);
   if (hit && Date.now() - hit.at < GET_TTL_MS) return { ...hit.res, config, cached: true };
-  const res = await netAdapter(config);
-  getCache.set(key, { at: Date.now(), res });
-  return res;
+  let p = inflight.get(key);
+  if (!p) {
+    p = netAdapter(config).then((res) => { getCache.set(key, { at: Date.now(), res }); return res; }).finally(() => inflight.delete(key));
+    inflight.set(key, p);
+  }
+  const res = await p;
+  return { ...res, config };
 };
+
+// Warm the cache for a list of [url, params] so the next panel paints instantly. Errors are ignored.
+export const prefetchApi = (list) => Promise.allSettled(list.filter(([url, params]) => !getCache.has(cacheKey({ url, params }))).map(([url, params]) => api.get(url, { params })));
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("rt_token");

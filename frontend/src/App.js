@@ -2,6 +2,7 @@ import "@/App.css";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import api from "./lib/api";
+import { prefetchForRole } from "./lib/prefetch";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
@@ -92,7 +93,8 @@ function ChunkPrefetcher() {
     const run = () => list.forEach((l) => l().catch(() => {}));
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1200));
     const id = idle(run);
-    return () => (window.cancelIdleCallback || clearTimeout)(id);
+    const dataId = setTimeout(() => prefetchForRole(user.role), 3500);
+    return () => { (window.cancelIdleCallback || clearTimeout)(id); clearTimeout(dataId); };
   }, [user?.id, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
