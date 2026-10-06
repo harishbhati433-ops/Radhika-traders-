@@ -12,6 +12,10 @@ class ContactIn(BaseModel):
     whatsapp_number: str
     support_email: str
     owner_email: str
+    instagram_url: str = ""
+    facebook_url: str = ""
+    youtube_url: str = ""
+    telegram_url: str = ""
 
 
 def build_router(db, require_admin, log_activity) -> APIRouter:

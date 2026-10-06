@@ -489,3 +489,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## Install App card on Login/Signup — Oct 2026
 - components/InstallAppCard.jsx rendered at bottom of AuthShell (customer Login/Signup/Forgot pages; hidden on Admin login via showInstall={false}; Employee login shows it with installAudience="employee" copy (attendance/salary/KYC); hidden inside the installed app). Android/Chrome: one-tap install via captured beforeinstallprompt (`triggerInstall`), else toast with Chrome menu steps; iPhone: Share → Add to Home Screen guide. Test id install-app-card / install-app-btn / install-app-ios.
+
+
+## Footer Social Links (admin-editable) + Telegram — Oct 2026
+- contact_settings.py FIELDS now include instagram_url, facebook_url, youtube_url, telegram_url (kind "url", https auto-prefixed, telegram optional/blank = hidden). Exposed via /api/contact/public and editable in Admin → Contact & Support (ContactSettings.jsx renders url inputs). Defaults = previous hardcoded links.
+- Footer.jsx "Follow Us": colourful gradient buttons (WhatsApp green, Instagram pink/purple, Facebook blue, YouTube red, Telegram sky) with hover lift; links read from useContact(); Telegram only shows when a link is set. Test ids footer-whatsapp/instagram/facebook/youtube/telegram, container footer-social.

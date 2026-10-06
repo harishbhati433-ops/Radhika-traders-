@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "./api";
 
-export const DEFAULT_CONTACT = { owner_mobile: "6376541191", support_mobile: "6376541191", whatsapp_number: "6376541191", support_email: "radhikatradersofficial@gmail.com" };
+export const DEFAULT_CONTACT = { owner_mobile: "6376541191", support_mobile: "6376541191", whatsapp_number: "6376541191", support_email: "radhikatradersofficial@gmail.com", instagram_url: "https://www.instagram.com/growthwithharishbhati", facebook_url: "https://www.facebook.com/share/1BadZkWMoV/", youtube_url: "https://youtube.com/@radhikatradersofficial", telegram_url: "" };
 const KEY = "rt_contact_v1";
 let cache = null, inflight = null;
 const listeners = new Set();

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Phone, Mail, MapPin, Instagram, Facebook, Youtube, MessageCircle } from "lucide-react";
+import { Phone, Mail, MapPin, Instagram, Facebook, Youtube, MessageCircle, Send } from "lucide-react";
 import { useContact, telLink, waLink } from "../lib/contact";
 
 export function Footer() {
@@ -32,11 +32,19 @@ export function Footer() {
         </div>
         <div>
           <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-amber-400">Follow Us</h4>
-          <div className="flex gap-2">
-            <a href={waLink(contact.whatsapp_number)} target="_blank" rel="noreferrer" data-testid="footer-whatsapp" className="rounded-lg bg-white/5 p-2.5 hover:bg-emerald-600"><MessageCircle className="h-4 w-4" /></a>
-            <a href="https://www.instagram.com/growthwithharishbhati" target="_blank" rel="noreferrer" data-testid="footer-instagram" className="rounded-lg bg-white/5 p-2.5 hover:bg-pink-600"><Instagram className="h-4 w-4" /></a>
-            <a href="https://www.facebook.com/share/1BadZkWMoV/" target="_blank" rel="noreferrer" data-testid="footer-facebook" className="rounded-lg bg-white/5 p-2.5 hover:bg-blue-600"><Facebook className="h-4 w-4" /></a>
-            <a href="https://youtube.com/@radhikatradersofficial" target="_blank" rel="noreferrer" data-testid="footer-youtube" className="rounded-lg bg-white/5 p-2.5 hover:bg-red-600"><Youtube className="h-4 w-4" /></a>
+          <div className="flex flex-wrap gap-2.5" data-testid="footer-social">
+            {[
+              ["whatsapp", waLink(contact.whatsapp_number), MessageCircle, "from-emerald-500 to-green-600 shadow-emerald-500/40", "WhatsApp"],
+              ["instagram", contact.instagram_url, Instagram, "from-amber-400 via-pink-500 to-purple-600 shadow-pink-500/40", "Instagram"],
+              ["facebook", contact.facebook_url, Facebook, "from-blue-500 to-blue-700 shadow-blue-500/40", "Facebook"],
+              ["youtube", contact.youtube_url, Youtube, "from-red-500 to-red-700 shadow-red-500/40", "YouTube"],
+              ["telegram", contact.telegram_url, Send, "from-sky-400 to-sky-600 shadow-sky-500/40", "Telegram"],
+            ].filter(([, href]) => !!href).map(([k, href, Icon, grad, label]) => (
+              <a key={k} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} data-testid={`footer-${k}`}
+                className={`group flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-lg ring-1 ring-white/10 transition-transform duration-200 hover:-translate-y-1 hover:scale-110`}>
+                <Icon className="h-5 w-5 drop-shadow" />
+              </a>
+            ))}
           </div>
         </div>
       </div>

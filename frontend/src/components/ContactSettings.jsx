@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { refreshContact } from "../lib/contact";
 import { toast } from "sonner";
-import { Phone, MessageCircle, Mail, Crown, Headphones, Loader2, Save, History, ShieldCheck } from "lucide-react";
+import { Phone, MessageCircle, Mail, Crown, Headphones, Loader2, Save, History, ShieldCheck, Instagram, Facebook, Youtube, Send } from "lucide-react";
 
-const ICONS = { owner_mobile: Crown, support_mobile: Headphones, whatsapp_number: MessageCircle, support_email: Mail, owner_email: Crown };
+const ICONS = { owner_mobile: Crown, support_mobile: Headphones, whatsapp_number: MessageCircle, support_email: Mail, owner_email: Crown, instagram_url: Instagram, facebook_url: Facebook, youtube_url: Youtube, telegram_url: Send };
+const URL_HINTS = { instagram_url: "Shown as the Instagram button in the website footer.", facebook_url: "Shown as the Facebook button in the website footer.", youtube_url: "Shown as the YouTube button in the website footer.", telegram_url: "Shown as the Telegram button in the footer — leave blank until you have a channel link." };
 const HINTS = {
   owner_mobile: "Shown as “Call Now” on the Contact page (Owner & Founder card).",
   support_mobile: "Main customer-care number — Footer, Contact page, customer panel support box.",
@@ -54,12 +55,12 @@ export function ContactSettings() {
           return (
             <label key={f.key} className={`block rounded-2xl border bg-white p-4 transition-colors ${changed ? "border-amber-400 ring-2 ring-amber-100" : "border-slate-200"}`} data-testid={`contact-field-${f.key}`}>
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Icon className="h-3.5 w-3.5 text-red-600" /> {f.label}</div>
-              <input type={f.kind === "email" ? "email" : "tel"} inputMode={f.kind === "email" ? "email" : "numeric"} maxLength={f.kind === "email" ? 120 : 10}
+              <input type={f.kind === "email" ? "email" : f.kind === "url" ? "url" : "tel"} inputMode={f.kind === "email" ? "email" : f.kind === "url" ? "url" : "numeric"} maxLength={f.kind === "mobile" ? 10 : 300}
                 value={form[f.key] || ""} onChange={(e) => setForm({ ...form, [f.key]: f.kind === "mobile" ? e.target.value.replace(/\D/g, "").slice(0, 10) : e.target.value })}
-                data-testid={`contact-input-${f.key}`} placeholder={f.kind === "email" ? "name@gmail.com" : "10-digit mobile"}
+                data-testid={`contact-input-${f.key}`} placeholder={f.kind === "email" ? "name@gmail.com" : f.kind === "url" ? "https://..." : "10-digit mobile"}
                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm font-semibold text-slate-900 focus:border-red-500 focus:outline-none" />
-              <div className="mt-1.5 text-[11px] text-slate-500">{HINTS[f.key]}</div>
-              {changed && <div className="mt-1 text-[11px] font-bold text-amber-700" data-testid={`contact-changed-${f.key}`}>Was: {data[f.key]}</div>}
+              <div className="mt-1.5 text-[11px] text-slate-500">{HINTS[f.key] || URL_HINTS[f.key]}</div>
+              {changed && <div className="mt-1 text-[11px] font-bold text-amber-700" data-testid={`contact-changed-${f.key}`}>Was: {data[f.key] || "(blank)"}</div>}
             </label>
           );
         })}
