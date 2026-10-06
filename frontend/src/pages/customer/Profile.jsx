@@ -12,6 +12,7 @@ import { AvatarUpload } from "../../components/AvatarUpload";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Award, ArrowRight } from "lucide-react";
 import { SecuritySettings } from "../../components/SecuritySettings";
+import { AppLockSettings } from "../../components/applock/AppLockSettings";
 import { IfscBankInfo } from "../../components/IfscBankInfo";
 
 export default function Profile() {
@@ -123,6 +124,7 @@ export default function Profile() {
       </div>
       <div className="mt-8">
         <h2 className="mb-4 font-display text-xl font-bold text-slate-900">Security</h2>
+        <div className="mb-6"><AppLockSettings /></div>
         <SecuritySettings />
       </div>
     </DashboardLayout>

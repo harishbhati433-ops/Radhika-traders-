@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { canUser } from "../lib/perm";
+import { AppLockGate } from "./applock/AppLockGate";
 
 const homeFor = (u) => (u.role === "admin" ? "/admin" : u.role === "employee" ? "/employee" : "/dashboard");
 
@@ -15,9 +16,9 @@ export function ProtectedRoute({ children, role, perm }) {
   }
   if (!user) return <Navigate to={role === "admin" ? "/admin/login" : role === "employee" ? "/employee/login" : "/login"} replace />;
   if (role === "admin" && user.role === "employee") {
-    if (perm && canUser(user, perm, "view")) return children;
+    if (perm && canUser(user, perm, "view")) return <AppLockGate>{children}</AppLockGate>;
     return <Navigate to="/employee" replace />;
   }
   if (role && user.role !== role) return <Navigate to={homeFor(user)} replace />;
-  return children;
+  return <AppLockGate>{children}</AppLockGate>;
 }

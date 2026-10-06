@@ -10,6 +10,7 @@ bcrypt==4.1.3
 black==26.5.1
 boto3==1.43.85
 botocore==1.43.85
+cbor2==6.1.5
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1
@@ -88,7 +89,10 @@ pyflakes==3.4.0
 Pygments==2.21.0
 PyJWT==2.13.0
 pymongo==4.6.3
+pymupdf==1.28.2
+pyOpenSSL==26.4.0
 pyparsing==3.3.2
+pypdf==6.19.0
 pytest==9.1.1
 pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
@@ -97,6 +101,7 @@ python-jose==3.5.0
 python-multipart==0.0.32
 pytokens==0.4.1
 PyYAML==6.0.3
+qrcode==8.2
 referencing==0.37.0
 regex==2026.9.3
 reportlab==5.0.1
@@ -124,7 +129,7 @@ uritemplate==4.2.0
 urllib3==2.7.0
 uvicorn==0.25.0
 watchfiles==1.2.0
+webauthn==3.0.1
 websockets==16.1.1
 yarl==1.24.5
 zipp==4.1.0
-qrcode==8.2

@@ -104,6 +104,7 @@ def public_user(u: dict) -> dict:
         "kyc": u.get("kyc", {"status": "not_submitted"}),
         "bank": u.get("bank", {}),
         "signup_flags": u.get("signup_flags"),
+        "app_lock": {"configured": bool((u.get("app_lock") or {}).get("pin_hash")), "enabled": (u.get("app_lock") or {}).get("enabled", True)},
         "created_at": u.get("created_at"),
         "username": u.get("username"),
         "permissions": u.get("permissions") if u.get("role") == "employee" else None,
@@ -3041,6 +3042,8 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 _emp_router = build_employee_router(db, require_admin, log_activity, public_user)
 api.include_router(_emp_router)
 api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.require_employee, log_activity, pan_error, aadhaar_error, lookup_ifsc_info))
+from app_lock_routes import build_app_lock_router  # noqa: E402
+api.include_router(build_app_lock_router(db, get_current_user, hash_password, verify_password, send_otp_email, log_activity))
 api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
@@ -3105,8 +3108,10 @@ async def startup():
         for coll, keys in (("users", [("role", 1), ("email_verified", 1), ("account_status", 1), ("created_at", -1)]), ("users", [("role", 1), ("kyc.status", 1), ("kyc.submitted_at", -1)]),
                            ("transactions", [("user_id", 1), ("type", 1)]), ("transactions", [("user_id", 1), ("created_at", -1)]), ("withdrawals", [("user_id", 1), ("status", 1)]),
                            ("notifications", [("user_id", 1), ("created_at", -1)]), ("leads", [("partner_id", 1), ("created_at", -1)]), ("activity_logs", [("actor_id", 1), ("created_at", -1)]),
-                           ("users", [("signup_device.fp", 1)]), ("users", [("signup_device.id", 1)]), ("users", [("signup_device.ip", 1)])):
+                           ("users", [("signup_device.fp", 1)]), ("users", [("signup_device.id", 1)]), ("users", [("signup_device.ip", 1)]), ("webauthn_credentials", [("user_id", 1), ("rp_id", 1)]), ("app_lock_otps", [("user_id", 1)])):
             await db[coll].create_index(keys)
+        await db.webauthn_credentials.create_index([("user_id", 1), ("credential_id", 1)], unique=True)
+        await db.webauthn_challenges.create_index("expires_at", expireAfterSeconds=0)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

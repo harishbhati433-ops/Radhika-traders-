@@ -5,6 +5,7 @@ import { adminNav } from "../admin/nav";
 import { useAuth } from "../../context/AuthContext";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { PasswordInput } from "../../components/PasswordInput";
+import { AppLockSettings } from "../../components/applock/AppLockSettings";
 import { toast } from "sonner";
 import { Eye, Pencil, KeyRound, History, CalendarCheck, ShieldCheck } from "lucide-react";
 
@@ -83,6 +84,7 @@ export default function EmployeeDashboard() {
           )}
         </div>
       </div>
+      <div className="mt-6"><AppLockSettings /></div>
     </DashboardLayout>
   );
 }
