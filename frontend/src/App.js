@@ -103,7 +103,11 @@ function PortalSync({ children }) {
   const { switchPortal } = useAuth();
   const { pathname } = useLocation();
   const portal = portalFromPath(pathname);
-  useEffect(() => { switchPortal(portal); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    switchPortal(portal);
+    const m = document.getElementById("rt-manifest");
+    if (m) m.href = portal === "admin" ? "/manifest-admin.json" : portal === "employee" ? "/manifest-employee.json" : "/manifest.json";
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   if (portal !== "customer" && !hasGate(portal) && !isStandalone()) return <HiddenPage />;
   return children;
 }
