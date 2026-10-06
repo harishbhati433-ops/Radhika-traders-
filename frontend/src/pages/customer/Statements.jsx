@@ -1,3 +1,4 @@
+import { getToken } from "../../lib/portal";
 import { useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
@@ -20,7 +21,7 @@ export default function Statements() {
     if (!r.valid) return toast.error("Select both From and To dates");
     setBusy(fmt);
     try {
-      const token = localStorage.getItem("rt_token");
+      const token = getToken();
       const qs = new URLSearchParams({ format: fmt, ...r.params }).toString();
       const res = await fetch(`${API}/statement?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error();

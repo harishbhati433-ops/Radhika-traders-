@@ -1,9 +1,10 @@
 import "@/App.css";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
 import { PwaEntry } from "./components/PwaEntry";
+import { getToken, portalFromPath } from "./lib/portal";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -27,7 +28,7 @@ const CustomerDashboard = lazy(loadDashboard);
 // Kick off the most likely next chunk immediately, in parallel with the auth check.
 try {
   const p = window.location.pathname;
-  if (p.startsWith("/dashboard") || (localStorage.getItem("rt_token") && p === "/")) loadDashboard();
+  if (p.startsWith("/dashboard") || (getToken() && p === "/")) loadDashboard();
   else if (p.startsWith("/join/")) loadLeadForm();
   else if (p === "/login") loadLogin();
 } catch {}
@@ -94,6 +95,14 @@ function SplashDismiss() {
   return null;
 }
 
+// Keeps the auth session in step with the portal the URL belongs to (/, /employee, /admin).
+function PortalSync() {
+  const { switchPortal } = useAuth();
+  const { pathname } = useLocation();
+  useEffect(() => { switchPortal(portalFromPath(pathname)); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 // Warm all route chunks while the browser is idle so the first click on any menu item is instant.
 const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
 const ADMIN_CHUNKS = [() => import("./pages/admin/AdminDashboard"), () => import("./pages/admin/AdminCampaigns"), () => import("./pages/admin/AdminCustomers"), () => import("./pages/admin/AdminLeads"), () => import("./pages/admin/AdminKyc"), () => import("./pages/admin/AdminWithdrawals"), () => import("./pages/admin/AdminBanners"), () => import("./pages/admin/AdminBroadcast"), () => import("./pages/admin/AdminReports"), () => import("./pages/admin/AdminSecurity"), () => import("./pages/admin/AdminCategories"), () => import("./pages/admin/AdminDedicatedReferrals"),
@@ -132,6 +141,7 @@ function App() {
         <ShutdownGate>
         <Suspense fallback={<Fallback />}>
           <SplashDismiss />
+          <PortalSync />
           <PwaEntry />
           <Routes>
             <Route path="/" element={<Home />} />

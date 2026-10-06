@@ -1,3 +1,4 @@
+import { getToken } from "../../lib/portal";
 import { useEffect, useState } from "react";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
 import { Input } from "../ui/input";
@@ -6,7 +7,7 @@ import { toast } from "sonner";
 import { Pencil, X, Download, CalendarPlus } from "lucide-react";
 import { StatusPill, STATUS_META, EDIT_STATUSES, EDIT_LABELS, EDIT_HELP, todayIST, thisMonth, dur, mins, inr } from "./shared";
 
-const token = () => localStorage.getItem("rt_token");
+const token = () => getToken();
 export const dl = async (path, params) => {
   try {
     const { data, headers } = await api.get(path, { params, responseType: "blob" });

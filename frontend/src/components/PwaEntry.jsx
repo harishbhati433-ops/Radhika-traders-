@@ -19,8 +19,11 @@ export function PwaEntry() {
   useEffect(() => {
     if (done.current || loading) return;
     done.current = true;
-    if (!isStandalone() || pathname !== "/") return;
-    nav(user ? homeFor(user) : "/login", { replace: true });
+    if (!isStandalone()) return;
+    const p = pathname.replace(/\/$/, "") || "/";
+    if (p === "/") nav(user ? homeFor(user) : "/login", { replace: true });
+    else if (p === "/employee" && !user) nav("/employee/login", { replace: true });
+    else if (p === "/admin" && !user) nav("/admin/login", { replace: true });
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

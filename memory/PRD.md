@@ -494,3 +494,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## Footer Social Links (admin-editable) + Telegram — Oct 2026
 - contact_settings.py FIELDS now include instagram_url, facebook_url, youtube_url, telegram_url (kind "url", https auto-prefixed, telegram optional/blank = hidden). Exposed via /api/contact/public and editable in Admin → Contact & Support (ContactSettings.jsx renders url inputs). Defaults = previous hardcoded links.
 - Footer.jsx "Follow Us": colourful gradient buttons (WhatsApp green, Instagram pink/purple, Facebook blue, YouTube red, Telegram sky) with hover lift; links read from useContact(); Telegram only shows when a link is set. Test ids footer-whatsapp/instagram/facebook/youtube/telegram, container footer-social.
+
+
+## Separate Sessions + Three Installable Apps — Oct 2026
+- Problem: one shared `rt_token` meant logging out of any panel logged out all. Now lib/portal.js keeps independent sessions per portal: `rt_token_customer|employee|admin` (+ `rt_user_*`), portal derived from URL (/admin*, /employee*, else customer). Staff fallback: /admin pages use the employee token if no admin token (employees with RBAC permissions keep working). AuthContext.switchPortal driven by PortalSync (App.js) on route change; old `rt_token` auto-migrated once. api.js attaches the current portal's token; 401 clears only that portal.
+- Three PWAs on one origin: manifest.json (Radhika Traders, scope "/"), manifest-employee.json ("Radhika Traders Employee", scope /employee/, green EMPLOYEE badge icons), manifest-admin.json ("Radhika Traders Admin", scope /admin/, red ADMIN badge icons). index.html swaps <link rel=manifest id=rt-manifest> by pathname before load. PwaEntry handles /employee and /admin standalone starts. InstallAppCard shows on all three login pages with audience copy. sw.js v6.
+- Verified: 3 simultaneous logins; employee logout leaves customer+admin logged in; customer logout leaves admin.

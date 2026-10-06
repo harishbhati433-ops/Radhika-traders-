@@ -1,3 +1,4 @@
+import { getToken } from "../lib/portal";
 import { useEffect, useState } from "react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { CopyValue } from "./CopyValue";
@@ -27,7 +28,7 @@ export function CustomerStatementDialog({ userId, onClose }) {
     setBusy(fmt);
     try {
       const qs = new URLSearchParams({ format: fmt, ...r.params }).toString();
-      const res = await fetch(`${API}/admin/customers/${userId}/statement/download?${qs}`, { headers: { Authorization: `Bearer ${localStorage.getItem("rt_token")}` } });
+      const res = await fetch(`${API}/admin/customers/${userId}/statement/download?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob);

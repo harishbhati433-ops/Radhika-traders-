@@ -1,3 +1,4 @@
+import { clearSession } from "../lib/portal";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import api from "../lib/api";
@@ -14,7 +15,7 @@ export function ShutdownGate({ children }) {
   useEffect(() => {
     check();
     const t = setInterval(check, POLL_MS);
-    const onShutdown = (e) => { setState({ active: true, ...e.detail }); if (!window.location.pathname.startsWith("/admin") && !window.location.pathname.startsWith("/employee")) { localStorage.removeItem("rt_token"); window.dispatchEvent(new Event("rt:logout")); } };
+    const onShutdown = (e) => { setState({ active: true, ...e.detail }); if (!window.location.pathname.startsWith("/admin") && !window.location.pathname.startsWith("/employee")) { clearSession("customer"); window.dispatchEvent(new Event("rt:logout")); } };
     window.addEventListener("rt:shutdown", onShutdown);
     return () => { clearInterval(t); window.removeEventListener("rt:shutdown", onShutdown); };
   }, []);

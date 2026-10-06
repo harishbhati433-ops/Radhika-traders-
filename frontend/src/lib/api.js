@@ -1,5 +1,6 @@
 import axios from "axios";
 import { toast } from "sonner";
+import { getToken, clearSession } from "./portal";
 
 const ENV_URL = process.env.REACT_APP_BACKEND_URL;
 const sameHost = (() => {
@@ -86,7 +87,7 @@ api.defaults.adapter = async (config) => {
 export const prefetchApi = (list) => Promise.allSettled(list.filter(([url, params]) => !getCache.has(cacheKey({ url, params }))).map(([url, params]) => api.get(url, { params })));
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("rt_token");
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -99,8 +100,8 @@ api.interceptors.response.use((r) => r, (err) => {
     net(false, { write: true });
     return Promise.reject(err);
   }
-  if (err.response?.status === 401 && localStorage.getItem("rt_token")) {
-    localStorage.removeItem("rt_token");
+  if (err.response?.status === 401 && getToken()) {
+    clearSession();
     const d = err.response?.data?.detail;
     if (typeof d === "string" && /password was changed/i.test(d)) toast.error(d, { duration: 8000 });
     window.dispatchEvent(new Event("rt:logout"));

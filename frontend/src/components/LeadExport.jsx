@@ -1,3 +1,4 @@
+import { getToken } from "../lib/portal";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Download, Loader2, FileSpreadsheet, FileText } from "lucide-react";
@@ -29,7 +30,7 @@ export function LeadExport({ filters, count }) {
     setBusy(format);
     try {
       const params = new URLSearchParams({ ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), format });
-      const token = localStorage.getItem("rt_token");
+      const token = getToken();
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/leads/export?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Export failed");
       const blob = await res.blob();
