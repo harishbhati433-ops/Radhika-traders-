@@ -70,6 +70,7 @@ const AdminContact = lazy(() => import("./pages/admin/AdminContact"));
 const AdminTeam = lazy(() => import("./pages/admin/AdminTeam"));
 const AdminAttendance = lazy(() => import("./pages/admin/AdminAttendance"));
 const AdminEmployeeKyc = lazy(() => import("./pages/admin/AdminEmployeeKyc"));
+const AdminSuspicious = lazy(() => import("./pages/admin/AdminSuspicious"));
 const EmployeeKyc = lazy(() => import("./pages/employee/EmployeeKyc"));
 const EmployeeAttendance = lazy(() => import("./pages/employee/EmployeeAttendance"));
 const EmployeeLogin = lazy(() => import("./pages/auth/EmployeeLogin"));
@@ -169,6 +170,7 @@ function App() {
             <Route path="/admin/team" element={A(<AdminTeam />)} />
             <Route path="/admin/attendance" element={A(<AdminAttendance />)} />
             <Route path="/admin/employee-kyc" element={A(<AdminEmployeeKyc />)} />
+            <Route path="/admin/suspicious-signups" element={A(<AdminSuspicious />)} />
             <Route path="/employee/kyc" element={E(<EmployeeKyc />)} />
             <Route path="/employee/attendance" element={E(<EmployeeAttendance />)} />
           </Routes>

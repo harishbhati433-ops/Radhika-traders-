@@ -103,6 +103,7 @@ def public_user(u: dict) -> dict:
         "account_status_reason": u.get("account_status_reason", ""),
         "kyc": u.get("kyc", {"status": "not_submitted"}),
         "bank": u.get("bank", {}),
+        "signup_flags": u.get("signup_flags"),
         "created_at": u.get("created_at"),
         "username": u.get("username"),
         "permissions": u.get("permissions") if u.get("role") == "employee" else None,
@@ -141,6 +142,8 @@ class RegisterIn(BaseModel):
     referred_by: Optional[str] = ""
     accepted_terms: bool = False
     terms_version: Optional[str] = ""
+    device_fp: Optional[str] = ""
+    device_id: Optional[str] = ""
 
 
 class SettingsIn(BaseModel):
@@ -436,7 +439,7 @@ def _norm_mobile(m: str) -> str:
 
 
 @api.post("/auth/register")
-async def register(body: RegisterIn):
+async def register(body: RegisterIn, request: Request):
     if (await shutdown_state())["active"]:
         raise HTTPException(status_code=503, detail={"code": "shutdown", **(await shutdown_state())})
     email = body.email.lower()
@@ -468,6 +471,7 @@ async def register(body: RegisterIn):
         "bank": {},
         "referred_by_code": ref_code,
         "referral_bonus_paid": False,
+        "signup_device": {"fp": (body.device_fp or "")[:64], "id": (body.device_id or "")[:64], "ip": _client_ip(request), "ua": (request.headers.get("user-agent") or "")[:200], "at": now_iso()},
         "created_at": now_iso(),
     }
     if existing:
@@ -500,6 +504,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
     if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
     await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    await apply_device_rule(email)
     await apply_referral_limit(email)
     await db.users.update_one({"email": email}, {"$set": {"email_verified": True}})
     user = await db.users.find_one({"email": email})
@@ -533,6 +538,45 @@ async def resend_welcome_letter(request: Request, background: BackgroundTasks, u
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
     background.add_task(send_welcome_email, u["email"], u.get("name", ""), u.get("referral_code", ""), bonus, f"{origin}/dashboard")
     return {"message": "Welcome letter sent to your email"}
+
+
+async def _device_dup(u: dict):
+    """Earlier verified customer that signed up from the same device (fingerprint or stored device id)."""
+    d = u.get("signup_device") or {}
+    ors = [{"signup_device.fp": d["fp"]}] if d.get("fp") else []
+    if d.get("id"):
+        ors.append({"signup_device.id": d["id"]})
+    if not ors:
+        return None
+    return await db.users.find_one({"_id": {"$ne": u["_id"]}, "role": "customer", "email_verified": True, "account_status": {"$ne": "deleted"}, "$or": ors},
+                                   {"name": 1, "email": 1, "referral_code": 1})
+
+
+async def apply_device_rule(email: str) -> None:
+    """One device = one rewarded account. A second signup from the same device still gets an account, but no referral / dedicated / signup bonus."""
+    u = await db.users.find_one({"email": email})
+    if not u or u.get("role") != "customer":
+        return
+    flags = {}
+    dup = await _device_dup(u)
+    if dup:
+        flags["same_device"] = True
+        flags["dup_of"] = dup.get("referral_code") or dup.get("email")
+        flags["dup_user_id"] = str(dup["_id"])
+    ip = (u.get("signup_device") or {}).get("ip")
+    if ip:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        same_ip = await db.users.find({"_id": {"$ne": u["_id"]}, "role": "customer", "signup_device.ip": ip, "created_at": {"$gte": since}}, {"referral_code": 1}).to_list(20)
+        if same_ip:
+            flags["same_ip_with"] = [s.get("referral_code") for s in same_ip if s.get("referral_code")]
+    if not flags:
+        return
+    upd = {"signup_flags": {**flags, "flagged_at": now_iso()}}
+    if dup:
+        referrer = await db.users.find_one({"referral_code": u.get("referred_by_code") or "", "role": "customer"}, {"_id": 1}) if u.get("referred_by_code") else None
+        upd.update({"referral_bonus_paid": True, "dedicated_referral_paid": True, "referral_limit_exceeded": "device", "referred_by_user_id": str(referrer["_id"]) if referrer else ""})
+        logger.info(f"[device rule] {email} signed up from the same device as {flags['dup_of']} — no referral/signup bonus")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": upd})
 
 
 async def apply_referral_limit(email: str) -> None:
@@ -1495,7 +1539,8 @@ async def _signup_dup(u: dict):
         ors.append({"kyc.pan": pan})
     dup = await db.users.find_one({"_id": {"$ne": u["_id"]}, "role": "customer", "created_at": {"$lt": u.get("created_at", "")}, "$or": ors}) if ors else None
     if not dup:
-        return None, ""
+        dd = await _device_dup(u)
+        return (dd, "device") if dd else (None, "")
     f = "mobile" if dup.get("mobile") == u.get("mobile") else "email" if (dup.get("email") or "").lower() == (u.get("email") or "").lower() else "PAN"
     return dup, f
 
@@ -2483,6 +2528,36 @@ async def admin_edit_kyc(uid: str, body: KycIn, request: Request, admin: dict = 
     return public_user(full)
 
 
+@api.get("/admin/suspicious-signups")
+async def admin_suspicious_signups(admin: dict = Depends(require_admin)):
+    proj = {"name": 1, "email": 1, "mobile": 1, "referral_code": 1, "referred_by_code": 1, "created_at": 1, "signup_flags": 1, "signup_device": 1, "email_verified": 1, "account_status": 1, "kyc.status": 1}
+    users = await db.users.find({"role": "customer", "account_status": {"$ne": "deleted"}, "$or": [{"signup_device.fp": {"$nin": ["", None]}}, {"signup_device.id": {"$nin": ["", None]}}, {"signup_device.ip": {"$nin": ["", None]}}]}, proj).sort("created_at", -1).to_list(5000)
+
+    def row(u):
+        return {"id": str(u["_id"]), "name": u.get("name"), "email": u.get("email"), "mobile": u.get("mobile"), "referral_code": u.get("referral_code"), "referred_by_code": u.get("referred_by_code") or "",
+                "created_at": u.get("created_at"), "verified": bool(u.get("email_verified")), "kyc": (u.get("kyc") or {}).get("status", "not_submitted"), "flags": u.get("signup_flags") or {},
+                "ip": (u.get("signup_device") or {}).get("ip", ""), "ua": (u.get("signup_device") or {}).get("ua", "")}
+
+    def groups(keyf):
+        g = {}
+        for u in users:
+            k = keyf(u)
+            if k:
+                g.setdefault(k, []).append(u)
+        return [{"key": k, "count": len(v), "users": [row(u) for u in v]} for k, v in g.items() if len(v) > 1]
+
+    dev = {}
+    for u in users:
+        d = u.get("signup_device") or {}
+        k = d.get("fp") or d.get("id")
+        if k:
+            dev.setdefault(k, []).append(u)
+    device_groups = sorted([{"key": k[:12], "count": len(v), "users": [row(u) for u in v]} for k, v in dev.items() if len(v) > 1], key=lambda x: -x["count"])
+    ip_groups = sorted(groups(lambda u: (u.get("signup_device") or {}).get("ip")), key=lambda x: -x["count"])
+    blocked = sum(1 for u in users if (u.get("signup_flags") or {}).get("same_device"))
+    return {"device_groups": device_groups, "ip_groups": ip_groups, "blocked_count": blocked, "tracked": len(users)}
+
+
 @api.get("/admin/dashboard")
 async def admin_dashboard(admin: dict = Depends(require_admin)):
     cq = {"is_deleted": False}
@@ -3029,7 +3104,8 @@ async def startup():
         await db.salary_adjustments.create_index([("employee_id", 1), ("month", 1)], unique=True)
         for coll, keys in (("users", [("role", 1), ("email_verified", 1), ("account_status", 1), ("created_at", -1)]), ("users", [("role", 1), ("kyc.status", 1), ("kyc.submitted_at", -1)]),
                            ("transactions", [("user_id", 1), ("type", 1)]), ("transactions", [("user_id", 1), ("created_at", -1)]), ("withdrawals", [("user_id", 1), ("status", 1)]),
-                           ("notifications", [("user_id", 1), ("created_at", -1)]), ("leads", [("partner_id", 1), ("created_at", -1)]), ("activity_logs", [("actor_id", 1), ("created_at", -1)])):
+                           ("notifications", [("user_id", 1), ("created_at", -1)]), ("leads", [("partner_id", 1), ("created_at", -1)]), ("activity_logs", [("actor_id", 1), ("created_at", -1)]),
+                           ("users", [("signup_device.fp", 1)]), ("users", [("signup_device.id", 1)]), ("users", [("signup_device.ip", 1)])):
             await db[coll].create_index(keys)
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])

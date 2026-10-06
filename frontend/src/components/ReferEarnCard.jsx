@@ -110,7 +110,7 @@ export function ReferEarnCard({ code }) {
               {stats.recent.map((r, i) => (
                 <li key={i} data-testid={`refer-joined-${i}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                   <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-700">{(r.name || "?")[0]}</span><span className="font-semibold text-slate-800">{r.name}</span></span>
-                  <span className="flex items-center gap-2 text-xs text-slate-500">{(r.joined_at || "").slice(0, 10)}{r.limit_exceeded && <span data-testid={`refer-no-bonus-${i}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">No bonus · {r.limit_exceeded} limit</span>}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${r.kyc === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>KYC {r.kyc.replace("_", " ")}</span></span>
+                  <span className="flex items-center gap-2 text-xs text-slate-500">{(r.joined_at || "").slice(0, 10)}{r.limit_exceeded && <span data-testid={`refer-no-bonus-${i}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">{r.limit_exceeded === "device" ? "No bonus · same device" : `No bonus · ${r.limit_exceeded} limit`}</span>}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${r.kyc === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>KYC {r.kyc.replace("_", " ")}</span></span>
                 </li>
               ))}
             </ul>

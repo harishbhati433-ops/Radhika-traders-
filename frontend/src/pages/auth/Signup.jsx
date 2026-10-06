@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { getDeviceFingerprint, getDeviceId } from "../../lib/device";
 import { AuthShell } from "../../components/AuthShell";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -33,7 +34,7 @@ export default function Signup() {
     if (!agreed) { toast.error("कृपया Partner Declaration & Terms का checkbox tick करें"); return; }
     setLoading(true);
     try {
-      await api.post("/auth/register", { ...form, referred_by: referredBy, accepted_terms: true, terms_version: PARTNER_TERMS_VERSION });
+      await api.post("/auth/register", { ...form, referred_by: referredBy, accepted_terms: true, terms_version: PARTNER_TERMS_VERSION, device_fp: getDeviceFingerprint(), device_id: getDeviceId() });
       toast.success("OTP sent to your email");
       setStep(2);
     } catch (err) {

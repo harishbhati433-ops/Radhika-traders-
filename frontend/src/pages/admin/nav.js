@@ -1,4 +1,4 @@
-import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History, Wallet, Headphones, CalendarCheck, Camera } from "lucide-react";
+import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, ShieldAlert, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History, Wallet, Headphones, CalendarCheck, Camera } from "lucide-react";
 
 export const adminNav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
@@ -9,6 +9,7 @@ export const adminNav = [
   { to: "/admin/dedicated-referrals", label: "Dedicated Referral", icon: Gift, group: "Customers", adminOnly: true },
   { to: "/admin/leads", label: "Leads / Reports", icon: ClipboardList, group: "Customers", perm: "leads" },
   { to: "/admin/kyc", label: "KYC Management", icon: ShieldCheck, group: "Customers", perm: "clients" },
+  { to: "/admin/suspicious-signups", label: "Suspicious Signups", icon: ShieldAlert, group: "Customers", adminOnly: true },
   { to: "/admin/withdrawals", label: "Withdrawals", icon: ArrowDownToLine, group: "Payments", perm: "withdrawals" },
   { to: "/admin/wallets", label: "Wallet Balances", icon: Wallet, group: "Payments", perm: "payments" },
   { to: "/admin/broadcast", label: "Broadcast", icon: Send, group: "Communication", perm: "reports" },

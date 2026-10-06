@@ -445,3 +445,11 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - AdminDashboard warms settings/attendance-dashboard/signup-bonus-log in parallel; AdminCustomers no debounce on first load.
 - Backend: GET /api/admin/kyc paginated {items,page,pages,total,limit,counts}; AdminKyc.jsx uses Pager (kyc-pager*) + server counts. compute_wallet & admin_dashboard use asyncio.gather. New compound indexes (users role/email_verified/account_status/created_at; users role/kyc.status/kyc.submitted_at; transactions user_id+type / user_id+created_at; withdrawals user_id+status; notifications; leads; activity_logs).
 - Tested: iteration_33 (backend 8/8, frontend all flows pass).
+
+
+## One Device = One Rewarded Account (anti-referral-abuse) — Oct 2026
+- Decision (user): account creation is NEVER blocked; a 2nd signup from the same device gets NO referral bonus, NO dedicated payout, NO signup bonus. Same-IP is info-only (CGNAT in India).
+- Frontend: `lib/device.js` (fingerprint hash of UA/screen/timezone/canvas/WebGL + persistent `rt_device_id` in localStorage). Signup.jsx sends `device_fp`, `device_id` with /auth/register.
+- Backend: `signup_device {fp,id,ip,ua,at}` stored at register. `apply_device_rule(email)` runs in verify-otp before referral payouts: sets `signup_flags {same_device, dup_of, dup_user_id, same_ip_with[]}`, and for dup → referral_bonus_paid/dedicated_referral_paid=True, referral_limit_exceeded="device". `_signup_dup` also returns (dup,"device") so signup bonus is logged not_eligible. New indexes on signup_device.fp/id/ip.
+- Admin: GET /api/admin/suspicious-signups → {device_groups, ip_groups, blocked_count, tracked}; page /admin/suspicious-signups (nav: Customers → Suspicious Signups). Customers table shows "Dup device" badge (customer-dup-device-<id>). ReferEarnCard shows "No bonus · same device".
+- Sim: backend/tests/sim_device_rule.py (verified: 2nd account flagged, no REF credit, admin group count 2).
