@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
 import { PwaEntry } from "./components/PwaEntry";
+import { NetworkBanner } from "./components/NetworkBanner";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
@@ -191,6 +192,7 @@ function App() {
         </ShutdownGate>
         <WhatsAppFloat />
         <InstallPrompt />
+        <NetworkBanner />
         <CelebrationLayer />
         <ChunkPrefetcher />
       </BrowserRouter>

@@ -478,3 +478,10 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## PWA Direct-to-Dashboard — Oct 2026
 - Installed app (standalone display-mode / navigator.standalone / ?source=pwa) opening at "/" redirects to the user's panel (customer /dashboard, employee /employee, admin /admin) or /login if logged out. Website visits in browser unchanged. Component: components/PwaEntry.jsx (mounted in App.js). manifest shortcuts now Dashboard / My Wallet / My Leads with ?source=pwa. Website still reachable from the app via logo/menu links.
+
+
+## Weak-Network Resilience — Oct 2026
+- api.js: 25s timeout; GETs auto-retry 3x (700ms backoff) on network error/timeout/502/504; last good JSON per GET persisted in localStorage (`rt_api_persist_v1`, ≤1.2MB, skips `_t` cache-busted keys) and served (flagged `stale`) when the network fails; events rt:net-degraded / rt:net-ok. Offline/timeout errors get a human `detail` message (status 0) so every existing toast reads well. clearApiCache wipes persisted data on logout.
+- components/NetworkBanner.jsx (mounted in App): offline (dark) / weak connection (amber, "showing saved data from HH:MM") with Retry; auto-hides on first successful request.
+- sw.js v4: navigation network-first with 4s timeout → cached shell; hashed JS/CSS/images cache-first; Google Fonts stale-while-revalidate.
+- Verified: wallet page offline shows ₹45 + transactions from saved copy with banner; back online banner disappears; offline write shows clear message; retry succeeded after reconnect.
