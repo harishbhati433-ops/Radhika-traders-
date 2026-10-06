@@ -7,7 +7,7 @@ import { isStandalone } from "./PwaEntry";
 const isIOS = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream;
 
 // "Download the app" card for auth pages: one tap install on Android/Chrome, step guide on iPhone, hidden inside the installed app.
-export function InstallAppCard() {
+export function InstallAppCard({ audience = "customer" }) {
   const [ready, setReady] = useState(!!window.__rtInstallPrompt);
   const [installed, setInstalled] = useState(isStandalone());
   const [ios] = useState(isIOS());
@@ -24,17 +24,18 @@ export function InstallAppCard() {
     toast.info(ios ? "On iPhone: tap Share → Add to Home Screen." : "Open the Chrome menu (⋮) and choose 'Install app' or 'Add to Home screen'.", { duration: 7000 });
   };
 
+  const emp = audience === "employee";
   return (
     <div data-testid="install-app-card" className="mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-[#0B0F17] via-[#1a0f12] to-[#2a0a0a] p-4 text-white shadow-lg">
       <div className="flex items-center gap-3">
         <img src="/icons/icon-192.png" alt="Radhika Traders app" className="h-12 w-12 shrink-0 rounded-xl ring-1 ring-amber-400/50" />
         <div className="min-w-0 flex-1">
           <div className="font-display text-sm font-extrabold leading-tight">Get the Radhika Traders App</div>
-          <div className="mt-0.5 text-[11px] text-slate-300">Official partner app · Faster, secure access to campaigns, wallet & earnings</div>
+          <div className="mt-0.5 text-[11px] text-slate-300">{emp ? "Official team app · Attendance, salary & KYC in one place" : "Official partner app · Faster, secure access to campaigns, wallet & earnings"}</div>
         </div>
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-200">
-        {["Opens straight to your dashboard", "PIN & fingerprint protection", "Reliable on slow networks", "Instant earning updates"].map((f) => <li key={f} className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> {f}</li>)}
+        {(emp ? ["One-tap check-in & check-out", "Attendance reminders", "PIN & fingerprint protection", "Reliable on slow networks"] : ["Opens straight to your dashboard", "PIN & fingerprint protection", "Reliable on slow networks", "Instant earning updates"]).map((f) => <li key={f} className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> {f}</li>)}
       </ul>
       {ios ? (
         <div data-testid="install-app-ios" className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-[11px] leading-relaxed text-slate-100">

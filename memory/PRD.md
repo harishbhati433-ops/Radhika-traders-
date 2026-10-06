@@ -488,4 +488,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 
 ## Install App card on Login/Signup — Oct 2026
-- components/InstallAppCard.jsx rendered at bottom of AuthShell (customer Login/Signup/Forgot pages; hidden on Admin & Employee login via showInstall={false}; hidden inside the installed app). Android/Chrome: one-tap install via captured beforeinstallprompt (`triggerInstall`), else toast with Chrome menu steps; iPhone: Share → Add to Home Screen guide. Test id install-app-card / install-app-btn / install-app-ios.
+- components/InstallAppCard.jsx rendered at bottom of AuthShell (customer Login/Signup/Forgot pages; hidden on Admin login via showInstall={false}; Employee login shows it with installAudience="employee" copy (attendance/salary/KYC); hidden inside the installed app). Android/Chrome: one-tap install via captured beforeinstallprompt (`triggerInstall`), else toast with Chrome menu steps; iPhone: Share → Add to Home Screen guide. Test id install-app-card / install-app-btn / install-app-ios.
