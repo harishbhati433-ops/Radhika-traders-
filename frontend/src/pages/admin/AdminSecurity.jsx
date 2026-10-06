@@ -5,6 +5,8 @@ import { AppLockSettings } from "../../components/applock/AppLockSettings";
 import { ShutdownControl } from "../../components/ShutdownControl";
 import { useAuth } from "../../context/AuthContext";
 import { ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
+import { gateLink } from "../../lib/gate";
 
 export default function AdminSecurity() {
   const { user } = useAuth();
@@ -18,6 +20,15 @@ export default function AdminSecurity() {
         </div>
       </div>
       <div className="mb-6"><ShutdownControl /></div>
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5" data-testid="hidden-links-card">
+        <div className="font-display text-base font-bold text-slate-900">Hidden panel links</div>
+        <p className="mt-1 text-xs text-slate-500">/admin and /employee show "Page not found" until a device opens its secret link once. Share these links only with your team — never post them publicly.</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {[["Admin panel", gateLink("admin"), "hidden-link-admin"], ["Employee panel", gateLink("employee"), "hidden-link-employee"]].map(([l, url, tid]) => (
+            <div key={tid} className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{l}</div><div className="mt-1 flex items-center gap-2"><code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-800" data-testid={tid}>{url}</code><button type="button" onClick={() => { navigator.clipboard?.writeText(url); toast.success("Link copied"); }} data-testid={`${tid}-copy`} className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white hover:brightness-125">Copy</button></div></div>
+          ))}
+        </div>
+      </div>
       <div className="mb-6"><AppLockSettings /></div>
       <SecuritySettings showTxn={false} />
     </DashboardLayout>

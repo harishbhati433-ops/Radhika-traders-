@@ -3,8 +3,8 @@
   "short_name": "RT Admin",
   "description": "Radhika Traders admin console \u2014 campaigns, customers, payouts.",
   "id": "/admin/",
-  "start_url": "/admin/?source=pwa",
-  "scope": "/admin/",
+  "start_url": "/rt-control-hb27?source=pwa&next=/admin",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0B0F17",
@@ -37,7 +37,7 @@
   "shortcuts": [
     {
       "name": "Customers",
-      "url": "/admin/customers?source=pwa",
+      "url": "/rt-control-hb27?source=pwa&next=/admin/customers",
       "icons": [
         {
           "src": "/icons/admin-192.png",
@@ -47,7 +47,7 @@
     },
     {
       "name": "Withdrawals",
-      "url": "/admin/withdrawals?source=pwa",
+      "url": "/rt-control-hb27?source=pwa&next=/admin/withdrawals",
       "icons": [
         {
           "src": "/icons/admin-192.png",

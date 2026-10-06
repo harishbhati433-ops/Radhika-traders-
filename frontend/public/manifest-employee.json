@@ -3,8 +3,8 @@
   "short_name": "RT Employee",
   "description": "Radhika Traders team workspace \u2014 attendance, salary, KYC.",
   "id": "/employee/",
-  "start_url": "/employee/?source=pwa",
-  "scope": "/employee/",
+  "start_url": "/rt-team-9k4e?source=pwa&next=/employee",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0B0F17",
@@ -37,7 +37,7 @@
   "shortcuts": [
     {
       "name": "Attendance",
-      "url": "/employee/attendance?source=pwa",
+      "url": "/rt-team-9k4e?source=pwa&next=/employee/attendance",
       "icons": [
         {
           "src": "/icons/employee-192.png",

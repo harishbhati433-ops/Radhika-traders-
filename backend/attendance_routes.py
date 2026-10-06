@@ -634,7 +634,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         final = await salary_row(emp, month, ist_today())
         if body.published and real_email(emp) and final["payment_status"] != "paid":
             origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
-            background.add_task(send_salary_published_email, real_email(emp), emp.get("name", ""), employee_view(final), f"{origin}/employee/attendance")
+            background.add_task(send_salary_published_email, real_email(emp), emp.get("name", ""), employee_view(final), f"{origin}/rt-team-9k4e?next=/employee/attendance")
             final["email_sent_to"] = real_email(emp)
         return final
 
@@ -941,7 +941,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         recs = {a["employee_id"]: a for a in await db.attendance.find({"date": today}).to_list(1000)}
         sent_kinds = {(x["employee_id"], x.get("kind", "checkin")) for x in await db.attendance_reminders.find({"date": today}, {"employee_id": 1, "kind": 1}).to_list(2000)}
         d = datetime.fromisoformat(today).strftime("%d %b %Y")
-        link = f"{origin}/employee/attendance"
+        link = f"{origin}/rt-team-9k4e?next=/employee/attendance"
         sent = 0
         async for emp in db.users.find({"role": "employee", "account_status": {"$nin": ["deleted", "disabled", "inactive"]}}, {"name": 1, "email": 1, "employee_code": 1, "joining_date": 1, "created_at": 1}):
             eid = str(emp["_id"])

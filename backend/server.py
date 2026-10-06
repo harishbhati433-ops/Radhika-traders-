@@ -1995,7 +1995,7 @@ async def request_withdrawal(body: WithdrawIn, request: Request, background: Bac
 
 async def _notify_admin_withdrawal(w: dict, customer_id: str, origin: str):
     when = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %B %Y, %I:%M %p IST")
-    link = f"{origin}/admin/withdrawals?highlight={w['id']}"
+    link = f"{origin}/rt-control-hb27?next=/admin/withdrawals%3Fhighlight={w['id']}"
     admins = await db.users.find({"role": "admin"}, {"email": 1, "_id": 1}).to_list(10)
     emails = {a["email"] for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
     for email in emails:

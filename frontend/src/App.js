@@ -3,7 +3,9 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
-import { PwaEntry } from "./components/PwaEntry";
+import { PwaEntry, isStandalone } from "./components/PwaEntry";
+import { GateEntry } from "./components/GateEntry";
+import { GATES, hasGate } from "./lib/gate";
 import { getToken, portalFromPath } from "./lib/portal";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { Toaster } from "sonner";
@@ -96,12 +98,24 @@ function SplashDismiss() {
 }
 
 // Keeps the auth session in step with the portal the URL belongs to (/, /employee, /admin).
-function PortalSync() {
+// Also hides staff panels behind their secret entry link: without it, /admin/* and /employee/* look like a missing page.
+function PortalSync({ children }) {
   const { switchPortal } = useAuth();
   const { pathname } = useLocation();
-  useEffect(() => { switchPortal(portalFromPath(pathname)); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-  return null;
+  const portal = portalFromPath(pathname);
+  useEffect(() => { switchPortal(portal); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (portal !== "customer" && !hasGate(portal) && !isStandalone()) return <HiddenPage />;
+  return children;
 }
+
+const HiddenPage = () => (
+  <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-6 text-center" data-testid="hidden-page">
+    <img src="/images/logo-tile.png" alt="" className="mb-6 h-16 w-16 rounded-2xl shadow-lg ring-1 ring-amber-500/40" />
+    <div className="font-display text-5xl font-extrabold text-slate-900">404</div>
+    <p className="mt-2 text-sm text-slate-500">The page you're looking for doesn't exist.</p>
+    <a href="/" className="mt-6 rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:bg-red-700">Go to homepage</a>
+  </div>
+);
 
 // Warm all route chunks while the browser is idle so the first click on any menu item is instant.
 const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
@@ -141,10 +155,12 @@ function App() {
         <ShutdownGate>
         <Suspense fallback={<Fallback />}>
           <SplashDismiss />
-          <PortalSync />
           <PwaEntry />
+          <PortalSync>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path={`/${GATES.admin}`} element={<GateEntry portal="admin" />} />
+            <Route path={`/${GATES.employee}`} element={<GateEntry portal="employee" />} />
             <Route path="/maintenance" element={<MaintenanceRoute />} />
             <Route path="/about" element={<About />} />
             <Route path="/services" element={<Services />} />
@@ -198,6 +214,7 @@ function App() {
             <Route path="/employee/kyc" element={E(<EmployeeKyc />)} />
             <Route path="/employee/attendance" element={E(<EmployeeAttendance />)} />
           </Routes>
+          </PortalSync>
         </Suspense>
         </ShutdownGate>
         <WhatsAppFloat />
