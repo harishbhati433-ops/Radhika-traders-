@@ -42,7 +42,7 @@ export default function CustomerDashboard() {
     <DashboardLayout nav={customerNav} title={`Hi ${user?.name?.split(" ")[0] || ""} 👋`}>
       <WelcomeModal />
       {!kycDone && (
-        <Link to="/profile" data-testid="kyc-alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm font-medium text-amber-800 hover:bg-amber-100">
+        <Link to="/app/profile" data-testid="kyc-alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm font-medium text-amber-800 hover:bg-amber-100">
           <ShieldAlert className="h-5 w-5 shrink-0" /> Complete your KYC to enable withdrawals. <ArrowRight className="ml-auto h-4 w-4" />
         </Link>
       )}
@@ -76,7 +76,7 @@ export default function CustomerDashboard() {
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-bold text-slate-900">Available Campaigns</h2>
-            <Link to="/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">View all <ArrowRight className="h-4 w-4" /></Link>
+            <Link to="/app/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">View all <ArrowRight className="h-4 w-4" /></Link>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {campaigns.map((c) => (

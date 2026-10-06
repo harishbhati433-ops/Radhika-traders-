@@ -20,7 +20,7 @@ export function ReferEarnCard({ code }) {
     api.get("/my-referrals").then(({ data }) => setStats(data)).catch(() => {});
   }, []);
 
-  const link = `${window.location.origin}/signup?ref=${code}`;
+  const link = `${window.location.origin}/app/signup?ref=${code}`;
   const qr = useBlobUrl(`/share/qr?url=${encodeURIComponent(link)}&size=400`, [link]);
   const partnerName = (user?.name || "a partner").replace(/\b\w/g, (m) => m.toUpperCase());
   const bonusLine = signupBonus > 0 ? `\n🎁 Sign up with my link and receive a *₹${signupBonus} welcome bonus*` : "";

@@ -20,7 +20,7 @@ export function useCountdown(seconds, setSeconds) {
 
 export default function ForgotPassword({ portal = "customer" }) {
   const isAdmin = portal === "admin";
-  const loginPath = isAdmin ? "/admin/login" : "/login";
+  const loginPath = isAdmin ? "/admin/login" : "/app/login";
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");

@@ -1,10 +1,10 @@
 {
-  "name": "Radhika Traders \u2014 Earn with Referrals",
+  "name": "Radhika Traders — Earn with Referrals",
   "short_name": "Radhika Traders",
   "description": "Trusted Partner for Financial Growth. Share campaign links, track leads and earnings, withdraw to your bank.",
-  "id": "/",
-  "start_url": "/?source=pwa",
-  "scope": "/",
+  "id": "/app/",
+  "start_url": "/app/dashboard?source=pwa",
+  "scope": "/app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0B0F17",
@@ -37,7 +37,7 @@
   "shortcuts": [
     {
       "name": "Dashboard",
-      "url": "/dashboard?source=pwa",
+      "url": "/app/dashboard?source=pwa",
       "icons": [
         {
           "src": "/icons/icon-192.png",
@@ -47,7 +47,7 @@
     },
     {
       "name": "My Wallet",
-      "url": "/wallet?source=pwa",
+      "url": "/app/wallet?source=pwa",
       "icons": [
         {
           "src": "/icons/icon-192.png",
@@ -57,7 +57,7 @@
     },
     {
       "name": "My Leads",
-      "url": "/my-leads?source=pwa",
+      "url": "/app/my-leads?source=pwa",
       "icons": [
         {
           "src": "/icons/icon-192.png",

@@ -40,9 +40,9 @@ export function WelcomeModal() {
           <div className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-400">Get started in 3 steps</div>
           <ol className="mt-3 space-y-3 text-sm">
             {[
-              [ShieldCheck, "Complete your KYC", "Add PAN, bank or UPI details so your payouts are never delayed.", "/profile"],
-              [Megaphone, "Pick a campaign", "Open Campaigns and copy your personal referral link.", "/my-campaigns"],
-              [Share2, "Share & earn", "Share on WhatsApp / Telegram — every approved account pays you a fixed amount.", "/dashboard"],
+              [ShieldCheck, "Complete your KYC", "Add PAN, bank or UPI details so your payouts are never delayed.", "/app/profile"],
+              [Megaphone, "Pick a campaign", "Open Campaigns and copy your personal referral link.", "/app/my-campaigns"],
+              [Share2, "Share & earn", "Share on WhatsApp / Telegram — every approved account pays you a fixed amount.", "/app/dashboard"],
             ].map(([Icon, t, d, to], i) => (
               <li key={t} className="flex items-start gap-3">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-700">{i + 1}</div>
@@ -51,8 +51,8 @@ export function WelcomeModal() {
             ))}
           </ol>
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-            <Link to="/profile" onClick={close} data-testid="welcome-modal-kyc" className="rt-gradient-btn flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold"><ShieldCheck className="h-4 w-4" /> Complete KYC now</Link>
-            <Link to="/welcome-letter" onClick={close} data-testid="welcome-modal-letter" className="flex flex-1 items-center justify-center gap-2 rounded-full border border-slate-200 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><Wallet className="h-4 w-4" /> View welcome letter <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link to="/app/profile" onClick={close} data-testid="welcome-modal-kyc" className="rt-gradient-btn flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold"><ShieldCheck className="h-4 w-4" /> Complete KYC now</Link>
+            <Link to="/app/welcome-letter" onClick={close} data-testid="welcome-modal-letter" className="flex flex-1 items-center justify-center gap-2 rounded-full border border-slate-200 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"><Wallet className="h-4 w-4" /> View welcome letter <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <button onClick={close} data-testid="welcome-modal-close" className="mt-3 w-full text-center text-xs font-semibold text-slate-400 hover:text-slate-600">Explore dashboard →</button>
         </div>

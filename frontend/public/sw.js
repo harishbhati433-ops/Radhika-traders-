@@ -1,4 +1,4 @@
-const CACHE = "rt-pwa-v7";
+const CACHE = "rt-pwa-v8";
 const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png"];
 const NAV_TIMEOUT_MS = 4000;
 

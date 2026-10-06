@@ -193,7 +193,7 @@ export default function Home() {
         <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] p-10 text-center sm:p-16">
           <h2 className="font-display text-3xl font-extrabold text-white sm:text-4xl">Ready to grow your income?</h2>
           <p className="mx-auto mt-3 max-w-xl text-red-100">Join Radhika Traders today and turn your network into earnings.</p>
-          <Link to="/signup" className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-red-700 hover:bg-amber-50">
+          <Link to="/app/signup" className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-bold text-red-700 hover:bg-amber-50">
             Create Free Account <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

@@ -20,7 +20,7 @@ export default function Partners() {
           <h1 className="mt-3 max-w-3xl font-display text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">Partner With <span className="text-red-500">Radhika Traders</span> and monetise your network</h1>
           <p className="mt-5 max-w-2xl text-base text-slate-300 sm:text-lg">Influencers, agents, students, sub-brokers, telecallers — anyone with an audience can promote our financial campaigns and earn a payout on every eligible conversion.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/signup" data-testid="partners-register" className="rt-gradient-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold">Register as Partner <ArrowRight className="h-4 w-4" /></Link>
+            <Link to="/app/signup" data-testid="partners-register" className="rt-gradient-btn inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold">Register as Partner <ArrowRight className="h-4 w-4" /></Link>
             <Link to="/campaigns" data-testid="partners-campaigns" className="inline-flex items-center gap-2 rounded-full border border-white/20 px-6 py-3 text-sm font-bold text-white hover:bg-white/10">See Live Campaigns</Link>
           </div>
         </div>
@@ -42,7 +42,7 @@ export default function Partners() {
               <li key={s} className="flex gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400 font-mono text-sm font-bold text-slate-950">{i + 1}</span><span className="text-sm text-slate-200">{s}</span></li>
             ))}
           </ol>
-          <Link to="/signup" className="mt-8 inline-flex items-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 hover:brightness-110">Partner With Us <ArrowRight className="h-4 w-4" /></Link>
+          <Link to="/app/signup" className="mt-8 inline-flex items-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-sm font-bold text-slate-950 hover:brightness-110">Partner With Us <ArrowRight className="h-4 w-4" /></Link>
         </div>
       </section>
     </PublicLayout>

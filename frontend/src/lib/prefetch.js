@@ -14,13 +14,13 @@ const ROUTE_DATA = {
   "/admin/attendance": () => [["/admin/attendance/dashboard"], ["/admin/attendance", { month: month() }]],
   "/admin/campaigns": () => [["/campaigns", { admin_view: true }]],
   "/admin/reports": () => [["/admin/reports"]],
-  "/dashboard": () => [["/wallet"], ["/campaigns"], ["/settings/public"], ["/my-referrals"], ["/leaderboard"], ["/banners"]],
-  "/wallet": () => [["/wallet"], ["/wallet/transactions"]],
-  "/withdrawals": () => [["/wallet"], ["/withdrawals"], ["/settings/public"]],
-  "/my-leads": () => [["/my-leads"]],
-  "/my-campaigns": () => [["/campaigns"]],
-  "/reports": () => [["/reports"]],
-  "/welcome-letter": () => [["/me/welcome-letter"]],
+  "/app/dashboard": () => [["/wallet"], ["/campaigns"], ["/settings/public"], ["/my-referrals"], ["/leaderboard"], ["/banners"]],
+  "/app/wallet": () => [["/wallet"], ["/wallet/transactions"]],
+  "/app/withdrawals": () => [["/wallet"], ["/withdrawals"], ["/settings/public"]],
+  "/app/my-leads": () => [["/my-leads"]],
+  "/app/my-campaigns": () => [["/campaigns"]],
+  "/app/reports": () => [["/reports"]],
+  "/app/welcome-letter": () => [["/me/welcome-letter"]],
   "/employee": () => [["/employee/my-activity"], ["/employee/attendance", { month: month() }]],
   "/employee/attendance": () => [["/employee/attendance", { month: month() }], ["/employee/salary"]],
   "/employee/kyc": () => [["/employee/kyc"]],
@@ -31,7 +31,7 @@ export const prefetchRoute = (path) => { const f = ROUTE_DATA[path]; return f ? 
 const ROLE_ROUTES = {
   admin: ["/admin/customers", "/admin/kyc", "/admin/withdrawals", "/admin/wallets", "/admin/employees", "/admin/attendance", "/admin/campaigns"],
   employee: ["/employee/attendance", "/employee/kyc"],
-  customer: ["/wallet", "/withdrawals", "/my-leads", "/my-campaigns", "/reports"],
+  customer: ["/app/wallet", "/app/withdrawals", "/app/my-leads", "/app/my-campaigns", "/app/reports"],
 };
 // Background warm-up, one panel at a time so it never competes with what the user is looking at.
 export const prefetchForRole = async (role) => { for (const r of ROLE_ROUTES[role] || []) await prefetchRoute(r); };

@@ -64,7 +64,7 @@ export default function Profile() {
 
   return (
     <DashboardLayout nav={customerNav} title="Profile & KYC">
-      <Link to="/welcome-letter" data-testid="profile-welcome-letter" className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 hover:border-amber-300">
+      <Link to="/app/welcome-letter" data-testid="profile-welcome-letter" className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 hover:border-amber-300">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-[#991B1B] p-2.5 text-white"><Award className="h-5 w-5" /></div>
           <div>

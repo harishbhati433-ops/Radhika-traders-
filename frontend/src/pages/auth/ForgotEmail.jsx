@@ -29,7 +29,7 @@ export default function ForgotEmail() {
           <div className="mt-2 text-sm text-emerald-800">Your registered email is</div>
           <div className="mt-1 font-mono text-xl font-bold text-slate-900" data-testid="forgot-email-masked">{result}</div>
           <p className="mt-3 text-xs text-slate-500">For your security only a masked email is shown. Use it to log in or reset your password.</p>
-          <Link to="/login" data-testid="forgot-email-login" className="rt-gradient-btn mt-5 inline-flex rounded-full px-6 py-2.5 text-sm font-bold">Go to Login</Link>
+          <Link to="/app/login" data-testid="forgot-email-login" className="rt-gradient-btn mt-5 inline-flex rounded-full px-6 py-2.5 text-sm font-bold">Go to Login</Link>
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4" data-testid="forgot-email-form">
@@ -38,7 +38,7 @@ export default function ForgotEmail() {
           <div className="text-center text-xs text-slate-400">— or —</div>
           <div><Label>Date of Birth</Label><Input data-testid="forgot-email-dob" type="date" value={f.dob} onChange={(e) => setF({ ...f, dob: e.target.value })} className="mt-1.5" /></div>
           <button type="submit" disabled={busy} data-testid="forgot-email-submit" className="rt-gradient-btn inline-flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold disabled:opacity-60">{busy && <Loader2 className="h-4 w-4 animate-spin" />} Recover Email</button>
-          <p className="text-center text-xs text-slate-500">Remembered it? <Link to="/login" className="font-semibold text-red-600">Login</Link> · <Link to="/forgot-password" className="font-semibold text-red-600">Forgot Password</Link></p>
+          <p className="text-center text-xs text-slate-500">Remembered it? <Link to="/app/login" className="font-semibold text-red-600">Login</Link> · <Link to="/app/forgot-password" className="font-semibold text-red-600">Forgot Password</Link></p>
         </form>
       )}
     </AuthShell>

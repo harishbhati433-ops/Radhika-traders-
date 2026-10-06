@@ -66,7 +66,7 @@ export function DashboardLayout({ nav, children, title }) {
   useEffect(() => { setOpenGroup(activeGroup); setOpen(false); }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
 
-  const doLogout = () => { logout(); navigate(isEmp ? "/employee/login" : user?.role === "admin" ? "/admin/login" : "/login", { replace: true }); };
+  const doLogout = () => { logout(); navigate(isEmp ? "/employee/login" : user?.role === "admin" ? "/admin/login" : "/app/login", { replace: true }); };
 
   // Preserve order: ungrouped items stand alone; grouped items collapse into accordion sections (one open at a time)
   const sections = [];

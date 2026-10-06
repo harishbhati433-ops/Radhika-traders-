@@ -150,7 +150,7 @@ export default function CampaignDetail() {
               ) : (
                 <div className="mt-3 rounded-lg bg-slate-50 p-4 text-center">
                   <p className="text-sm text-slate-600">Login to get your unique referral link and start earning.</p>
-                  <Link to="/login" className="rt-gradient-btn mt-3 inline-block rounded-full px-5 py-2 text-sm font-bold">Login</Link>
+                  <Link to="/app/login" className="rt-gradient-btn mt-3 inline-block rounded-full px-5 py-2 text-sm font-bold">Login</Link>
                 </div>
               )}
 

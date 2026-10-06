@@ -47,7 +47,7 @@ export default function EmployeeLogin() {
         </button>
       </form>
       <p className="mt-6 text-center text-xs text-slate-500">Forgot password? Ask your Super Admin to reset it.</p>
-      <p className="mt-2 text-center text-sm text-slate-500"><Link to="/login" className="font-semibold text-red-600 hover:underline">Customer login</Link></p>
+      <p className="mt-2 text-center text-sm text-slate-500"><Link to="/app/login" className="font-semibold text-red-600 hover:underline">Customer login</Link></p>
     </AuthShell>
   );
 }

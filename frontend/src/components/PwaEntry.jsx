@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { grantGate } from "../lib/gate";
 
-const homeFor = (u) => (u.role === "admin" ? "/admin" : u.role === "employee" ? "/employee" : "/dashboard");
+const homeFor = (u) => (u.role === "admin" ? "/admin" : u.role === "employee" ? "/employee" : "/app/dashboard");
 
 // Installed app (home-screen icon) opens straight into the panel; normal website visits are untouched.
 export const isStandalone = () => {
@@ -21,7 +22,8 @@ export function PwaEntry() {
     done.current = true;
     if (!isStandalone()) return;
     const p = pathname.replace(/\/$/, "") || "/";
-    if (p === "/") nav(user ? homeFor(user) : "/login", { replace: true });
+    if (p.startsWith("/admin")) grantGate("admin"); else if (p.startsWith("/employee")) grantGate("employee");
+    if (p === "/") nav(user ? homeFor(user) : "/app/login", { replace: true });
     else if (p === "/employee" && !user) nav("/employee/login", { replace: true });
     else if (p === "/admin" && !user) nav("/admin/login", { replace: true });
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps

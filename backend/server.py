@@ -527,7 +527,7 @@ async def verify_otp(body: OtpVerifyIn, request: Request, background: Background
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"welcome": {"issued_at": now_iso(), "signup_bonus": bonus}}})
         await lock_signup_bonus(user)
         origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
-        background.add_task(send_welcome_email, email, user.get("name", ""), user.get("referral_code", ""), bonus, f"{origin}/dashboard")
+        background.add_task(send_welcome_email, email, user.get("name", ""), user.get("referral_code", ""), bonus, f"{origin}/app/dashboard")
     token = create_access_token(str(user["_id"]), email, user["role"], user.get("token_version", 0))
     return {"token": token, "user": public_user(user)}
 
@@ -547,7 +547,7 @@ async def resend_welcome_letter(request: Request, background: BackgroundTasks, u
     u = await db.users.find_one({"_id": ObjectId(user["id"])})
     bonus = float((u.get("welcome") or {}).get("signup_bonus", 0) or 0)
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
-    background.add_task(send_welcome_email, u["email"], u.get("name", ""), u.get("referral_code", ""), bonus, f"{origin}/dashboard")
+    background.add_task(send_welcome_email, u["email"], u.get("name", ""), u.get("referral_code", ""), bonus, f"{origin}/app/dashboard")
     return {"message": "Welcome letter sent to your email"}
 
 
@@ -1022,7 +1022,7 @@ async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] 
 async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
     full = await _apply_kyc(user["id"], body, "self")
     await db.notifications.insert_one({"user_id": user["id"], "title": "KYC Verified ✓", "body": "Your KYC details were verified successfully. Withdrawals are enabled.",
-                                       "link": "/withdrawals", "type": "kyc", "read": False, "created_at": now_iso()})
+                                       "link": "/app/withdrawals", "type": "kyc", "read": False, "created_at": now_iso()})
     return public_user(full)
 
 
@@ -1267,7 +1267,7 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
         return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
     if partner:
         await db.notifications.insert_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}" + (" (duplicate)" if original is not None else ""),
-                                           "body": f"{data.get('name') or 'A customer'} submitted details via your link." + (f" Marked duplicate of {original['lead_id']}." if original is not None else ""), "link": "/my-leads",
+                                           "body": f"{data.get('name') or 'A customer'} submitted details via your link." + (f" Marked duplicate of {original['lead_id']}." if original is not None else ""), "link": "/app/my-leads",
                                            "type": "lead", "read": False, "created_at": now_iso()})
     return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": original is not None}
 
@@ -1429,7 +1429,7 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
         label = (body.account_status or body.status).replace("_", " ")
         await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
                                            "body": f"{l.get('customer_name') or 'Customer'} · {l['campaign_name']}" + (f" · {body.reject_reason}" if body.reject_reason else ""),
-                                           "link": "/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
+                                           "link": "/app/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
     await log_activity(admin, "lead_status_updated", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
                        campaign_id=l.get("campaign_id", ""), campaign_name=l.get("campaign_name", ""), client_id=l.get("partner_id", ""), client_name=l.get("partner_name", ""),
                        status=body.account_status or body.status or "", detail=body.reject_reason or "")
@@ -1457,7 +1457,7 @@ async def admin_fund_lead(lid: str, body: LeadFundIn, request: Request, admin: d
     entry = {"amount": amount, "note": body.note.strip(), "ref_id": ref_id, "at": now_iso(), "by": admin["email"]}
     await db.leads.update_one({"_id": l["_id"]}, {"$push": {"fund_history": entry}, "$inc": {"fund_total": amount}, "$set": {"updated_at": now_iso()}})
     await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"₹{amount:g} credited for lead {l['lead_id']}",
-                                       "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/wallet",
+                                       "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/app/wallet",
                                        "type": "wallet", "read": False, "created_at": now_iso()})
     wallet = await compute_wallet(l["partner_id"])
     await log_activity(admin, "lead_fund_added", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
@@ -1694,7 +1694,7 @@ async def grant_signup_bonus(user_id: str, lead: dict) -> None:
     await db.users.update_one({"_id": u["_id"]}, {"$set": {"signup_bonus_paid": True, "signup_bonus_paid_at": now_iso(), "signup_bonus_ref": ref_id}})
     await _signup_bonus_log(u, amount, "credited", lead, "credited", "", ref_id)
     await db.notifications.insert_one({"user_id": user_id, "title": f"₹{amount:g} Signup Bonus credited", "body": f"Your lead {lead.get('lead_id', '')} was approved, so your Signup Bonus is now in your main wallet.",
-                                       "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+                                       "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
 
 
 @api.get("/admin/signup-bonus/log")
@@ -1729,7 +1729,7 @@ async def unlock_signup_bonus(user_id: str, lead: Optional[dict] = None) -> str:
     await _signup_bonus_log(u, total, "credited", lead, "credited", "", locked[0].get("ref_id", ""))
     await db.notifications.insert_one({"user_id": user_id, "title": f"₹{total:g} Signup Bonus moved to Main Wallet",
                                        "body": "Congratulations! Your first lead was approved, so your Signup Bonus is now withdrawable.",
-                                       "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+                                       "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return "credited"
 
 
@@ -2372,7 +2372,7 @@ async def admin_update_kyc(uid: str, body: KycStatusIn, request: Request, admin:
            "rejected": f"Your KYC was rejected. {body.note or 'Please re-submit correct details.'}",
            "deactivated": f"Your KYC has been deactivated. {body.note or 'Contact support.'}",
            "pending": "Your KYC is under review."}[body.status]
-    await db.notifications.insert_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/profile",
+    await db.notifications.insert_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/app/profile",
                                        "type": "kyc", "read": False, "created_at": now_iso()})
     await log_activity(admin, "kyc_status_updated", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""),
                        client_id=uid, client_name=u.get("name", ""), status=body.status, detail=body.note or "")
@@ -2575,7 +2575,7 @@ async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dic
     await log_activity(admin, "wallet_adjusted", request, entity_type="wallet", entity_id=ref_id, entity_label=u.get("name", ""), client_id=body.user_id,
                        client_name=u.get("name", ""), status=body.mode, amount=amount, detail=f"{reason} · ₹{before['balance']:g} → ₹{after['balance']:g}")
     await db.notifications.insert_one({"user_id": body.user_id, "title": f"Wallet {'credited' if ttype == 'credit' else 'debited'} ₹{amount:g}",
-                                       "body": f"{label}. Reason: {reason}", "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+                                       "body": f"{label}. Reason: {reason}", "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return {"message": f"{u.get('name')}: ₹{before['balance']:g} → ₹{after['balance']:g}", "ref_id": ref_id, "wallet": after}
 
 
@@ -2614,7 +2614,7 @@ async def admin_edit_kyc(uid: str, body: KycIn, request: Request, admin: dict = 
     cur_status = u.get("kyc", {}).get("status", "not_submitted")
     full = await _apply_kyc(uid, body, admin.get("username") or admin["email"], keep_status="verified" if cur_status in ("not_submitted", "pending", "rejected", "verified") else cur_status)
     await db.notifications.insert_one({"user_id": uid, "title": "KYC details updated", "body": "Radhika Traders updated your KYC / bank details. Check your profile.",
-                                       "link": "/profile", "type": "kyc", "read": False, "created_at": now_iso()})
+                                       "link": "/app/profile", "type": "kyc", "read": False, "created_at": now_iso()})
     await log_activity(admin, "customer_kyc_edited", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="updated")
     return public_user(full)
 
@@ -2801,12 +2801,12 @@ async def admin_send_report(request: Request, background: BackgroundTasks, file:
     res = await db.reports.insert_one(doc)
     if users:
         await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": f"New report: {title}", "body": (note.strip()[:140] or "A new file has been shared with you. Download it from Reports."),
-                                             "link": "/reports", "type": "report", "report_id": str(res.inserted_id), "read": False, "created_at": now_iso()} for u in users])
+                                             "link": "/app/reports", "type": "report", "report_id": str(res.inserted_id), "read": False, "created_at": now_iso()} for u in users])
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
     expires_on = datetime.fromisoformat(expires).astimezone(IST).strftime("%d %b %Y")
     if send_email:
         for u in users:
-            background.add_task(send_report_email, u.get("email", ""), u.get("name", ""), title, note.strip(), f"{origin}/reports", expires_on)
+            background.add_task(send_report_email, u.get("email", ""), u.get("name", ""), title, note.strip(), f"{origin}/app/reports", expires_on)
     await _log_security(admin["id"], "report_sent", request, f"{title} -> {len(users)} publishers")
     await log_activity(admin, "report_sent", request, entity_type="report", entity_id=str(res.inserted_id), entity_label=title, status="sent", amount=len(users), detail=f"{audience} · {file.filename}")
     return {"message": f"Report sent to {len(users)} publisher{'s' if len(users) != 1 else ''}", "id": str(res.inserted_id), "recipients": len(users), "expires_at": expires}
@@ -3051,7 +3051,7 @@ async def pay_dedicated_referral(new_user: dict):
     await _ded_log(rid, "referral_paid", f"{new_user.get('name', '')} ({new_user.get('email', '')}) joined via referral", "system", amount,
                    {"referred_user_id": str(new_user["_id"]), "ref_id": ref_id})
     await db.notifications.insert_one({"user_id": rid, "title": f"₹{amount:g} dedicated referral bonus", "body": f"{new_user.get('name', 'A new partner')} joined with your link.",
-                                       "link": "/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
+                                       "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
 
 
 async def _ded_out(d: dict) -> dict:

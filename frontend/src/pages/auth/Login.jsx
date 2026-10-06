@@ -27,7 +27,7 @@ export default function Login() {
     if (remember) saveRemembered("customer", email, password); else clearRemembered("customer");
     loginWithToken(data.token, data.user);
     toast.success(`Welcome back, ${data.user.name}!`);
-    nav("/dashboard");
+    nav("/app/dashboard");
   };
 
   const submit = async (e) => {
@@ -80,8 +80,8 @@ export default function Login() {
         <div>
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link to="/forgot-password" className="text-xs font-semibold text-red-600 hover:underline" data-testid="login-forgot-link">Forgot Password?</Link>
-            <Link to="/forgot-email" className="ml-2 text-xs font-semibold text-slate-500 hover:underline" data-testid="login-forgot-email-link">Forgot Email?</Link>
+            <Link to="/app/forgot-password" className="text-xs font-semibold text-red-600 hover:underline" data-testid="login-forgot-link">Forgot Password?</Link>
+            <Link to="/app/forgot-email" className="ml-2 text-xs font-semibold text-slate-500 hover:underline" data-testid="login-forgot-email-link">Forgot Email?</Link>
           </div>
           <PasswordInput id="password" data-testid="login-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="••••••••" />
         </div>
@@ -91,7 +91,7 @@ export default function Login() {
         </button>
       </form>
       <p className="mt-6 text-center text-sm text-slate-500">
-        New here? <Link to="/signup" className="font-semibold text-red-600 hover:underline" data-testid="login-to-signup">Create an account</Link>
+        New here? <Link to="/app/signup" className="font-semibold text-red-600 hover:underline" data-testid="login-to-signup">Create an account</Link>
       </p>
     </AuthShell>
   );

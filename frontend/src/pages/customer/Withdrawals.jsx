@@ -74,9 +74,9 @@ export default function Withdrawals() {
           ) : !kycDone ? (
             <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800" data-testid="withdraw-kyc-warning">
               {kycState === "pending" ? "Your KYC is under review by Radhika Traders. Withdrawals will be enabled once verified."
-                : kycState === "rejected" ? <>Your KYC was rejected. Please <Link to="/profile" className="font-bold underline">re-submit your KYC</Link>.</>
+                : kycState === "rejected" ? <>Your KYC was rejected. Please <Link to="/app/profile" className="font-bold underline">re-submit your KYC</Link>.</>
                 : kycState === "deactivated" ? "Your KYC has been deactivated. Please contact support."
-                : <>Complete your <Link to="/profile" className="font-bold underline">KYC</Link> to enable withdrawals.</>}
+                : <>Complete your <Link to="/app/profile" className="font-bold underline">KYC</Link> to enable withdrawals.</>}
             </div>
           ) : (
             <form onSubmit={submit} className="mt-4 space-y-4">
@@ -91,12 +91,12 @@ export default function Withdrawals() {
                 <Label>{method === "UPI" ? "UPI ID" : "Bank Account Number"}</Label>
                 <Input data-testid="withdraw-details" required value={details} onChange={(e) => setDetails(e.target.value)} className="mt-1.5" placeholder={method === "UPI" ? "yourname@upi" : "Account number"} />
                 {method === "Bank Transfer" && bank.ifsc && <p className="mt-1 text-xs text-slate-500">Holder: <b>{bank.account_holder}</b> · IFSC: <b>{bank.ifsc}</b> (from your KYC)</p>}
-                {method === "UPI" && !bank.upi && <p className="mt-1 text-xs text-amber-700">Tip: add your UPI ID in <Link to="/profile" className="underline">Profile & KYC</Link> to auto-fill next time.</p>}
+                {method === "UPI" && !bank.upi && <p className="mt-1 text-xs text-amber-700">Tip: add your UPI ID in <Link to="/app/profile" className="underline">Profile & KYC</Link> to auto-fill next time.</p>}
               </div>
               <div>
                 <Label>Transaction Password (PIN)</Label>
                 <PasswordInput data-testid="withdraw-txn-pin" inputMode="numeric" required maxLength={6} value={txnPin} onChange={(e) => setTxnPin(e.target.value.replace(/\D/g, ""))} className="mt-1.5 font-mono tracking-widest" placeholder="••••" />
-                <p className="mt-1 text-xs text-slate-500">Not set yet? Create it in <Link to="/profile" className="font-bold underline">Profile → Security</Link>.</p>
+                <p className="mt-1 text-xs text-slate-500">Not set yet? Create it in <Link to="/app/profile" className="font-bold underline">Profile → Security</Link>.</p>
               </div>
               <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Payment is transferred manually by Radhika Traders to the UPI ID / bank account above, usually within 24–48 hours. You will see the status here.</p>
               <button type="submit" data-testid="withdraw-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">

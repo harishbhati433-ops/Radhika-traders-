@@ -24,5 +24,5 @@ export function BonusWalletCard({ wallet, compact }) {
     </>
   );
   const cls = `rounded-2xl border p-5 ${cfg.tone}`;
-  return compact ? <Link to="/wallet" data-testid="bonus-wallet-card" className={`block ${cls} hover:brightness-[0.98]`}>{body}</Link> : <div data-testid="bonus-wallet-card" className={cls}>{body}</div>;
+  return compact ? <Link to="/app/wallet" data-testid="bonus-wallet-card" className={`block ${cls} hover:brightness-[0.98]`}>{body}</Link> : <div data-testid="bonus-wallet-card" className={cls}>{body}</div>;
 }

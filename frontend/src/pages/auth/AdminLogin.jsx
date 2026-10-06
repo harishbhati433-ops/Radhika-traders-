@@ -62,7 +62,7 @@ export default function AdminLogin() {
         </button>
       </form>
       <p className="mt-4 text-center text-sm"><Link to="/admin/forgot-password" className="font-semibold text-red-600 hover:underline" data-testid="admin-forgot-link">Forgot password?</Link></p>
-      <p className="mt-3 text-center text-sm text-slate-500"><Link to="/login" className="font-semibold text-red-600 hover:underline">← Customer login</Link></p>
+      <p className="mt-3 text-center text-sm text-slate-500"><Link to="/app/login" className="font-semibold text-red-600 hover:underline">← Customer login</Link></p>
     </AuthShell>
   );
 }

@@ -49,7 +49,7 @@ export default function Signup() {
       const { data } = await api.post("/auth/verify-otp", { email: form.email, code: otp });
       sessionStorage.setItem("rt_just_signed_up", data.user.id);
       loginWithToken(data.token, data.user);
-      nav("/dashboard");
+      nav("/app/dashboard");
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Verification failed");
     } finally { setLoading(false); }
@@ -98,7 +98,7 @@ export default function Signup() {
         </form>
       )}
       <p className="mt-6 text-center text-sm text-slate-500">
-        Already have an account? <Link to="/login" className="font-semibold text-red-600 hover:underline">Login</Link>
+        Already have an account? <Link to="/app/login" className="font-semibold text-red-600 hover:underline">Login</Link>
       </p>
     </AuthShell>
   );

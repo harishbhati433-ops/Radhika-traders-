@@ -39,7 +39,7 @@ export function Navbar() {
         <div className="hidden items-center gap-2 lg:flex">
           {user ? (
             <>
-              <Link to={user.role === "admin" ? "/admin" : user.role === "employee" ? "/employee" : "/dashboard"} data-testid="nav-dashboard"
+              <Link to={user.role === "admin" ? "/admin" : user.role === "employee" ? "/employee" : "/app/dashboard"} data-testid="nav-dashboard"
                 className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:brightness-125">
                 <LayoutDashboard className="h-4 w-4" /> Dashboard
               </Link>
@@ -49,8 +49,8 @@ export function Navbar() {
             </>
           ) : (
             <>
-              <Link to="/login" data-testid="nav-login" className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Login</Link>
-              <Link to="/signup" data-testid="nav-signup" className="rt-gradient-btn rounded-full px-5 py-2 text-sm font-semibold">Get Started</Link>
+              <Link to="/app/login" data-testid="nav-login" className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Login</Link>
+              <Link to="/app/signup" data-testid="nav-signup" className="rt-gradient-btn rounded-full px-5 py-2 text-sm font-semibold">Get Started</Link>
             </>
           )}
         </div>
@@ -70,14 +70,14 @@ export function Navbar() {
             <div className="my-2 h-px bg-slate-200" />
             {user ? (
               <>
-                <Link to={user.role === "admin" ? "/admin" : user.role === "employee" ? "/employee" : "/dashboard"} onClick={() => setOpen(false)}
+                <Link to={user.role === "admin" ? "/admin" : user.role === "employee" ? "/employee" : "/app/dashboard"} onClick={() => setOpen(false)}
                   className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
                 <button onClick={() => { setOpen(false); doLogout(); }} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-red-600"><LogOut className="h-4 w-4" /> Logout</button>
               </>
             ) : (
               <>
-                <Link to="/login" onClick={() => setOpen(false)} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700">Login</Link>
-                <Link to="/signup" onClick={() => setOpen(false)} className="rt-gradient-btn rounded-lg px-4 py-2.5 text-center text-sm font-semibold">Get Started</Link>
+                <Link to="/app/login" onClick={() => setOpen(false)} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700">Login</Link>
+                <Link to="/app/signup" onClick={() => setOpen(false)} className="rt-gradient-btn rounded-lg px-4 py-2.5 text-center text-sm font-semibold">Get Started</Link>
               </>
             )}
           </div>

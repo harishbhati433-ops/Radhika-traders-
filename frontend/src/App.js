@@ -30,9 +30,9 @@ const CustomerDashboard = lazy(loadDashboard);
 // Kick off the most likely next chunk immediately, in parallel with the auth check.
 try {
   const p = window.location.pathname;
-  if (p.startsWith("/dashboard") || (getToken() && p === "/")) loadDashboard();
+  if (p.startsWith("/app/dashboard") || (getToken() && p === "/")) loadDashboard();
   else if (p.startsWith("/join/")) loadLeadForm();
-  else if (p === "/login") loadLogin();
+  else if (p === "/app/login") loadLogin();
 } catch {}
 
 const About = lazy(() => import("./pages/About"));
@@ -143,6 +143,13 @@ const C = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
 const A = (el, perm) => <ProtectedRoute role="admin" perm={perm}>{el}</ProtectedRoute>;
 const E = (el) => <ProtectedRoute role="employee">{el}</ProtectedRoute>;
 
+// Customer app now lives under /app/* (its own PWA scope). Old links keep working.
+const LEGACY_CUSTOMER_PATHS = ["/login", "/signup", "/forgot-password", "/forgot-email", "/dashboard", "/my-campaigns", "/wallet", "/withdrawals", "/statements", "/profile", "/welcome-letter", "/my-leads", "/reports"];
+function LegacyRedirect({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
+
 function MaintenanceRoute() {
   const [state, setState] = useState(null);
   const check = () => api.get("/status/public").then(({ data }) => setState(data)).catch(() => {});
@@ -175,25 +182,26 @@ function App() {
             <Route path="/offer-ended" element={<OfferEnded />} />
             <Route path="/join/:slug" element={<LeadForm />} />
 
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            {LEGACY_CUSTOMER_PATHS.map((p) => <Route key={p} path={p} element={<LegacyRedirect to={`/app${p}`} />} />)}
+            <Route path="/app/login" element={<Login />} />
+            <Route path="/app/signup" element={<Signup />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/employee/login" element={<EmployeeLogin />} />
             <Route path="/employee" element={E(<EmployeeDashboard />)} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/app/forgot-password" element={<ForgotPassword />} />
             <Route path="/admin/forgot-password" element={<ForgotPassword portal="admin" />} />
-            <Route path="/forgot-email" element={<ForgotEmail />} />
+            <Route path="/app/forgot-email" element={<ForgotEmail />} />
 
-            <Route path="/dashboard" element={C(<CustomerDashboard />)} />
-            <Route path="/my-campaigns" element={C(<CustomerCampaigns />)} />
-            <Route path="/wallet" element={C(<Wallet />)} />
-            <Route path="/withdrawals" element={C(<Withdrawals />)} />
-            <Route path="/statements" element={C(<Statements />)} />
-            <Route path="/profile" element={C(<Profile />)} />
-            <Route path="/welcome-letter" element={C(<WelcomeLetter />)} />
-            <Route path="/my-leads" element={C(<MyLeads />)} />
-            <Route path="/reports" element={C(<Reports />)} />
+            <Route path="/app/dashboard" element={C(<CustomerDashboard />)} />
+            <Route path="/app/my-campaigns" element={C(<CustomerCampaigns />)} />
+            <Route path="/app/wallet" element={C(<Wallet />)} />
+            <Route path="/app/withdrawals" element={C(<Withdrawals />)} />
+            <Route path="/app/statements" element={C(<Statements />)} />
+            <Route path="/app/profile" element={C(<Profile />)} />
+            <Route path="/app/welcome-letter" element={C(<WelcomeLetter />)} />
+            <Route path="/app/my-leads" element={C(<MyLeads />)} />
+            <Route path="/app/reports" element={C(<Reports />)} />
 
             <Route path="/admin" element={A(<AdminDashboard />)} />
             <Route path="/admin/campaigns" element={A(<AdminCampaigns />, "campaigns")} />

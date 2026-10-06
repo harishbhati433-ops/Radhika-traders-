@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { canUser } from "../lib/perm";
 import { AppLockGate } from "./applock/AppLockGate";
 
-const homeFor = (u) => (u.role === "admin" ? "/admin" : u.role === "employee" ? "/employee" : "/dashboard");
+const homeFor = (u) => (u.role === "admin" ? "/admin" : u.role === "employee" ? "/employee" : "/app/dashboard");
 
 export function ProtectedRoute({ children, role, perm }) {
   const { user, loading } = useAuth();
@@ -14,7 +14,7 @@ export function ProtectedRoute({ children, role, perm }) {
       </div>
     );
   }
-  if (!user) return <Navigate to={role === "admin" ? "/admin/login" : role === "employee" ? "/employee/login" : "/login"} replace />;
+  if (!user) return <Navigate to={role === "admin" ? "/admin/login" : role === "employee" ? "/employee/login" : "/app/login"} replace />;
   if (role === "admin" && user.role === "employee") {
     if (perm && canUser(user, perm, "view")) return <AppLockGate>{children}</AppLockGate>;
     return <Navigate to="/employee" replace />;
