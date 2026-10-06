@@ -3201,7 +3201,7 @@ async def startup():
                            ("users", [("signup_device.fp", 1)]), ("users", [("signup_device.id", 1)]), ("users", [("signup_device.ip", 1)]), ("webauthn_credentials", [("user_id", 1), ("rp_id", 1)]), ("app_lock_otps", [("user_id", 1)])):
             await db[coll].create_index(keys)
         await db.webauthn_credentials.create_index([("user_id", 1), ("credential_id", 1)], unique=True)
-        await db.webauthn_challenges.create_index("expires_at", expireAfterSeconds=0)
+        await db.webauthn_challenges.create_index([("user_id", 1), ("ceremony", 1)])
         for k in ("pan", "mobile", "email"):
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):

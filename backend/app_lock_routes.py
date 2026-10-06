@@ -212,6 +212,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         if not handle:
             handle = _b64e(secrets.token_bytes(32))
             await db.users.update_one({"_id": u["_id"]}, {"$set": {"webauthn_user_id": handle}})
+        await db.webauthn_challenges.delete_many({"user_id": user["id"], "expires_at": {"$lt": _now()}})
         existing = await db.webauthn_credentials.find({"user_id": user["id"], "rp_id": rp_id}).to_list(20)
         opts = generate_registration_options(
             rp_id=rp_id, rp_name="Radhika Traders", user_id=_b64d(handle), user_name=u.get("email") or u.get("username") or user["id"], user_display_name=u.get("name") or "Partner",
@@ -240,6 +241,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
     @r.post("/biometric/unlock/options")
     async def bio_unlock_options(request: Request, user: dict = Depends(get_current_user)):
         origin, rp_id = rp_context(request)
+        await db.webauthn_challenges.delete_many({"user_id": user["id"], "expires_at": {"$lt": _now()}})
         rows = await db.webauthn_credentials.find({"user_id": user["id"], "rp_id": rp_id}).to_list(20)
         if not rows:
             raise HTTPException(status_code=404, detail="Fingerprint is not set up on this device. Use your PIN.")
