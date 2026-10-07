@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { BellRing, BellOff, Volume2, Loader2 } from "lucide-react";
 import api from "../lib/api";
 import { SOUNDS, getPushState, enablePush, disablePush, getSound, setSound, playSound, isIosBrowser } from "../lib/push";
+import { triggerInstall, isStandalone } from "./InstallPrompt";
 
 export function PushToggle() {
   const [state, setState] = useState("off");
@@ -39,6 +40,11 @@ export function PushToggle() {
         </div>
       </div>
       {state === "denied" && <p className="mt-1 text-[11px] text-rose-600">Notifications are blocked — allow them in your browser/site settings, then reload.</p>}
+      {state === "on" && !isStandalone() && (
+        <button onClick={() => { if (!triggerInstall()) toast.info("Browser menu (⋮) → Install app / Add to Home screen"); }} data-testid="push-install-hint" className="mt-1.5 text-[11px] font-semibold text-amber-700 hover:underline">
+          Install the app to see the Radhika Traders logo on alerts (instead of the browser's) →
+        </button>
+      )}
       <div className="mt-2 flex items-center gap-1.5">
         <Volume2 className="h-3.5 w-3.5 text-slate-500" /><span className="text-[11px] text-slate-500">Sound:</span>
         {SOUNDS.map(([k, label]) => (
