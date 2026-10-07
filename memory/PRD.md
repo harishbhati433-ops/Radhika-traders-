@@ -530,3 +530,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 
 ## Employee KYC — profile photo upload (Oct 2026)
 - Employee → My KYC now has a "Profile photo" card at the top using the shared AvatarUpload (gallery/camera pick → zoom & crop dialog → upload → PUT /profile). Same flow as customer Profile. `AvatarUpload` accepts `subtitle`; `public_user` now returns `employee_code`. Verified: crop dialog opens, Save updates card + sidebar avatar.
+- Photo picker fix (Oct 2026): some phones (Vivo/Oppo) show only "Recent" for `accept="image/*"`. AvatarUpload now offers Gallery · Camera (capture=user) · **All files / folders** (input without accept → full file manager). ImageUpload (proofs/banners) also has an "All files" button. Non-image files are rejected client-side.

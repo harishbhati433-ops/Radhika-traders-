@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import api, { fileUrl, formatApiErrorDetail } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Camera, Loader2, Trash2 } from "lucide-react";
+import { Camera, Loader2, Trash2, ImageIcon, FolderOpen } from "lucide-react";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 
 export function UserAvatar({ user, size = 40, className = "" }) {
@@ -16,7 +16,7 @@ export function UserAvatar({ user, size = 40, className = "" }) {
 
 export function useAvatarPicker() {
   const { user, setUser } = useAuth();
-  const ref = useRef();
+  const refs = { gallery: useRef(), camera: useRef(), files: useRef() };
   const [busy, setBusy] = useState(false);
   const [cropSrc, setCropSrc] = useState(null);
 
@@ -29,6 +29,7 @@ export function useAvatarPicker() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) return toast.error("Please choose a photo (JPG, PNG, WEBP or HEIC)");
     if (file.size > 15 * 1024 * 1024) return toast.error("Photo is too large (max 15 MB)");
     const reader = new FileReader();
     reader.onload = () => setCropSrc(reader.result);
@@ -56,10 +57,14 @@ export function useAvatarPicker() {
     finally { setBusy(false); }
   };
 
-  const open = () => ref.current?.click();
+  // gallery = standard image picker · camera = opens the phone camera directly · files = full file manager
+  // (all folders, not just "Recent" — some phones like Vivo/Oppo limit the image picker to recents)
+  const open = (mode = "gallery") => (refs[mode] || refs.gallery).current?.click();
   const elements = (testId = "avatar-file-input") => (
     <>
-      <input ref={ref} type="file" accept="image/*" hidden onChange={pick} data-testid={testId} />
+      <input ref={refs.gallery} type="file" accept="image/*" hidden onChange={pick} data-testid={testId} />
+      <input ref={refs.camera} type="file" accept="image/*" capture="user" hidden onChange={pick} data-testid={`${testId}-camera`} />
+      <input ref={refs.files} type="file" hidden onChange={pick} data-testid={`${testId}-files`} />
       <AvatarCropDialog src={cropSrc} open={!!cropSrc} onCancel={() => setCropSrc(null)} onDone={uploadCropped} />
     </>
   );
@@ -70,7 +75,7 @@ export function SidebarAvatarButton() {
   const { user, busy, open, elements } = useAvatarPicker();
   return (
     <div className="relative shrink-0">
-      <button type="button" onClick={open} disabled={busy} data-testid="sidebar-avatar-btn" aria-label="Change profile photo" title="Change profile photo"
+      <button type="button" onClick={() => open("gallery")} disabled={busy} data-testid="sidebar-avatar-btn" aria-label="Change profile photo" title="Change profile photo"
         className="group relative block rounded-full transition-transform hover:scale-105 disabled:opacity-70">
         <UserAvatar user={user} size={48} />
         <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
@@ -89,24 +94,26 @@ export function AvatarUpload({ subtitle }) {
   const { user, busy, open, remove, elements } = useAvatarPicker();
 
   return (
-    <div className="flex items-center gap-5" data-testid="avatar-upload">
-      <div className="relative">
+    <div className="flex flex-wrap items-center gap-5" data-testid="avatar-upload">
+      <div className="relative shrink-0">
         <div className="rounded-full bg-gradient-to-br from-amber-400 via-red-500 to-red-900 p-[3px] shadow-lg">
           <div className="rounded-full bg-white p-[3px]"><UserAvatar user={user} size={96} className="ring-0" /></div>
         </div>
-        <button type="button" onClick={open} disabled={busy} data-testid="avatar-upload-btn" aria-label="Change profile photo"
+        <button type="button" onClick={() => open("gallery")} disabled={busy} data-testid="avatar-upload-btn" aria-label="Change profile photo"
           className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-md transition-transform hover:scale-105 disabled:opacity-60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
         </button>
       </div>
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="font-display font-bold text-slate-900">{user?.name}</div>
         <div className="text-xs text-slate-500">{subtitle || `Partner ID ${user?.referral_code}`}</div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" onClick={open} disabled={busy} data-testid="avatar-change-btn" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{user?.avatar_url ? "Change photo" : "Upload photo"}</button>
+          <button type="button" onClick={() => open("gallery")} disabled={busy} data-testid="avatar-change-btn" className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><ImageIcon className="h-3.5 w-3.5" /> {user?.avatar_url ? "Change from gallery" : "Gallery"}</button>
+          <button type="button" onClick={() => open("camera")} disabled={busy} data-testid="avatar-camera-btn" className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><Camera className="h-3.5 w-3.5" /> Camera</button>
+          <button type="button" onClick={() => open("files")} disabled={busy} data-testid="avatar-files-btn" className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><FolderOpen className="h-3.5 w-3.5" /> All files / folders</button>
           {user?.avatar_url && <button type="button" onClick={remove} disabled={busy} data-testid="avatar-remove-btn" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>}
         </div>
-        <p className="mt-1.5 text-[11px] text-slate-400">Pick from gallery, files or camera · then zoom & crop to centre your face</p>
+        <p className="mt-1.5 text-[11px] text-slate-400">Photo not in "Recent"? Tap <b>All files / folders</b> to browse WhatsApp, Downloads, DCIM etc. · then zoom &amp; crop to centre your face</p>
       </div>
       {elements()}
     </div>

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import api from "../lib/api";
 import { toast } from "sonner";
-import { Upload, Loader2, X } from "lucide-react";
+import { Upload, Loader2, X, FolderOpen } from "lucide-react";
 import { fileUrl } from "../lib/api";
 
 // Shrink big phone screenshots (3-6 MB) to a ~1600px JPEG before upload so it finishes in ~1s.
@@ -21,12 +21,14 @@ async function compressImage(file) {
 
 export function ImageUpload({ label, value, onChange, testId }) {
   const ref = useRef();
+  const filesRef = useRef();
   const [busy, setBusy] = useState(false);
 
   const pick = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif|gif|bmp|pdf)$/i.test(file.name)) return toast.error("Please choose an image file");
     setBusy(true);
     try {
       const fd = new FormData();
@@ -56,7 +58,12 @@ export function ImageUpload({ label, value, onChange, testId }) {
           className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
           {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</> : <><Upload className="h-4 w-4" /> {value ? "Change" : "Upload"}</>}
         </button>
+        <button type="button" data-testid={`${testId}-files`} onClick={() => filesRef.current.click()} disabled={busy} title="Browse all folders (WhatsApp, Downloads, DCIM…)"
+          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+          <FolderOpen className="h-4 w-4" /> All files
+        </button>
         <input ref={ref} type="file" accept="image/*" hidden onChange={pick} />
+        <input ref={filesRef} type="file" hidden onChange={pick} />
       </div>
     </div>
   );
