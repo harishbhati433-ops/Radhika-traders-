@@ -531,3 +531,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## Employee KYC — profile photo upload (Oct 2026)
 - Employee → My KYC now has a "Profile photo" card at the top using the shared AvatarUpload (gallery/camera pick → zoom & crop dialog → upload → PUT /profile). Same flow as customer Profile. `AvatarUpload` accepts `subtitle`; `public_user` now returns `employee_code`. Verified: crop dialog opens, Save updates card + sidebar avatar.
 - Photo picker fix (Oct 2026): some phones (Vivo/Oppo) show only "Recent" for `accept="image/*"`. AvatarUpload now offers Gallery · Camera (capture=user) · **All files / folders** (input without accept → full file manager). ImageUpload (proofs/banners) also has an "All files" button. Non-image files are rejected client-side.
+
+## Employee Leave Requests — DONE (Oct 2026, tests iteration_36 18/18 + UI pass)
+- backend/leave_routes.py: POST/GET/DELETE /api/employee/leaves; GET /api/admin/leaves?status=; PATCH /api/admin/leaves/{id} {action: approve(paid:bool)|reject|set_paid|set_unpaid, note}. Collection `leave_requests` {employee_id, employee_name, employee_code, from_date, to_date, dates[], days, reason, leave_type, status pending|approved|rejected|cancelled, paid, admin_note, decided_by/at}.
+- Approve → attendance rows (status=leave, leave_paid, source=leave_request, leave_request_id) per working day (Sundays skipped; real worked days not overwritten) → Salary Sheet paid_leave/unpaid_leave + per-day deduction automatic. set_paid/unpaid rewrites rows; reject/cancel deletes them.
+- Emails: send_leave_request_email (admins) / send_leave_decision_email (employee), background.
+- UI: components/attendance/MyLeaves.jsx (employee, on /employee/attendance), LeavesTab.jsx (admin tab "Leave Requests" with pending badge on /admin/attendance). Tests: backend/tests/test_leaves.py.

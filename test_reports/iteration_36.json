@@ -1,0 +1,28 @@
+{
+  "summary": "Tested new Employee Leave Requests feature end-to-end. 18/18 pytest backend scenarios pass (apply validation, Sunday-only, to<from, overlap, short reason, list+summary, admin RBAC, approve requires paid, invalid actions, approve-unpaid+salary deduction, set_paid flip, reject removes attendance rows, withdraw pending, cannot withdraw non-pending). Frontend Playwright flow: employee rahul.k submits leave via /employee/attendance → my-leaves list shows Pending with correct testid; overlap submission shows error toast; summary pills update. Admin bhatiharish276 /admin/attendance → att-tab-leaves-badge=2, LeavesTab shows card with id, Approve·Unpaid → card moves to Approved filter with 'Unpaid · salary deducted' pill, Make Paid → 'Paid · no salary cut', Cancel leave → Rejected filter. Salary Sheet tab opens fine and shows 'LEAVE P/U' column.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin pages (global)", "issues": ["Console: 'Encountered two children with the same key, 9' React warning observed across admin pages (not from leaves components) — likely from a dropdown/list elsewhere. Pre-existing.", "Console: 'In HTML, <span> cannot be a child of <option>' hydration warning on AttendanceTab employee filter select (AttendanceTab.jsx line 105). Pre-existing, unrelated to leaves."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_leaves.py", "/app/test_reports/pytest/leaves.xml"],
+  "action_items": [
+    "(Optional, pre-existing) Fix hydration warning in AttendanceTab option children (wrap text instead of <span>) and dedupe map keys to clean the console."
+  ],
+  "critical_code_review_comments": [
+    "leave_routes.py: `approve` currently allowed on both pending AND rejected (`if l['status'] not in ('pending','rejected')`). Spec implies re-approve from rejected is intentional, so OK, but PATCH note in spec said 'approve on already-approved → 400' which is enforced; approve on cancelled would also 400 — fine.",
+    "`decide_leave` deletes & re-applies attendance on every approval (even set_paid). Current behaviour correctly handles the flip (removes old rows then re-applies with new paid flag) — safe.",
+    "apply_to_attendance preserves real attendance rows (status in present/late/short_hours/half_day/sunday_worked with check_in) — matches spec. Good.",
+    "No pagination cap on /admin/leaves beyond 500. Fine for current scale."
+  ],
+  "updated_files": ["/app/backend/tests/test_leaves.py (new)"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% core flows"},
+  "test_credentials": "admin bhatiharish276@gmail.com/Radhika@2023 (portal:admin), emp rahul.k/Emp@1234, PIN 2580",
+  "seed_data_creation": "Created & cleaned up ~5 test leave requests in Nov 2026 for emp 6aa4f62060cf8b2d2a38c56b. All were ultimately rejected/withdrawn in cleanup so salary sheet unaffected. One UI-created leave 2026-11-18→19 ended in Rejected state (not deducted).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests reusable: pytest /app/backend/tests/test_leaves.py -o addopts=''. Pre-existing console warnings (duplicate key '9', hydration <span> inside <option>) come from AttendanceTab employee filter select, not leaves code."
+}
