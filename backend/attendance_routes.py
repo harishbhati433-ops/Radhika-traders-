@@ -523,6 +523,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         before = desc(old) if old else "Absent (no record)"
         after = desc(rec) + (f" · {fmt_dur(rec['worked_minutes'])}" if rec.get("worked_minutes") else "")
         await log_activity(admin, "attendance_edited", request, entity_type="attendance", entity_id=f"{employee_id}:{date}", entity_label=f"{emp.get('name')} · {date}", status=rec["status"], detail=f"{before} → {after}" + (f" · {rec['note']}" if rec["note"] else ""))
+        await push_service.notify_one({"user_id": employee_id, "title": f"Attendance updated for {datetime.fromisoformat(date).strftime('%d %b')}", "body": f"{before} → {after}" + (f" · {rec['note']}" if rec["note"] else "") + " (by admin)",
+                                       "link": "/employee/attendance", "type": "attendance", "read": False, "created_at": now_utc().isoformat()})
         return out(await db.attendance.find_one({"employee_id": employee_id, "date": date}), emp, per_day_of(emp, date[:7]))
 
     @r.get("/admin/attendance/dashboard")
@@ -644,6 +646,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await audit(emp, month, "published" if body.published else "unpublished", row["payable_now"], row["payable_now"], row["payable_now"], admin, "")
         await log_activity(admin, "salary_published" if body.published else "salary_unpublished", request, entity_type="salary", entity_id=f"{employee_id}:{month}", entity_label=f"{emp.get('name')} · {month}", amount=row["payable_now"])
         final = await salary_row(emp, month, ist_today())
+        if body.published:
+            mlabel = datetime.strptime(month, "%Y-%m").strftime("%B %Y")
+            await push_service.notify_one({"user_id": employee_id, "title": f"Salary for {mlabel} published", "body": f"Payable ₹{final['payable_now']:g} · open My Salary to see the full breakup.",
+                                           "link": "/employee/attendance", "type": "salary", "read": False, "created_at": now_utc().isoformat()})
         if body.published and real_email(emp) and final["payment_status"] != "paid":
             origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
             background.add_task(send_salary_published_email, real_email(emp), emp.get("name", ""), employee_view(final), f"{origin}/rt-team-9k4e?next=/employee/attendance")
@@ -955,13 +961,14 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         now_m = _ist_minutes(now_utc().isoformat())
         recs = {a["employee_id"]: a for a in await db.attendance.find({"date": today}).to_list(1000)}
         sent_kinds = {(x["employee_id"], x.get("kind", "checkin")) for x in await db.attendance_reminders.find({"date": today}, {"employee_id": 1, "kind": 1}).to_list(2000)}
+        pushed = {(x["employee_id"], x["kind"]) for x in await db.attendance_push_log.find({"date": today}, {"employee_id": 1, "kind": 1}).to_list(2000)}
         d = datetime.fromisoformat(today).strftime("%d %b %Y")
         link = f"{origin}/rt-team-9k4e?next=/employee/attendance"
         sent = 0
         async for emp in db.users.find({"role": "employee", "account_status": {"$nin": ["deleted", "disabled", "inactive"]}}, {"name": 1, "email": 1, "employee_code": 1, "joining_date": 1, "created_at": 1}):
             eid = str(emp["_id"])
             joined = (emp.get("joining_date") or emp.get("created_at") or "")[:10]
-            if not real_email(emp) or (joined and joined > today):
+            if joined and joined > today:
                 continue
             rec = recs.get(eid)
             kind = None
@@ -971,8 +978,12 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 kind = "checkout"
             if not kind:
                 continue
-            asyncio.create_task(push_service.send_push([eid], "Reminder: please check in now" if kind == "checkin" else "Reminder: you have not checked out",
-                                                       f"{d} · Office hours have {'started' if kind == 'checkin' else 'ended'} — open the app and punch now.", "/employee/attendance", tag=f"nudge-{kind}", kind="attendance"))
+            if (eid, kind) not in pushed:  # phone alert once per kind per day, independent of email delivery
+                asyncio.create_task(push_service.send_push([eid], "Reminder: please check in now" if kind == "checkin" else "Reminder: you have not checked out",
+                                                           f"{d} · Office hours have {'started' if kind == 'checkin' else 'ended'} — open the app and punch now.", "/employee/attendance", tag=f"nudge-{kind}", kind="attendance"))
+                await db.attendance_push_log.insert_one({"employee_id": eid, "date": today, "kind": kind, "at": now_utc().isoformat()})
+            if not real_email(emp):
+                continue
             try:
                 mid = await (send_attendance_reminder_email(real_email(emp), emp.get("name", ""), emp.get("employee_code", ""), d, link) if kind == "checkin"
                              else send_checkout_reminder_email(real_email(emp), emp.get("name", ""), d, fmt_t(rec["check_in"]), link))

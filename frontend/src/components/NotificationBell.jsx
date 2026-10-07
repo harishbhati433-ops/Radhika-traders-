@@ -5,7 +5,7 @@ import { Bell, Megaphone, ShieldCheck, Info, CheckCheck, Wallet, Banknote, UserC
 import { PushToggle } from "./PushToggle";
 import { onPushMessage, warmAudio } from "../lib/push";
 
-const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info, wallet: Wallet, withdrawal: Banknote, account: UserCog, security: ShieldCheck, leave: CalendarCheck, attendance: CalendarCheck, lead: FileText, bonus: Wallet };
+const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info, wallet: Wallet, withdrawal: Banknote, account: UserCog, security: ShieldCheck, leave: CalendarCheck, attendance: CalendarCheck, lead: FileText, bonus: Wallet, salary: Banknote };
 
 export function NotificationBell() {
   const [data, setData] = useState({ unread: 0, items: [] });

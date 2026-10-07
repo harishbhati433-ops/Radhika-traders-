@@ -10,6 +10,7 @@ from bson import ObjectId
 
 from auth_utils import hash_password, verify_password, create_access_token, get_current_user_from_db
 from rbac import PERMISSION_MODULES, normalize_permissions
+import push_service
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,30}$")
 MAX_ATTEMPTS, LOCK_MINUTES = 5, 30
@@ -198,6 +199,13 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
         for a in (actions or ["employee_updated"]):
             await log_activity(admin, a, request, entity_type="employee", entity_id=eid, entity_label=u.get("username"),
                                status=u.get("account_status"), detail=", ".join(f"{m}={v}" for m, v in upd.get("permissions", {}).items() if v != "none") if a == "employee_permissions_changed" else "")
+        msgs = {"employee_permissions_changed": ("Your access was updated", "Admin changed the modules you can access. Re-open the app to see the changes."),
+                "employee_enabled": ("Account enabled ✓", "Your employee account is active again — you can log in and mark attendance."),
+                "employee_disabled": ("Account disabled", "Your employee account has been disabled by the admin. Contact the Super Admin."),
+                "employee_password_reset": ("Password reset by admin", "Your login password was reset. Use the new password shared by the admin.")}
+        for a in actions:
+            if a in msgs:
+                await push_service.notify_one({"user_id": eid, "title": msgs[a][0], "body": msgs[a][1], "link": "/employee", "type": "account", "read": False, "created_at": _now()})
         return employee_out(u)
 
     @r.delete("/admin/employees/{eid}")
