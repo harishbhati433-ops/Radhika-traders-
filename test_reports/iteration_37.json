@@ -1,0 +1,35 @@
+{
+  "summary": "Reliability batch (email queue+log, campaign status lifecycle, admin email-log page) tested end-to-end. Backend pytest: 12/12 pass. PATCH /api/campaigns/{cid}/status cycle live→paused→live→closed→live works (notified:true), same-status is idempotent (notified:false, 'Already X'), invalid=400, employee=403, unauth=401. For each change the background task inserts: one notifications doc per active verified customer (title contains LIVE/PAUSED/CLOSED), one broadcasts doc of kind campaign_live/paused/closed with recipients=active_customer_count, and email_log rows (preview @example.com failed with 'HTTP 422 Undeliverable', attempts=1, no 429 on preview recipients). activity_logs gets campaign_status_changed + email_failed (actor_name 'System') entries. GET /api/admin/email-log works (shape {items, sent_24h, failed_24h}), ?status=sent/failed filters, ?q=example.com filters, employee=403. Employee check-in/out endpoints respond (200/400 'Already'). Frontend Admin: /rt-control-hb27 → admin login + PIN 2580 → /admin/campaigns, cycled Axis Mutual Fund SIP paused→live→closed→live via status-* data-testids, each produced correct success toast ('… paused — customers notified', 'LIVE — customers notified by email', '… closed — customers notified'). Sidebar group Communication contains Email Log link; /admin/email-log renders email-log-stats (last24h attempted 43 / delivered 5 / failed 38), filter buttons All/Sent/Failed, search box filters rows (28 for 'example.com'), each row has Sent/Failed status pill and HTTP 422 error text for failed rows. Customer /app/login + PIN 2468 → bell shows new Campaign LIVE/PAUSED/CLOSED: Axis Mutual Fund SIP notifications, click targets /app/my-campaigns.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All admin & customer pages", "issues": ["Pre-existing React console warning: 'Encountered two children with the same key' (5+ occurrences) — not from the reliability batch; appears on dashboard & admin pages. Already noted in iterations 35/36."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_campaign_status_lifecycle.py",
+    "/app/test_reports/pytest/campaign_status.xml"
+  ],
+  "action_items": [
+    "(Pre-existing, not from this batch) Trace & fix React duplicate-key warnings in lists on dashboard/admin pages."
+  ],
+  "critical_code_review_comments": [
+    "email_service.send_email has an unreachable `logger.error ... return None` block after the final `await _log(...); return None` (lines 155-156). Dead code — safe to remove.",
+    "announce_campaign_status serialises email sends via the throttle lock inside the loop; with multiple rapid status changes to the same campaign, consecutive background tasks can overlap and share the global _send_lock. During testing we observed provider HTTP 429 for real recipient (harishbhati4581@gmail.com) when 4 cycles were fired <2min apart. The 5-step exponential backoff recovers but the whole broadcast can take ~60-90s per cycle. Consider per-campaign serialisation (asyncio.Lock keyed by campaign_id) so overlapping admin actions queue cleanly.",
+    "broadcasts doc is inserted ONLY after the full email loop finishes. If the loop is slow or process restarts mid-way, the broadcast record is lost even though some emails/notifications were sent. Consider writing the broadcast row first (sent=0,failed=0) and incrementing counters as sends complete.",
+    "live-again branch sets link = /campaign/{slug} but campaign_status_email always links to /app/dashboard for non-live states — status 'live' re-run still uses /campaign/{slug} in email which is correct, consistent.",
+    "GET /api/campaigns param to include non-live is `admin_view=true` (not `all=true` as the task spec suggested). Minor doc discrepancy but code is fine."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_campaign_status_lifecycle.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% core flows"},
+  "test_credentials": "Admin bhatiharish276@gmail.com/Radhika@2023 (portal:admin), PIN 2580. Employee rahul.k/Emp@1234, PIN 2580. Customer testcust@example.com/Test@1234, PIN 2468.",
+  "seed_data_creation": "No new seed data. Axis Mutual Fund SIP campaign (slug axis-mutual-fund-sip) was reset to status=live after each lifecycle run; left in 'live' state at end of testing. Many Campaign LIVE/PAUSED/CLOSED notifications were produced for testcust@example.com during testing — can be ignored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Only one real campaign exists in preview: slug 'axis-mutual-fund-sip'. The task spec mentions slug 'radhika-connect' / 'choice-trade-test' — these do NOT exist. Use `admin_view=true` (not `all=true`) with GET /api/campaigns to include non-live campaigns. Background email loop can take 60-90s per status change if provider throttles the real recipient; poll broadcasts/notifications with ~4min timeout. Email_log previously accumulated 429 failures from stale rapid admin tests; preview @example.com recipients always fail with HTTP 422 Undeliverable (expected). Admin login JSON body must include portal:'admin'.",
+  "rca_of_the_issue": "None found during this testing cycle — all requested features behaved correctly."
+}

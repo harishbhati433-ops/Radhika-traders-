@@ -556,3 +556,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Logs showed the email provider returning **429 Too Many Requests** (~2 req/s limit). Each punch sends admin + employee mails back-to-back; several employees punching together → 429 → old code retried only 3× with 1.5 s gaps and silently dropped.
 - Fix in email_service.send_email: global lock + 0.6 s spacing between sends, 5 retries with 2/4/8/12/16 s backoff, and every attempt logged to new `email_log` collection {to, subject, status sent|failed, error, email_id, attempts, created_at} (set_db(db) at startup). Burst test: 5 concurrent mails → 5 sent, 0 failures.
 - Check-out reminder mails depend on the attendance-nudges cron, which was only registered correctly in today's deploy (see cron fix above).
+
+## Reliability batch — emails + campaign status (Oct 2026, iteration_37 12/12 + UI pass)
+- Campaign status PATCH now notifies at API level for every transition (new & old offers): in-app notification + email (first live → "New Campaign LIVE"; live-again/paused/closed → send_campaign_status_email) + broadcasts record; same-status call idempotent. Live→Pause→Live→Close→Live verified.
+- Attendance punch / reminder email failures → activity_logs action `email_failed` (actor System); failed reminders are retried by the next 15-min cron run.
+- Admin → Communication → **Email Log** (/admin/email-log, GET /api/admin/email-log) — every email with sent/failed, attempts, provider error; 24h stats; filters + search.
+- AdminCampaigns status buttons: data-testids status-live/paused/closed-{slug}, disabled in flight, descriptive toasts, error toasts.
