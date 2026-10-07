@@ -8,7 +8,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { fileUrl } from "../../lib/api";
 import { toast } from "sonner";
 import { Input } from "../../components/ui/input";
-import { Plus, Pencil, Archive, RotateCcw, Search, Eye, EyeOff, Radio, PauseCircle, XCircle } from "lucide-react";
+import { Plus, Pencil, Archive, RotateCcw, Search, Eye, EyeOff, Radio, PauseCircle, XCircle, Play } from "lucide-react";
 
 export default function AdminCampaigns() {
   const [items, setItems] = useState([]);
@@ -32,11 +32,14 @@ export default function AdminCampaigns() {
 
   const [statusBusy, setStatusBusy] = useState("");
   const setStatus = async (c, status) => {
-    if (c.status === status || statusBusy) return;
-    setStatusBusy(c.id + status);
+    if (statusBusy) return;
+    // Clicking the active Pause / Close button again toggles the campaign back to Live.
+    const target = c.status === status && status !== "live" ? "live" : status;
+    if (c.status === target) return;
+    setStatusBusy(c.id + target);
     try {
-      const { data } = await api.patch(`/campaigns/${c.id}/status?status=${status}`);
-      toast.success(status === "live" ? `${c.offer_name} is LIVE — customers notified by email` : status === "paused" ? `${c.offer_name} paused — customers notified` : `${c.offer_name} closed — customers notified`, { description: data?.notified ? "Email + in-app notification sent to all active customers" : undefined });
+      const { data } = await api.patch(`/campaigns/${c.id}/status?status=${target}`);
+      toast.success(target === "live" ? `${c.offer_name} is LIVE${c.status === "paused" ? " again (resumed)" : c.status === "closed" ? " again (reopened)" : ""} — customers notified by email` : target === "paused" ? `${c.offer_name} paused — customers notified` : `${c.offer_name} closed — customers notified`, { description: data?.notified ? "Email + in-app notification sent to all active customers" : undefined });
       load();
     } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Could not change status"); } finally { setStatusBusy(""); }
   };
@@ -82,8 +85,8 @@ export default function AdminCampaigns() {
             ) : (
               <div className="flex flex-wrap items-center gap-1">
                 <button onClick={() => setStatus(c, "live")} disabled={!!statusBusy} data-testid={`status-live-${c.slug}`} title={c.status === "live" ? "Live (current)" : "Make Live — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "live" ? "bg-emerald-100 text-emerald-600" : "text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"}`}><Radio className="h-4 w-4" /></button>
-                <button onClick={() => setStatus(c, "paused")} disabled={!!statusBusy} data-testid={`status-paused-${c.slug}`} title={c.status === "paused" ? "Paused (current)" : "Pause — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "paused" ? "bg-amber-100 text-amber-600" : "text-slate-400 hover:bg-amber-50 hover:text-amber-600"}`}><PauseCircle className="h-4 w-4" /></button>
-                <button onClick={() => setStatus(c, "closed")} disabled={!!statusBusy} data-testid={`status-closed-${c.slug}`} title={c.status === "closed" ? "Closed (current)" : "Close — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "closed" ? "bg-rose-100 text-rose-600" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}><XCircle className="h-4 w-4" /></button>
+                <button onClick={() => setStatus(c, "paused")} disabled={!!statusBusy} data-testid={`status-paused-${c.slug}`} title={c.status === "paused" ? "Paused — click again to Resume (Live)" : "Pause — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "paused" ? "bg-amber-100 text-amber-600 hover:bg-emerald-100 hover:text-emerald-600" : "text-slate-400 hover:bg-amber-50 hover:text-amber-600"}`}>{c.status === "paused" ? <Play className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</button>
+                <button onClick={() => setStatus(c, "closed")} disabled={!!statusBusy} data-testid={`status-closed-${c.slug}`} title={c.status === "closed" ? "Closed — click again to Reopen (Live)" : "Close — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "closed" ? "bg-rose-100 text-rose-600 hover:bg-emerald-100 hover:text-emerald-600" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}>{c.status === "closed" ? <RotateCcw className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}</button>
                 <button onClick={() => toggleOffer(c)} data-testid={`toggle-offer-${c.slug}`} title="Enable/Disable" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">{c.offer_enabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
                 <button onClick={() => openEdit(c)} data-testid={`edit-${c.slug}`} className="rounded-lg p-2 text-sky-600 hover:bg-sky-50"><Pencil className="h-4 w-4" /></button>
                 <button onClick={() => archive(c)} data-testid={`archive-${c.slug}`} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" /></button>

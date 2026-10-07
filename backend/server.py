@@ -1516,7 +1516,7 @@ async def create_campaign(body: CampaignIn, request: Request, background: Backgr
 
 
 @api.put("/campaigns/{cid}")
-async def update_campaign(cid: str, body: CampaignIn, request: Request, admin: dict = Depends(require_perm("campaigns", "edit"))):
+async def update_campaign(cid: str, body: CampaignIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_perm("campaigns", "edit"))):
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
@@ -1526,8 +1526,12 @@ async def update_campaign(cid: str, body: CampaignIn, request: Request, admin: d
         doc["slug"] = await unique_slug(body.offer_name, exclude_id=cid)
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": doc})
     c = await db.campaigns.find_one({"_id": ObjectId(cid)})
+    old_status = (current or {}).get("status")
+    if current and old_status != c.get("status") and c.get("status") in ("live", "paused", "closed"):
+        background.add_task(announce_campaign_status, c, c["status"], _origin(request))  # status changed from the edit form → same notifications as the outside buttons
     await log_activity(admin, "campaign_updated", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
-                       campaign_id=cid, campaign_name=c["offer_name"], status=c.get("status", ""), amount=c.get("payout_amount"))
+                       campaign_id=cid, campaign_name=c["offer_name"], status=c.get("status", ""), amount=c.get("payout_amount"),
+                       detail=(f"status {old_status} -> {c['status']} · customers notified" if old_status != c.get("status") else ""))
     return campaign_out(c)
 
 
