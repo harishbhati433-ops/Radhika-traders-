@@ -108,6 +108,7 @@ def public_user(u: dict) -> dict:
         "app_lock": {"configured": bool((u.get("app_lock") or {}).get("pin_hash")), "enabled": (u.get("app_lock") or {}).get("enabled", True)},
         "created_at": u.get("created_at"),
         "username": u.get("username"),
+        "employee_code": u.get("employee_code", ""),
         "permissions": u.get("permissions") if u.get("role") == "employee" else None,
     }
 

@@ -4,6 +4,8 @@ import { adminNav } from "../admin/nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { toast } from "sonner";
 import { ShieldCheck, Clock, XCircle, Loader2, Lock } from "lucide-react";
+import { AvatarUpload } from "../../components/AvatarUpload";
+import { useAuth } from "../../context/AuthContext";
 
 const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/, IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/, MOB_RE = /^[6-9]\d{9}$/, EMAIL_RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
 const EMPTY = { mobile: "", father_name: "", email: "", dob: "", address: "", aadhaar: "", pan: "", ifsc: "", bank_account: "", bank_account_confirm: "" };
@@ -77,6 +79,7 @@ export function KycForm({ init, prefill, onSubmit, submitLabel = "Submit KYC", t
 const STATUS = { pending: ["Pending verification", "bg-amber-100 text-amber-800", Clock], verified: ["Verified", "bg-emerald-100 text-emerald-800", ShieldCheck], rejected: ["Rejected — please correct & resubmit", "bg-rose-100 text-rose-800", XCircle] };
 
 export default function EmployeeKyc() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
   const [editing, setEditing] = useState(false);
   const load = () => api.get("/employee/kyc", { noCache: true }).then(({ data }) => { setD(data); setEditing(false); }).catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail)));
@@ -87,6 +90,10 @@ export default function EmployeeKyc() {
   const showForm = !k || editing || k.status === "rejected";
   return (
     <DashboardLayout nav={adminNav} title="My KYC">
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5" data-testid="ekyc-profile-photo-card">
+        <h3 className="mb-3 font-display text-base font-bold text-slate-900">Profile photo</h3>
+        <AvatarUpload subtitle={`Employee ID ${user?.employee_code || user?.username || ""}`} />
+      </div>
       {k && (
         <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5" data-testid="kyc-status-card">
           <div className="flex flex-wrap items-center justify-between gap-3">

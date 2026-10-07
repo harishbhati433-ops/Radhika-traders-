@@ -85,7 +85,7 @@ export function SidebarAvatarButton() {
   );
 }
 
-export function AvatarUpload() {
+export function AvatarUpload({ subtitle }) {
   const { user, busy, open, remove, elements } = useAvatarPicker();
 
   return (
@@ -101,7 +101,7 @@ export function AvatarUpload() {
       </div>
       <div>
         <div className="font-display font-bold text-slate-900">{user?.name}</div>
-        <div className="text-xs text-slate-500">Partner ID {user?.referral_code}</div>
+        <div className="text-xs text-slate-500">{subtitle || `Partner ID ${user?.referral_code}`}</div>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" onClick={open} disabled={busy} data-testid="avatar-change-btn" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{user?.avatar_url ? "Change photo" : "Upload photo"}</button>
           {user?.avatar_url && <button type="button" onClick={remove} disabled={busy} data-testid="avatar-remove-btn" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>}

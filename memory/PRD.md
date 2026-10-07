@@ -527,3 +527,6 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - `.emergent/crons.yml` had `cron: "*/15 9-19 * * 1-6"` + `timezone: Asia/Kolkata`. Platform rule: non-UTC timezone requires a single minute & single hour (no */15, no ranges) → entry was REJECTED silently; pod still ran the old once-a-day `attendance-reminder` at 04:30 UTC. This is why check-in/check-out reminder mails were missing for employees.
 - Fix: UTC schedule `*/15 3-13 * * 1-6` (= 08:30–19:15 IST, Mon–Sat), no timezone. Reconciled in preview (applied.hash converged, webhook-crons shows attendance-nudges). Backend gates by office hours, so extra fires are no-ops. Will sync to prod on next deploy.
 - Verified live: POST /api/cron/attendance-nudges → 202, 1 reminder email sent (202 from email API) when employee had no check-in; employee dashboard shows "You have not checked in today" nudge with Check In now CTA; punch emails go to admin + employee's real Gmail.
+
+## Employee KYC — profile photo upload (Oct 2026)
+- Employee → My KYC now has a "Profile photo" card at the top using the shared AvatarUpload (gallery/camera pick → zoom & crop dialog → upload → PUT /profile). Same flow as customer Profile. `AvatarUpload` accepts `subtitle`; `public_user` now returns `employee_code`. Verified: crop dialog opens, Save updates card + sidebar avatar.
