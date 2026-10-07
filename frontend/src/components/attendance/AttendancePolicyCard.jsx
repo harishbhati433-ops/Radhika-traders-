@@ -43,7 +43,7 @@ function OfficeLocation({ f, setF }) {
         <label className="text-xs font-semibold text-slate-600">Latitude<input type="number" step="0.000001" value={f.office_lat ?? ""} onChange={num("office_lat")} data-testid="att-policy-lat" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" placeholder="23.7117" /></label>
         <label className="text-xs font-semibold text-slate-600">Longitude<input type="number" step="0.000001" value={f.office_lng ?? ""} onChange={num("office_lng")} data-testid="att-policy-lng" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" placeholder="76.0157" /></label>
         <label className="text-xs font-semibold text-slate-600">Radius (metres)<input type="number" min="20" max="2000" value={f.radius_m} onChange={(e) => setF({ ...f, radius_m: Number(e.target.value) })} data-testid="att-policy-radius" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" /></label>
-        <label className="text-xs font-semibold text-slate-600">Keep selfies (days)<input type="number" min="7" max="365" value={f.selfie_retention_days} onChange={(e) => setF({ ...f, selfie_retention_days: Number(e.target.value) })} data-testid="att-policy-retention" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" /></label>
+        <label className="text-xs font-semibold text-slate-600">Keep selfies (days)<input type="number" min="7" max="365" value={f.selfie_retention_days || ""} placeholder="60" onChange={(e) => setF({ ...f, selfie_retention_days: e.target.value === "" ? "" : Number(e.target.value) })} data-testid="att-policy-retention" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" /></label>
       </div>
       <label className="mt-3 block text-xs font-semibold text-slate-600">Label (optional)<input value={f.office_label || ""} onChange={(e) => setF({ ...f, office_label: e.target.value })} data-testid="att-policy-label" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Radhika Traders office, Agar" /></label>
       {f.office_lat != null && f.office_lng != null && <a href={`https://www.google.com/maps?q=${f.office_lat},${f.office_lng}`} target="_blank" rel="noreferrer" data-testid="att-policy-map-link" className="mt-2 inline-block text-[11px] font-semibold text-sky-700 underline">Open in Google Maps to verify</a>}
@@ -101,7 +101,7 @@ export function AttendancePolicyCard() {
         <OfficeLocation f={f} setF={setF} />
         <div className="flex items-center gap-3">
           <button onClick={save} disabled={saving} data-testid="att-policy-save" className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"><Save className="h-4 w-4" /> {saving ? "Saving…" : "Save attendance mode"}</button>
-          <span className="text-[11px] text-slate-500">Selfies auto-delete after {f.selfie_retention_days} days (attendance record & GPS distance stay).</span>
+          <span className="text-[11px] text-slate-500">Selfies auto-delete after {f.selfie_retention_days || 60} days (attendance record & GPS distance stay).</span>
         </div>
         <EmployeeOverrides employees={p.employees} onChange={setEmp} />
       </div>

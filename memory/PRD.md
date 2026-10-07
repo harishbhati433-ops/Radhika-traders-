@@ -537,3 +537,7 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Approve → attendance rows (status=leave, leave_paid, source=leave_request, leave_request_id) per working day (Sundays skipped; real worked days not overwritten) → Salary Sheet paid_leave/unpaid_leave + per-day deduction automatic. set_paid/unpaid rewrites rows; reject/cancel deletes them.
 - Emails: send_leave_request_email (admins) / send_leave_decision_email (employee), background.
 - UI: components/attendance/MyLeaves.jsx (employee, on /employee/attendance), LeavesTab.jsx (admin tab "Leave Requests" with pending badge on /admin/attendance). Tests: backend/tests/test_leaves.py.
+
+## Attendance glitches (Oct 2026)
+- "Keep selfies (days)" showed 0 in prod: stored/invalid retention now sanitised on load (7–365 else 60); input shows placeholder 60 instead of 0.
+- "GPS too weak (±500 m)": getLivePosition() now uses watchPosition for up to 12 s and keeps the best fix (early exit ≤40 m) — phones' coarse first fix no longer blocks check-in. Backend message explains laptops/PCs have no GPS → use phone or admin sets per-employee mode Normal.

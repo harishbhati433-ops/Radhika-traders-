@@ -57,7 +57,8 @@ def verify_location(lat, lng, accuracy) -> tuple[dict | None, str | None]:
     if not (-90 <= lat <= 90 and -180 <= lng <= 180):
         return None, "Invalid location data"
     if acc is not None and acc > 300:
-        return None, f"GPS signal is too weak (±{int(acc)} m). Please step outside / enable high-accuracy location and try again."
+        return None, (f"GPS signal is too weak (±{int(acc)} m). Use your phone with Location ON (high accuracy) and step near a window / outside, then try again. "
+                      "Laptops & PCs have no GPS — ask the admin to set your attendance mode to Normal if you must mark from a computer.")
     d = distance_m(lat, lng, _P["office_lat"], _P["office_lng"])
     tolerance = min(acc or 0, 20)  # small allowance for phone GPS jitter
     rec = {"lat": round(lat, 6), "lng": round(lng, 6), "accuracy_m": round(acc, 1) if acc is not None else None, "distance_m": round(d, 1), "radius_m": _P["radius_m"]}
@@ -90,6 +91,11 @@ async def load(db) -> None:
             _P[k] = doc[k]
     if _P["mode"] not in MODES:
         _P["mode"] = "normal"
+    try:
+        days = int(_P.get("selfie_retention_days") or 0)
+    except (TypeError, ValueError):
+        days = 0
+    _P["selfie_retention_days"] = days if 7 <= days <= 365 else DEFAULT["selfie_retention_days"]
     global _loaded_at
     _loaded_at = datetime.now(timezone.utc)
 

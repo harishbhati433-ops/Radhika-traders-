@@ -46,10 +46,19 @@ export function SelfieDialog({ open, onCapture, onClose, kind = "check-in" }) {
 }
 
 export function getLivePosition() {
+  // Phones often return a coarse first fix (±500 m) that sharpens within seconds — sample for up to 12 s and keep the best reading.
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("This device/browser has no GPS support."));
-    navigator.geolocation.getCurrentPosition((p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-      (e) => reject(new Error(e.code === 1 ? "Location permission denied. Please allow location access for attendance." : e.code === 3 ? "Could not get your location in time. Please try again." : "Could not read your location. Turn on GPS and try again.")),
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    const fail = (e) => reject(new Error(e.code === 1 ? "Location permission denied. Please allow location access for attendance." : e.code === 3 ? "Could not get your location in time. Please try again." : "Could not read your location. Turn on GPS and try again."));
+    let best = null, done = false, watchId = null, timer = null;
+    const stop = () => { done = true; clearTimeout(timer); if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
+    const finish = () => { if (done) return; stop(); best ? resolve(best) : fail({ code: 3 }); };
+    const onPos = (p) => {
+      const s = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy };
+      if (!best || (s.accuracy || 1e9) < (best.accuracy || 1e9)) best = s;
+      if ((best.accuracy || 1e9) <= 40) finish();
+    };
+    timer = setTimeout(finish, 12000);
+    watchId = navigator.geolocation.watchPosition(onPos, (e) => { if (!best && !done) { stop(); fail(e); } }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
   });
 }
