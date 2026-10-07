@@ -75,7 +75,7 @@ export default function CampaignDetail() {
           <div className="lg:col-span-2">
             <div className="-mt-16 flex items-end gap-4">
               {c.logo_url ? (
-                <img src={fileUrl(c.logo_url)} alt={c.company} className="h-20 w-20 rounded-2xl border-4 border-white object-cover shadow-lg" />
+                <img src={fileUrl(c.logo_url)} alt={c.company} className="h-20 w-20 rounded-2xl border-4 border-white bg-white object-contain p-1.5 shadow-lg" />
               ) : (
                 <div className="flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-red-600 to-red-900 font-display text-2xl font-black text-white shadow-lg">
                   {(c.company || c.offer_name).charAt(0)}

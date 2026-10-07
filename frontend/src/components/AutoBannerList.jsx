@@ -16,7 +16,7 @@ function AutoRow({ b, idx, total, onMove, onToggle, onSaved }) {
   return (
     <div data-testid={`auto-banner-${b.campaign_id}`} className={`flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 ${b.enabled ? "border-slate-200" : "border-dashed border-slate-300 opacity-70"}`}>
       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#0B0F17] text-amber-400 font-display font-bold">
-        {b.image_url ? <img src={fileUrl(b.image_url)} alt="" className="h-full w-full object-cover" /> : b.logo_url ? <img src={fileUrl(b.logo_url)} alt="" className="h-full w-full object-cover" /> : (b.title || "?")[0]}
+        {b.image_url ? <img src={fileUrl(b.image_url)} alt="" className="h-full w-full object-cover" /> : b.logo_url ? <img src={fileUrl(b.logo_url)} alt="" className="h-full w-full bg-white object-contain p-1" /> : (b.title || "?")[0]}
       </div>
       <div className="min-w-0 flex-1">
         {edit ? (

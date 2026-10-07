@@ -69,7 +69,7 @@ export default function AdminCampaigns() {
         {items.length === 0 && <p className="py-12 text-center text-slate-500" data-testid="admin-no-campaigns">No campaigns.</p>}
         {items.map((c) => (
           <div key={c.id} data-testid={`admin-campaign-${c.slug}`} className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-            {c.logo_url ? <img src={fileUrl(c.logo_url)} alt="" className="h-12 w-12 rounded-xl object-cover" /> :
+            {c.logo_url ? <img src={fileUrl(c.logo_url)} alt="" className="h-12 w-12 rounded-xl border border-slate-100 bg-white object-contain p-1" /> :
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-900 font-display font-bold text-white">{(c.company || c.offer_name).charAt(0)}</div>}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">

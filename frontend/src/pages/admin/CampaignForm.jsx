@@ -113,7 +113,8 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
           <div><Label>Important Conditions</Label><Textarea value={f.important_conditions} onChange={set("important_conditions")} className="mt-1.5" rows={2} /></div>
 
           <Row>
-            <ImageUpload label="Logo" value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} testId="cf-upload-logo" />
+            <ImageUpload label="Logo" value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} testId="cf-upload-logo" fit="contain"
+              hint="Square 512×512 px PNG (1:1), logo centred with ~15% blank margin on all sides, white or transparent background, under 300 KB. Shown as a small rounded tile — avoid tiny text." />
             <div>
               <ImageUpload label="Banner — 1200×400 px (3:1). Auto-shows in the customer dashboard slider while the campaign is live." value={f.banner_url} onChange={(v) => setF({ ...f, banner_url: v })} testId="cf-upload-banner" />
               <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-700">

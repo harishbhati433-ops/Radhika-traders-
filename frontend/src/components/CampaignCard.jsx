@@ -14,7 +14,7 @@ export function CampaignCard({ c, index = 0 }) {
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           {c.logo_url ? (
-            <img src={fileUrl(c.logo_url)} alt={c.company} className="h-11 w-11 rounded-xl object-cover border border-slate-100" />
+            <img src={fileUrl(c.logo_url)} alt={c.company} className="h-11 w-11 rounded-xl border border-slate-100 bg-white object-contain p-1" />
           ) : (
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-900 text-white font-display font-bold">
               {(c.company || c.offer_name || "R").charAt(0)}

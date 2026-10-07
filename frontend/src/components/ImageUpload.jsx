@@ -19,7 +19,7 @@ async function compressImage(file) {
   } catch { return file; }
 }
 
-export function ImageUpload({ label, value, onChange, testId }) {
+export function ImageUpload({ label, value, onChange, testId, hint, fit = "cover" }) {
   const ref = useRef();
   const filesRef = useRef();
   const [busy, setBusy] = useState(false);
@@ -43,10 +43,11 @@ export function ImageUpload({ label, value, onChange, testId }) {
   return (
     <div>
       {label && <label className="text-sm font-medium text-slate-700">{label}</label>}
+      {hint && <p className="mt-0.5 text-[11px] leading-snug text-slate-500" data-testid={testId ? `${testId}-hint` : undefined}>{hint}</p>}
       <div className="mt-1.5 flex items-center gap-3">
         {value ? (
           <div className="relative">
-            <img src={fileUrl(value)} alt="" className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+            <img src={fileUrl(value)} alt="" className={`h-16 w-16 rounded-lg border border-slate-200 ${fit === "contain" ? "bg-white object-contain p-1" : "object-cover"}`} />
             <button type="button" onClick={() => onChange("")} className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 p-0.5 text-white"><X className="h-3 w-3" /></button>
           </div>
         ) : (

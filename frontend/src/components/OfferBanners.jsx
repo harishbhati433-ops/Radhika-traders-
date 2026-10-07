@@ -21,7 +21,7 @@ function GeneratedSlide({ b, active }) {
     <div className="relative flex h-full w-full flex-col justify-between bg-[radial-gradient(ellipse_at_top_left,#1e293b,#0B0F17_60%)] p-4 text-white sm:p-6" data-testid={active ? "offer-banner-generated" : undefined}>
       <div className="flex items-start gap-3 sm:gap-4">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/20 sm:h-16 sm:w-16">
-          {b.logo_url ? <img src={fileUrl(b.logo_url)} alt="" className="h-full w-full object-cover" loading="lazy" /> : <span className="font-display text-xl font-extrabold text-amber-400 sm:text-3xl">{(b.title || "?").slice(0, 1).toUpperCase()}</span>}
+          {b.logo_url ? <img src={fileUrl(b.logo_url)} alt="" className="h-full w-full bg-white object-contain p-1.5" loading="lazy" /> : <span className="font-display text-xl font-extrabold text-amber-400 sm:text-3xl">{(b.title || "?").slice(0, 1).toUpperCase()}</span>}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
