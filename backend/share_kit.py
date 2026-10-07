@@ -54,7 +54,7 @@ def _rounded(img: Image.Image, radius: int) -> Image.Image:
     return out
 
 
-def poster_png(c: dict, link: str, partner_name: str, logo_bytes: bytes | None) -> bytes:
+def poster_png(c: dict, link: str, partner_name: str, logo_bytes: bytes | None, partner_mobile: str = "") -> bytes:
     img = Image.new("RGB", (W, H), DARK)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, W, 150), fill=RED)
@@ -109,7 +109,9 @@ def poster_png(c: dict, link: str, partner_name: str, logo_bytes: bytes | None) 
             d.text((bx, by + 178 + i * 40), ln, font=_font(34), fill=WHITE)
     d.text((bx, by + 250), "Free · No investment · Radhika Traders partner", font=_font(22, False), fill=MUTED)
     d.text((bx, by + 292), "www.radhikatraders.net", font=_font(26), fill=(252, 211, 77))
-    d.text((bx, by + 334), f"WhatsApp {wa_number()}", font=_font(22, False), fill=MUTED)
+    digits = "".join(ch for ch in (partner_mobile or "") if ch.isdigit())[-10:]
+    contact = f"+91 {digits[:5]} {digits[5:]}" if len(digits) == 10 else wa_number()
+    d.text((bx, by + 334), f"WhatsApp {contact}", font=_font(22, False), fill=MUTED)
 
     buf = io.BytesIO()
     img.save(buf, "PNG", optimize=True)

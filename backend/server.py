@@ -2892,7 +2892,7 @@ async def share_poster(slug: str, request: Request, user: dict = Depends(get_cur
     origin = _share_origin(request)
     link = f"{origin}/api/go/{slug}?ref={user.get('referral_code')}" if user.get("referral_code") else f"{origin}/campaign/{slug}"
     logo = await _logo_bytes(c.get("logo_url", ""))
-    png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo)
+    png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo, user.get("mobile", "") if user.get("role") == "customer" else "")
     fname = f"{slug}-{user.get('referral_code', 'share')}.png"
     return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "private, max-age=3600"})
 
