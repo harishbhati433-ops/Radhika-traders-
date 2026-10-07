@@ -138,7 +138,7 @@ export default function CampaignDetail() {
                     <input data-testid="referral-link-input" readOnly value={referralLink} className="flex-1 bg-transparent text-xs text-slate-600 outline-none" />
                     <button data-testid="referral-copy-btn" onClick={copyRef} className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
                   </div>
-                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage.replace(`\n\n👉 Apply using my link: ${referralLink}`, "\n\n👉 Apply using my link:")} copyText={applyMessage} testPrefix="detail-share" /></div>
+                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage} copyText={applyMessage} testPrefix="detail-share" /></div>
                   <div className="mt-4 flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
                     <span className="flex items-center gap-1.5 font-semibold text-emerald-800"><MousePointerClick className="h-3.5 w-3.5" /> Clicks on your link</span>
                     <span className="font-mono font-bold text-emerald-700" data-testid="referral-clicks">{myClicks}</span>

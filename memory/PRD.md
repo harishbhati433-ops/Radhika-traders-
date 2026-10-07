@@ -562,3 +562,4 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Attendance punch / reminder email failures → activity_logs action `email_failed` (actor System); failed reminders are retried by the next 15-min cron run.
 - Admin → Communication → **Email Log** (/admin/email-log, GET /api/admin/email-log) — every email with sent/failed, attempts, provider error; 24h stats; filters + search.
 - AdminCampaigns status buttons: data-testids status-live/paused/closed-{slug}, disabled in flight, descriptive toasts, error toasts.
+- Share fix (Oct 2026): ShareButtons appended the link at the very end of WhatsApp text, so "Apply using my link:" was empty and the URL landed after the WhatsApp number. Now the link stays inline where the caption puts it (WhatsApp); Telegram passes url separately with the inline link stripped from text. Applies to campaign share + Refer & Earn.

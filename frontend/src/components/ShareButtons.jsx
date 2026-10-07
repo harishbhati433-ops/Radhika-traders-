@@ -3,7 +3,9 @@ import { MessageCircle, Send, Copy, Instagram, Facebook } from "lucide-react";
 
 export function ShareButtons({ link, message, copyText, testPrefix = "share" }) {
   const text = message || "Check out this offer on Radhika Traders!";
-  const encoded = encodeURIComponent(`${text} ${link}`);
+  // Keep the link where the message puts it (e.g. after "Apply using my link:"); only append when the message has no link.
+  const full = text.includes(link) ? text : `${text} ${link}`;
+  const encoded = encodeURIComponent(full);
 
   const copy = () => {
     navigator.clipboard.writeText(copyText || link);
@@ -27,7 +29,7 @@ export function ShareButtons({ link, message, copyText, testPrefix = "share" }) 
         className={`${btn} bg-emerald-500 text-white hover:brightness-110`}>
         <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
       </a>
-      <a data-testid={`${testPrefix}-telegram`} href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer"
+      <a data-testid={`${testPrefix}-telegram`} href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text.includes(link) ? text.replace(link, "").replace(/[ \t]+\n/g, "\n") : text)}`} target="_blank" rel="noreferrer"
         className={`${btn} bg-sky-500 text-white hover:brightness-110`}>
         <Send className="h-3.5 w-3.5" /> Telegram
       </a>
