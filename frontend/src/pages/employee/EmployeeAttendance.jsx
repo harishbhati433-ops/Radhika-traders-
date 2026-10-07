@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { LogIn, LogOut, Clock, Loader2 } from "lucide-react";
 import { StatusPill, MonthSummary, thisMonth, dur, mins } from "../../components/attendance/shared";
 import { MySalary } from "../../components/attendance/MySalary";
+import { MyLeaves } from "../../components/attendance/MyLeaves";
 import { SelfieDialog, getLivePosition } from "../../components/attendance/SelfieDialog";
 
 function Clockface() {
@@ -85,6 +86,7 @@ export default function EmployeeAttendance() {
         <input type="month" value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} data-testid="att-month" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm" />
       </div>
       {d && <MonthSummary s={d.summary} />}
+      <MyLeaves />
       <MySalary />
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">

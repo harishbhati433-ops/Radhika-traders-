@@ -36,6 +36,7 @@ from rbac import make_require_perm, make_log_activity
 from employee_routes import build_router as build_employee_router
 from employee_kyc_routes import build_router as build_employee_kyc_router
 from attendance_routes import build_router as build_attendance_router
+from leave_routes import build_router as build_leave_router
 import office_timing
 import attendance_policy
 from contact_routes import build_router as build_contact_router
@@ -3136,6 +3137,7 @@ api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.requ
 from app_lock_routes import build_app_lock_router  # noqa: E402
 api.include_router(build_app_lock_router(db, get_current_user, hash_password, verify_password, send_otp_email, log_activity))
 api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
+api.include_router(build_leave_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))

@@ -482,3 +482,39 @@ async def send_admin_withdrawal_alert(to: str, w: dict, customer_id: str, when_i
         f'<p style="font-size:12px;color:#64748b">Admin Panel → Withdrawals → Pending. This request is waiting for your approval.</p>'
     )
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+def _leave_rows(l: dict) -> str:
+    rng = l["from_date"] if l["from_date"] == l["to_date"] else f'{l["from_date"]} → {l["to_date"]}'
+    rows = [("Employee", f'{l.get("employee_name", "")} ({l.get("employee_code", "")})'), ("Dates", rng), ("Working days", str(l.get("days", 0))),
+            ("Type", str(l.get("leave_type", "")).title()), ("Reason", l.get("reason", ""))]
+    if l.get("admin_note"):
+        rows.append(("Admin note", l["admin_note"]))
+    return "".join(f'<tr><td style="padding:6px 10px 6px 0;font-size:13px;color:#64748b;white-space:nowrap">{escape(k)}</td><td style="padding:6px 0;font-size:13px;color:#0B0F17;font-weight:bold">{escape(str(v))}</td></tr>' for k, v in rows)
+
+
+async def send_leave_request_email(to: str, name: str, l: dict, review_link: str) -> str | None:
+    if not to:
+        return None
+    subject = f"Leave request: {l.get('employee_name', '')} · {l.get('days', 0)} day(s) from {l['from_date']}"
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+             f'<p style="font-size:14px;color:#334155">A new leave request is waiting for your one-tap approval.</p>'
+             f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{_leave_rows(l)}</table>'
+             f'<p style="margin:16px 0 6px"><a href="{escape(review_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Approve / Reject in Admin Panel</a></p>'
+             f'<p style="font-size:12px;color:#64748b;margin-top:16px">Approve as <b>Paid</b> (no salary cut) or <b>Unpaid</b> (that day\'s salary is deducted automatically).</p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_leave_decision_email(to: str, name: str, l: dict, label: str, portal_link: str) -> str | None:
+    if not to:
+        return None
+    approved = l.get("status") == "approved"
+    subject = f"Leave {label.lower()} — {l['from_date']}" if not approved else f"Leave approved ({'Paid' if l.get('paid') else 'Unpaid'}) — {l['from_date']}"
+    color = "#15803d" if approved else "#991B1B"
+    note = ("No salary will be deducted for these days." if l.get("paid") else "These days are unpaid — the salary for them will be deducted in your monthly salary sheet.") if approved else "Please contact the admin if you have any questions."
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(_first(name))},</p>'
+             f'<p style="font-size:14px;color:#334155">Your leave request has been <b style="color:{color}">{escape(label)}</b> by the admin.</p>'
+             f'<table style="border-collapse:collapse;margin:8px 0 14px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">{_leave_rows(l)}</table>'
+             f'<p style="font-size:13px;color:#334155">{note}</p>'
+             f'<p style="margin:16px 0 6px"><a href="{escape(portal_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">View in Employee Panel</a></p>')
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
