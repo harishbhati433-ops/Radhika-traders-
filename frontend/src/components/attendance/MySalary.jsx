@@ -18,12 +18,16 @@ export function MySalary() {
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${s.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`} data-testid={`my-salary-pay-${s.month}`}>{s.payment_status === "paid" ? `✓ Paid ${s.payment_date}` : "Payment pending"}</span></div>
             {s.payment_status === "paid" && (s.utr || s.proof_url) && <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800" data-testid={`my-salary-proof-${s.month}`}>{s.utr && <span>UTR / Ref: <b className="font-mono">{s.utr}</b></span>}{s.proof_url && <a href={fileUrl(s.proof_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold underline"><Receipt className="h-3 w-3" /> View payment proof</a>}</div>}
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
-              <dt>Base Salary</dt><dd className="text-right font-mono">{inr(s.monthly_salary)}</dd>
+              {s.in_progress ? (
+                <><dt>Earned till date ({s.paid_days} days × {inr(s.per_day)})</dt><dd className="text-right font-mono" data-testid={`my-salary-earned-${s.month}`}>{inr(Math.round(s.paid_days * s.per_day * 100) / 100)}</dd></>
+              ) : (
+                <><dt>Base Salary</dt><dd className="text-right font-mono">{inr(s.monthly_salary)}</dd></>
+              )}
               <dt>Sunday Extra ({s.sunday_worked} worked)</dt><dd className="text-right font-mono text-teal-700">+{inr(s.sunday_extra)}</dd>
               <dt>Bonus / Incentive</dt><dd className="text-right font-mono text-emerald-700">+{inr(s.bonus_incentive)}</dd>
-              <dt>Attendance Deduction</dt><dd className="text-right font-mono text-rose-700">−{inr(s.attendance_deduction)}</dd>
-              <dt>Adjustments</dt><dd className="text-right font-mono text-rose-700">−{inr(s.manual_adjustment)}</dd>
-              {s.in_progress && <dt className="col-span-2 mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800" data-testid={`my-salary-progress-${s.month}`}>Month still running — this amount covers the days you were present till today ({s.paid_days} paid days × {inr(s.per_day)}/day). Full-month amount will be finalized by the admin.</dt>}
+              {!s.in_progress && <><dt>Attendance Deduction</dt><dd className="text-right font-mono text-rose-700">−{inr(s.attendance_deduction)}</dd></>}
+              <dt>Adjustments (advance / deductions)</dt><dd className="text-right font-mono text-rose-700">−{inr(s.manual_adjustment)}</dd>
+              {s.in_progress && <dt className="col-span-2 mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800" data-testid={`my-salary-progress-${s.month}`}>Month still running — this amount covers the days you were present till today. Full-month salary (base {inr(s.monthly_salary)} − attendance deduction {inr(s.attendance_deduction)}) will be finalized by the admin.</dt>}
               <dt className="col-span-2 mt-1 text-[11px] text-slate-400">Present {s.present + s.late} · Half {s.half_day} · Absent {s.absent} · Leave {s.paid_leave}/{s.unpaid_leave} · Weekly off {s.weekly_off}</dt>
             </dl>
           </div>

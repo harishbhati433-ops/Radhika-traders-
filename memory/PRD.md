@@ -541,3 +541,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 ## Attendance glitches (Oct 2026)
 - "Keep selfies (days)" showed 0 in prod: stored/invalid retention now sanitised on load (7–365 else 60); input shows placeholder 60 instead of 0.
 - "GPS too weak (±500 m)": getLivePosition() now uses watchPosition for up to 12 s and keeps the best fix (early exit ≤40 m) — phones' coarse first fix no longer blocks check-in. Backend message explains laptops/PCs have no GPS → use phone or admin sets per-employee mode Normal.
+
+## Salary calculation audit (Oct 2026) — verified correct
+- Basis: per_day = monthly/30 (fixed). Paid day units: present/late/holiday/paid leave = 1, Sunday = 1 (paid weekly off), half day = 0.5 (auto half = minute-wise), short hours = worked/420, absent/unpaid leave/checkout-missing = 0; pre-joining days unpaid (not "absent"). Sunday worked = extra (minute-wise). Final = base + sunday extra + bonus + incentive − per_day×deduct_days − advance − manual − date deductions. Running month employee view = min(earned_to_date, final).
+- Checked rahul.k Sep (joined 12 Sep: 11 pre-joining + 16 absent = 27 deduct → 1500 = 3 paid Sundays) and Oct (holiday 1 + Sunday 1 + half 0.5 + short 0.0002 = 2.5 paid; deduct 4.4998 → 2249.9) — all arithmetic matches.
+- MySalary.jsx (employee): running-month breakdown now adds up (Earned till date = paid_days × per_day; attendance deduction moved to note). Open policy question for owner: Sundays are paid even in a week with zero attendance.
