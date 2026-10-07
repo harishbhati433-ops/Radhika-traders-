@@ -1549,7 +1549,7 @@ async def update_campaign_status(cid: str, request: Request, background: Backgro
     # Email + in-app notice is triggered here, at API level, after the DB write succeeded — every path (UI, API, old or new campaign) notifies.
     background.add_task(announce_campaign_status, c, status, _origin(request))
     await log_activity(admin, "campaign_status_changed", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
-                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{old} -> {status} · customers notified by email + in-app")
+                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{old} -> {status} · customers notified in-app (promo emails off)")
     return {"message": "Status updated", "status": status, "notified": True}
 
 
@@ -1594,18 +1594,10 @@ async def announce_campaign_status(c: dict, status: str, origin: str):
         await db.notifications.insert_many([{
             "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live" if status == "live" else "campaign_status",
             "campaign_id": str(c["_id"]), "status": status, "read": False, "created_at": now_iso()} for u in customers])
-    recipients = await _engaged_customers(c, first_live)
-    queued = 0
-    for u in recipients:
-        if not u.get("email") or u["email"].endswith("@example.com"):
-            continue
-        personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") and status == "live" else f"{origin}/app/dashboard"
-        html, subject = (campaign_live_html(u.get("name", ""), c, personal) if first_live else campaign_status_html(u.get("name", ""), c, status, personal))
-        await email_service.enqueue_bulk(u["email"], subject, html)
-        queued += 1
+    # Promotional (campaign live/pause/close) emails are disabled to save email quota — in-app notification only.
     await db.broadcasts.insert_one({"kind": "campaign_live" if first_live else f"campaign_{status}", "campaign_id": str(c["_id"]), "subject": title, "message": body,
-                                    "audience": "engaged", "recipients": len(customers), "sent": 0, "failed": 0, "queued": queued,
-                                    "channels": ["in_app", "email"], "created_at": now_iso()})
+                                    "audience": "all", "recipients": len(customers), "sent": 0, "failed": 0, "queued": 0,
+                                    "channels": ["in_app"], "created_at": now_iso()})
 
 
 async def announce_campaign_live(c: dict, origin: str):
