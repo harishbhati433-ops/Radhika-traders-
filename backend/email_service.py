@@ -560,3 +560,27 @@ async def send_leave_decision_email(to: str, name: str, l: dict, label: str, por
              f'<p style="font-size:13px;color:#334155">{note}</p>'
              f'<p style="margin:16px 0 6px"><a href="{escape(portal_link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">View in Employee Panel</a></p>')
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+
+
+async def send_campaign_status_email(to: str, name: str, c: dict, status: str, link: str) -> str | None:
+    """Pause / Close / Resume (live again) notice for an existing campaign."""
+    if not to:
+        return None
+    first, offer = _first(name), c.get("offer_name", "a campaign")
+    cfg = {
+        "paused": ("paused", "#b45309", f"{first}, {offer} is paused for now",
+                   "This campaign is <b>temporarily paused</b>. Please do not share its link until it is live again — new leads submitted while paused may not be counted. We will email you the moment it resumes."),
+        "closed": ("closed", "#991B1B", f"{first}, {offer} has been closed",
+                   "This campaign is now <b>closed</b>. Its referral link no longer accepts new leads. Earnings for leads already approved stay safe in your wallet."),
+        "live": ("live again", "#15803d", f"{first}, {offer} is LIVE again",
+                 "Good news — this campaign is <b>live again</b>. Your referral link is active; start sharing and earning right away."),
+    }[status]
+    word, color, subject, body = cfg
+    details = [f"Company: {c.get('company', '')}", f"Payout: Rs.{c.get('payout_amount', 0):g} {c.get('payout_type', '')}".strip(), f"Status: {word.upper()}"]
+    inner = (f'<p style="font-size:15px;color:#0B0F17">Hi {escape(first)},</p>'
+             f'<p style="font-size:14px;color:#334155">Campaign <b>{escape(offer)}</b> is now <b style="color:{color}">{escape(word)}</b>.</p>'
+             f'<p style="font-size:14px;color:#334155">{body}</p>'
+             f'<ul style="font-size:13px;color:#334155;padding-left:18px">{"".join(f"<li>{escape(d)}</li>" for d in details)}</ul>'
+             + (f'<p style="margin:16px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open your referral link</a></p>' if status == "live" else
+                f'<p style="margin:16px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#0B0F17;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open your dashboard</a></p>'))
+    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))

@@ -133,6 +133,9 @@ class AdjustIn(BaseModel):
     utr: Optional[str] = None
 
 
+SYSTEM = {"id": "system", "name": "System", "role": "system"}
+
+
 def build_router(db, require_admin, require_employee, log_activity) -> APIRouter:
     r = APIRouter()
 
@@ -344,9 +347,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             targets.setdefault(real_email(full), (full.get("name", ""), False))
         for to, (name, for_admin) in targets.items():
             try:
-                await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
+                mid = await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
             except Exception as e:  # never block attendance on email failure
                 logger.warning(f"attendance email to {to} failed: {e}")
+                mid = None
+            if not mid:
+                await log_activity(SYSTEM, "email_failed", None, entity_type="attendance", entity_id=rec["date"], entity_label=full.get("name", ""), status="failed",
+                                   detail=f"{'Check-in' if kind == 'in' else 'Check-out' if kind == 'out' else 'Auto-close'} email to {to} failed after retries — see Email Log")
 
     # ---------------- Employee ----------------
     class PunchIn(BaseModel):
@@ -964,6 +971,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             except Exception as e:
                 logger.warning(f"{kind} reminder to {emp['email']} failed: {e}")
                 mid = None
+            if not mid:  # not recorded as sent → the next 15-min run retries automatically
+                await log_activity(SYSTEM, "email_failed", None, entity_type="attendance", entity_id=today, entity_label=emp.get("name", ""), status="failed",
+                                   detail=f"{'Check-in' if kind == 'checkin' else 'Check-out'} reminder to {real_email(emp)} failed — will retry in 15 min")
+                continue
             await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": real_email(emp), "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
             sent += 1
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "sent": sent}})

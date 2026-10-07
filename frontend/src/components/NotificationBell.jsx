@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { Bell, Megaphone, ShieldCheck, Info, CheckCheck } from "lucide-react";
 
-const ICON = { campaign_live: Megaphone, kyc: ShieldCheck, broadcast: Info };
+const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info };
 
 export function NotificationBell() {
   const [data, setData] = useState({ unread: 0, items: [] });

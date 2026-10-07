@@ -64,6 +64,7 @@ const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminBanners = lazy(() => import("./pages/admin/AdminBanners"));
 const AdminKyc = lazy(() => import("./pages/admin/AdminKyc"));
 const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
+const AdminEmailLog = lazy(() => import("./pages/admin/AdminEmailLog"));
 const AdminLeads = lazy(() => import("./pages/admin/AdminLeads"));
 const AdminSecurity = lazy(() => import("./pages/admin/AdminSecurity"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
@@ -211,6 +212,7 @@ function App() {
             <Route path="/admin/banners" element={A(<AdminBanners />, "campaigns")} />
             <Route path="/admin/kyc" element={A(<AdminKyc />, "clients")} />
             <Route path="/admin/broadcast" element={A(<AdminBroadcast />, "reports")} />
+            <Route path="/admin/email-log" element={A(<AdminEmailLog />)} />
             <Route path="/admin/leads" element={A(<AdminLeads />, "leads")} />
             <Route path="/admin/security" element={A(<AdminSecurity />)} />
             <Route path="/admin/reports" element={A(<AdminReports />, "reports")} />

@@ -4,7 +4,7 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import { StatusBadge } from "../../components/StatusBadge";
 import { CampaignForm } from "./CampaignForm";
-import api from "../../lib/api";
+import api, { formatApiErrorDetail } from "../../lib/api";
 import { fileUrl } from "../../lib/api";
 import { toast } from "sonner";
 import { Input } from "../../components/ui/input";
@@ -30,7 +30,16 @@ export default function AdminCampaigns() {
   useEffect(() => { api.get("/categories?all=true").then(({ data }) => setCats(data)); }, []);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [search, showArchived]);
 
-  const setStatus = async (c, status) => { await api.patch(`/campaigns/${c.id}/status?status=${status}`); toast.success(`Set ${status}`); load(); };
+  const [statusBusy, setStatusBusy] = useState("");
+  const setStatus = async (c, status) => {
+    if (c.status === status || statusBusy) return;
+    setStatusBusy(c.id + status);
+    try {
+      const { data } = await api.patch(`/campaigns/${c.id}/status?status=${status}`);
+      toast.success(status === "live" ? `${c.offer_name} is LIVE — customers notified by email` : status === "paused" ? `${c.offer_name} paused — customers notified` : `${c.offer_name} closed — customers notified`, { description: data?.notified ? "Email + in-app notification sent to all active customers" : undefined });
+      load();
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Could not change status"); } finally { setStatusBusy(""); }
+  };
   const toggleOffer = async (c) => { await api.patch(`/campaigns/${c.id}/toggle-offer?enabled=${!c.offer_enabled}`); load(); };
   const archive = async (c) => { if (!window.confirm(`Archive "${c.offer_name}"? It can be restored.`)) return; await api.delete(`/campaigns/${c.id}`); toast.success("Archived"); load(); };
   const restore = async (c) => { await api.post(`/campaigns/${c.id}/restore`); toast.success("Restored"); load(); };
@@ -72,9 +81,9 @@ export default function AdminCampaigns() {
               <button onClick={() => restore(c)} data-testid={`restore-${c.slug}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white"><RotateCcw className="h-3.5 w-3.5" /> Restore</button>
             ) : (
               <div className="flex flex-wrap items-center gap-1">
-                <button onClick={() => setStatus(c, "live")} title="Live" className={`rounded-lg p-2 ${c.status === "live" ? "bg-emerald-100 text-emerald-600" : "text-slate-400 hover:bg-slate-100"}`}><Radio className="h-4 w-4" /></button>
-                <button onClick={() => setStatus(c, "paused")} title="Pause" className={`rounded-lg p-2 ${c.status === "paused" ? "bg-amber-100 text-amber-600" : "text-slate-400 hover:bg-slate-100"}`}><PauseCircle className="h-4 w-4" /></button>
-                <button onClick={() => setStatus(c, "closed")} title="Close" className={`rounded-lg p-2 ${c.status === "closed" ? "bg-rose-100 text-rose-600" : "text-slate-400 hover:bg-slate-100"}`}><XCircle className="h-4 w-4" /></button>
+                <button onClick={() => setStatus(c, "live")} disabled={!!statusBusy} data-testid={`status-live-${c.slug}`} title={c.status === "live" ? "Live (current)" : "Make Live — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "live" ? "bg-emerald-100 text-emerald-600" : "text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"}`}><Radio className="h-4 w-4" /></button>
+                <button onClick={() => setStatus(c, "paused")} disabled={!!statusBusy} data-testid={`status-paused-${c.slug}`} title={c.status === "paused" ? "Paused (current)" : "Pause — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "paused" ? "bg-amber-100 text-amber-600" : "text-slate-400 hover:bg-amber-50 hover:text-amber-600"}`}><PauseCircle className="h-4 w-4" /></button>
+                <button onClick={() => setStatus(c, "closed")} disabled={!!statusBusy} data-testid={`status-closed-${c.slug}`} title={c.status === "closed" ? "Closed (current)" : "Close — emails customers"} className={`rounded-lg p-2 disabled:opacity-50 ${c.status === "closed" ? "bg-rose-100 text-rose-600" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}><XCircle className="h-4 w-4" /></button>
                 <button onClick={() => toggleOffer(c)} data-testid={`toggle-offer-${c.slug}`} title="Enable/Disable" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">{c.offer_enabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
                 <button onClick={() => openEdit(c)} data-testid={`edit-${c.slug}`} className="rounded-lg p-2 text-sky-600 hover:bg-sky-50"><Pencil className="h-4 w-4" /></button>
                 <button onClick={() => archive(c)} data-testid={`archive-${c.slug}`} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Archive className="h-4 w-4" /></button>

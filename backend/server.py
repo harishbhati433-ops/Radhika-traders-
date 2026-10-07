@@ -30,7 +30,7 @@ from auth_utils import (
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
 import email_service
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
@@ -1537,40 +1537,74 @@ async def update_campaign_status(cid: str, request: Request, background: Backgro
     c = await db.campaigns.find_one({"_id": ObjectId(cid)})
     if not c:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    old = c.get("status")
+    if old == status:
+        return {"message": f"Already {status}", "status": status, "notified": False}
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
-    if status == "live" and c.get("status") != "live":
-        background.add_task(announce_campaign_live, c, _origin(request))
+    # Email + in-app notice is triggered here, at API level, after the DB write succeeded — every path (UI, API, old or new campaign) notifies.
+    background.add_task(announce_campaign_status, c, status, _origin(request))
     await log_activity(admin, "campaign_status_changed", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
-                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{c.get('status')} -> {status}")
-    return {"message": "Status updated"}
+                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{old} -> {status} · customers notified by email + in-app")
+    return {"message": "Status updated", "status": status, "notified": True}
 
 
 def _origin(request: Request) -> str:
     return f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
 
 
-async def announce_campaign_live(c: dict, origin: str):
-    claimed = await db.campaigns.update_one({"_id": c["_id"], "live_announced_at": {"$exists": False}}, {"$set": {"live_announced_at": now_iso()}})
-    if not claimed.modified_count:
-        return
-    customers = await db.users.find({"role": "customer", "email_verified": True, "account_status": {"$nin": ["disabled", "deleted"]}},
-                                    {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
-    title = f"New Campaign LIVE: {c['offer_name']}"
-    body = f"Payout Rs.{c.get('payout_amount', 0):g} · {c.get('company', '')}. Grab it and complete maximum eligible conversions!"
-    link = f"/campaign/{c['slug']}"
+async def _active_customers() -> list:
+    return await db.users.find({"role": "customer", "email_verified": True, "account_status": {"$nin": ["disabled", "deleted"]}},
+                               {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
+
+
+async def announce_campaign_status(c: dict, status: str, origin: str):
+    """live (first time) → 'new campaign' mail; live again / paused / closed → status mail. In-app notification always."""
+    first_live = status == "live" and not c.get("live_announced_at")
+    if first_live:
+        claimed = await db.campaigns.update_one({"_id": c["_id"], "live_announced_at": {"$exists": False}}, {"$set": {"live_announced_at": now_iso()}})
+        first_live = bool(claimed.modified_count)
+    customers = await _active_customers()
+    word = {"live": "LIVE", "paused": "PAUSED", "closed": "CLOSED"}[status]
+    title = f"New Campaign LIVE: {c['offer_name']}" if first_live else f"Campaign {word}: {c['offer_name']}"
+    body = (f"Payout Rs.{c.get('payout_amount', 0):g} · {c.get('company', '')}. Grab it and complete maximum eligible conversions!" if first_live else
+            {"live": "This campaign is live again — share your link and start earning.", "paused": "Temporarily paused — please hold sharing until it resumes.",
+             "closed": "Closed — its link no longer accepts new leads. Approved earnings stay in your wallet."}[status])
+    link = f"/campaign/{c['slug']}" if status == "live" else "/app/my-campaigns"
     if customers:
         await db.notifications.insert_many([{
-            "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live",
-            "campaign_id": str(c["_id"]), "read": False, "created_at": now_iso()} for u in customers])
+            "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live" if status == "live" else "campaign_status",
+            "campaign_id": str(c["_id"]), "status": status, "read": False, "created_at": now_iso()} for u in customers])
     sent = failed = 0
     for u in customers:
-        personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") else f"{origin}{link}"
-        ok = await send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, personal)
+        personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") and status == "live" else f"{origin}/app/dashboard"
+        ok = await (send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, personal) if first_live
+                    else send_campaign_status_email(u.get("email", ""), u.get("name", ""), c, status, personal))
         sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
-        await asyncio.sleep(0.6)
-    await db.broadcasts.insert_one({"kind": "campaign_live", "campaign_id": str(c["_id"]), "subject": title, "message": body,
+    await db.broadcasts.insert_one({"kind": "campaign_live" if first_live else f"campaign_{status}", "campaign_id": str(c["_id"]), "subject": title, "message": body,
                                     "audience": "all", "recipients": len(customers), "sent": sent, "failed": failed,
                                     "channels": ["email", "in_app"], "created_at": now_iso()})
+    if failed:
+        await log_activity({"id": "system", "name": "System", "role": "system"}, "email_failed", None, entity_type="campaign", entity_id=str(c["_id"]), entity_label=c["offer_name"],
+                           campaign_id=str(c["_id"]), campaign_name=c["offer_name"], status=status, detail=f"{failed} of {len(customers)} '{title}' emails failed — see Email Log")
+
+
+async def announce_campaign_live(c: dict, origin: str):
+    await announce_campaign_status(c, "live", origin)
+
+
+@api.get("/admin/email-log")
+async def admin_email_log(status: Optional[str] = None, q: Optional[str] = None, limit: int = 200, admin: dict = Depends(require_admin)):
+    query = {}
+    if status in ("sent", "failed"):
+        query["status"] = status
+    if q:
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        query["$or"] = [{"to": rx}, {"subject": rx}]
+    items = await db.email_log.find(query).sort("created_at", -1).to_list(min(max(limit, 1), 500))
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    sent24, failed24 = await asyncio.gather(db.email_log.count_documents({"status": "sent", "created_at": {"$gte": since}}),
+                                            db.email_log.count_documents({"status": "failed", "created_at": {"$gte": since}}))
+    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items], "sent_24h": sent24, "failed_24h": failed24}
 
 
 @api.patch("/campaigns/{cid}/toggle-offer")
