@@ -1,8 +1,8 @@
 crons:
   - name: attendance-nudges
-    description: "Every 15 min Mon-Sat 9 AM-7 PM IST: emails check-in reminders after office start and check-out reminders after office end (one of each per employee per day)"
-    cron: "*/15 9-19 * * 1-6"
-    timezone: "Asia/Kolkata"
+    description: "Every 15 min Mon-Sat 8:30 AM-7:15 PM IST: emails check-in reminders after office start and check-out reminders after office end (one of each per employee per day)"
+    # UTC schedule (03:00-13:45 UTC = 08:30-19:15 IST). Non-UTC timezone does not allow */15 or hour ranges, so this must stay in UTC.
+    cron: "*/15 3-13 * * 1-6"
     endpoint: "{{BASE_URL}}/api/cron/attendance-nudges"
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
