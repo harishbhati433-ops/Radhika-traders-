@@ -546,3 +546,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Basis: per_day = monthly/30 (fixed). Paid day units: present/late/holiday/paid leave = 1, Sunday = 1 (paid weekly off), half day = 0.5 (auto half = minute-wise), short hours = worked/420, absent/unpaid leave/checkout-missing = 0; pre-joining days unpaid (not "absent"). Sunday worked = extra (minute-wise). Final = base + sunday extra + bonus + incentive − per_day×deduct_days − advance − manual − date deductions. Running month employee view = min(earned_to_date, final).
 - Checked rahul.k Sep (joined 12 Sep: 11 pre-joining + 16 absent = 27 deduct → 1500 = 3 paid Sundays) and Oct (holiday 1 + Sunday 1 + half 0.5 + short 0.0002 = 2.5 paid; deduct 4.4998 → 2249.9) — all arithmetic matches.
 - MySalary.jsx (employee): running-month breakdown now adds up (Earned till date = paid_days × per_day; attendance deduction moved to note). Open policy question for owner: Sundays are paid even in a week with zero attendance.
+
+## Office timing / GPS radius / auto-close — verified (Oct 2026)
+- Timing change (PUT /admin/attendance/settings) reflects instantly in employee panel (start/end/auto-close), late calc uses new start; validation: end ≥ start+7h, auto-close > end. Full Day stays 7h by design.
+- GPS radius change (PUT /admin/attendance/policy) applies immediately to verify_location (250 m passes at 300, fails at 150). Mode normal/gps/gps_selfie + per-employee override.
+- Auto-close: previously ran only lazily on page/API requests; now also runs inside the 15-min attendance-nudges cron, so sessions close within 15 min of the configured auto-close time even if nobody opens the app.

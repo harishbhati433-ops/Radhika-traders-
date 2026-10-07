@@ -935,6 +935,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
     async def run_attendance_nudges(run_id: str, origin: str) -> None:
         """Every 15 min (Mon–Sat): email check-in reminders after office start, check-out reminders after office end. One of each per employee per day."""
         today = ist_today()
+        await ot.refresh(db)
+        await auto_close_stale()  # cron fires every 15 min, so forgotten sessions close within 15 min of the auto-close time even if nobody opens the app
         if is_sunday(today):
             return
         now_m = _ist_minutes(now_utc().isoformat())
