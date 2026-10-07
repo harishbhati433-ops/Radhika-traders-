@@ -55,7 +55,7 @@ export default function CampaignDetail() {
     `✨ *${c.offer_name}*\n` +
     `${c.customer_benefit ? `🎯 ${c.customer_benefit}\n` : ""}` +
     `${c.requirements ? `📋 Requirements: ${String(c.requirements).slice(0, 160)}\n` : ""}` +
-    `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: ${fmtWa(contact.whatsapp_number)}`;
+    `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: ${fmtWa(user?.mobile || contact.whatsapp_number)}`;
 
   return (
     <PublicLayout>

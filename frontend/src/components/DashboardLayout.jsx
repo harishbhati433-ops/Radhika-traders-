@@ -87,7 +87,7 @@ export function DashboardLayout({ nav, children, title }) {
     );
   };
 
-  const SideLinks = () => (
+  const sideLinks = (
     <nav className="flex flex-col gap-0.5" data-testid="sidebar-nav">
       {sections.map((s) => {
         if (s.item) return <LinkRow key={s.item.to} n={s.item} />;
@@ -113,7 +113,7 @@ export function DashboardLayout({ nav, children, title }) {
     </nav>
   );
 
-  const SidebarCard = () => (
+  const sidebarCard = (
     <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-3">
       <div className="mb-3 hidden lg:block"><Link to="/"><Logo size="sm" /></Link></div>
       <div className="mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-3 text-white">
@@ -124,7 +124,7 @@ export function DashboardLayout({ nav, children, title }) {
           <div className="truncate text-[11px] text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]"><SideLinks /></div>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]">{sideLinks}</div>
       <div className="mt-2 border-t border-slate-100 pt-2">
         <button onClick={doLogout} data-testid="dash-logout" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50">
           <LogOut style={{ width: 16, height: 16 }} /> Logout
@@ -152,13 +152,13 @@ export function DashboardLayout({ nav, children, title }) {
         <div onClick={() => setOpen(false)} data-testid="dash-drawer-backdrop" className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"}`} />
         <aside data-testid="dash-drawer" className={`absolute inset-y-0 left-0 flex w-[82vw] max-w-xs flex-col p-3 transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="mb-2 flex items-center justify-between px-1"><Logo size="sm" /><button onClick={() => setOpen(false)} data-testid="dash-drawer-close" aria-label="Close menu" className="rounded-lg bg-white p-2 text-slate-700 shadow"><X className="h-5 w-5" /></button></div>
-          <div className="min-h-0 flex-1"><SidebarCard /></div>
+          <div className="min-h-0 flex-1">{sidebarCard}</div>
         </aside>
       </div>
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
         {/* Desktop sidebar: fixed height, scrolls inside */}
-        <aside className="hidden lg:block sticky top-6 h-[calc(100vh-3rem)] w-60 shrink-0"><SidebarCard /></aside>
+        <aside className="hidden lg:block sticky top-6 h-[calc(100vh-3rem)] w-60 shrink-0">{sidebarCard}</aside>
 
         {/* Content */}
         <main className="rt-enter min-w-0 flex-1" key={loc.pathname}>

@@ -26,12 +26,13 @@ export default function AdminTeam() {
 
   useEffect(() => { if (newUrl) { setPhotos([...photos, { url: newUrl, caption: "" }]); setNewUrl(""); } }, [newUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = async () => {
+  const save = async (next = t, msg = "Team section saved — homepage updated") => {
     setBusy(true);
-    try { const { data } = await api.put("/admin/team", t); setT(data); toast.success("Team section saved — homepage updated"); }
+    try { const { data } = await api.put("/admin/team", next); setT(data); toast.success(msg); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); }
     finally { setBusy(false); }
   };
+  const toggleVisible = (v) => { const next = { ...t, visible: v }; setT(next); save(next, v ? "Team section is now visible on the homepage" : "Team section hidden from the homepage"); };
 
   if (!t) return <DashboardLayout nav={adminNav} title="Team Photos"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></DashboardLayout>;
 
@@ -41,8 +42,11 @@ export default function AdminTeam() {
 
       <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-2" data-testid="team-text-form">
         <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 lg:col-span-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">{t.visible ? <Eye className="h-4 w-4 text-emerald-600" /> : <EyeOff className="h-4 w-4 text-slate-400" />} Show Team section on homepage</div>
-          <Switch data-testid="team-visible-toggle" checked={t.visible} onCheckedChange={(v) => setT({ ...t, visible: v })} />
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">{t.visible ? <Eye className="h-4 w-4 text-emerald-600" /> : <EyeOff className="h-4 w-4 text-slate-400" />} Show Team section on homepage</div>
+            <div className="mt-0.5 text-[11px] text-slate-500" data-testid="team-visible-state">{t.visible ? "Visible — saves instantly when you switch it off." : "Hidden — photos stay saved, nothing is shown on the homepage."}</div>
+          </div>
+          <Switch data-testid="team-visible-toggle" checked={t.visible} disabled={busy} onCheckedChange={toggleVisible} />
         </div>
         <div><Label>Small label (above heading)</Label><Input data-testid="team-eyebrow" value={t.eyebrow} onChange={set("eyebrow")} className="mt-1.5" maxLength={60} /></div>
         <div><Label>Heading</Label><Input data-testid="team-heading" value={t.heading} onChange={set("heading")} className="mt-1.5" maxLength={80} /></div>
@@ -77,7 +81,7 @@ export default function AdminTeam() {
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-slate-400">{t.updated_at ? `Last saved ${new Date(t.updated_at).toLocaleString("en-IN")}${t.updated_by ? ` by ${t.updated_by}` : ""}` : "Using default photos"}</span>
-        <button onClick={save} disabled={busy} data-testid="team-save" className="rt-gradient-btn inline-flex items-center gap-1.5 rounded-full px-6 py-2.5 text-sm font-bold disabled:opacity-60">
+        <button onClick={() => save()} disabled={busy} data-testid="team-save" className="rt-gradient-btn inline-flex items-center gap-1.5 rounded-full px-6 py-2.5 text-sm font-bold disabled:opacity-60">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save & publish
         </button>
       </div>

@@ -34,7 +34,7 @@ export function ShareKit({ c, link, user }) {
   const qr = useBlobUrl(`/share/qr?url=${encodeURIComponent(link)}&size=600`, [link]);
   const [sharing, setSharing] = useState(false);
   const contact = useContact();
-  const captions = captionsFor(c, link, user?.name, contact.whatsapp_number);
+  const captions = captionsFor(c, link, user?.name, user?.mobile || contact.whatsapp_number);
   const fname = `${c.slug}-${user?.referral_code || "share"}.png`;
 
   const copy = (text, label) => { navigator.clipboard.writeText(text); toast.success(`${label} caption copied — paste it with the poster`); };

@@ -46,6 +46,11 @@ export default function EmployeeDashboard() {
       <div className="mb-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white" data-testid="emp-welcome">
         <div className="text-xs uppercase tracking-wider text-amber-300">Employee workspace · {user?.employee_code || user?.username}</div>
         <div className="mt-1 text-sm text-slate-200">You can access only the modules assigned by the Super Admin. Every action you take is recorded in the activity log.</div>
+        {(!user?.email || user.email.endsWith("@employee.radhikatraders.net")) ? (
+          <div className="mt-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200" data-testid="emp-no-email-banner">⚠ No Gmail is linked to your account — attendance, reminder and salary emails are OFF. Ask the admin to add your Gmail in Team &amp; HR → Employees.</div>
+        ) : (
+          <div className="mt-3 text-xs text-slate-300" data-testid="emp-email-info">✉ Attendance &amp; salary emails go to <span className="font-semibold text-white">{user.email}</span></div>
+        )}
       </div>
       {tiles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500" data-testid="emp-no-modules">No modules assigned yet. Please contact the Super Admin.</div>
