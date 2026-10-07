@@ -166,7 +166,7 @@ export function DashboardLayout({ nav, children, title }) {
             {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             <div className="flex items-center gap-2">
               <span className="hidden lg:block"><ThemeToggle /></span>
-              {user?.role === "customer" && <NotificationBell />}
+              <NotificationBell />
             </div>
           </div>
           {viewOnly && (

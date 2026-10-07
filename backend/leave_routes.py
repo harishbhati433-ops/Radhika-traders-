@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from bson import ObjectId
 
 import contact_settings
+import push_service
 from email_service import send_leave_request_email, send_leave_decision_email
 
 logger = logging.getLogger("leaves")
@@ -122,6 +123,10 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         link = f"{origin_of(request)}/rt-control-hb27?next=/admin/attendance"
         for to, name in targets.items():
             background.add_task(send_leave_request_email, to, name, out(doc), link)
+        if admins:
+            await push_service.notify_many([{"user_id": str(a["_id"]), "title": f"Leave request: {emp.get('name', '')}",
+                                             "body": f"{body.from_date} → {body.to_date} · {len(dates)} day(s) · {body.reason.strip()[:80]}", "link": "/admin/attendance",
+                                             "type": "leave", "read": False, "created_at": now_iso()} for a in admins])
         return out(doc)
 
     @r.delete("/employee/leaves/{lid}")
@@ -181,6 +186,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         else:
             await remove_from_attendance(new)
         label = {"approve": f"Approved · {'Paid' if new.get('paid') else 'Unpaid'}", "reject": "Rejected", "set_paid": "Changed to Paid", "set_unpaid": "Changed to Unpaid"}[a]
+        await push_service.notify_one({"user_id": new["employee_id"], "title": f"Leave {label}", "body": f"{new['from_date']} → {new['to_date']} · {new['days']} day(s)" + (f" · {body.note.strip()}" if body.note else ""),
+                                       "link": "/employee/attendance", "type": "leave", "read": False, "created_at": now_iso()})
         await log_activity(admin, "leave_decided", request, entity_type="leave", entity_id=lid, entity_label=new.get("employee_name", ""), status=new["status"],
                            detail=f"{label} · {new['from_date']} → {new['to_date']} · {new['days']} day(s)" + (f" · {body.note}" if body.note else ""))
         emp = await db.users.find_one({"_id": ObjectId(new["employee_id"])}) if ObjectId.is_valid(new["employee_id"]) else None

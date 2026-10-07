@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+import push_service
 from pydantic import BaseModel
 from bson import ObjectId
 import pandas as pd
@@ -346,6 +347,9 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), ("Admin", True))
         if real_email(full):
             targets.setdefault(real_email(full), (full.get("name", ""), False))
+        verb = {"in": "checked in", "out": "checked out", "auto": "did NOT check out (auto-closed)"}[kind]
+        asyncio.create_task(push_service.send_push([str(a["_id"]) for a in admins], f"{full.get('name', '')} {verb}", f"{d} · {when} · {st}" + (f" · {hours}" if hours else ""), "/admin/attendance", kind="attendance"))
+        asyncio.create_task(push_service.send_push([emp["id"]], f"You {verb}", f"{d} · {when} · {st}" + (f" · {hours}" if hours else ""), "/employee/attendance", kind="attendance"))
         for to, (name, for_admin) in targets.items():
             try:
                 mid = await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
@@ -967,6 +971,8 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 kind = "checkout"
             if not kind:
                 continue
+            asyncio.create_task(push_service.send_push([eid], "Reminder: please check in now" if kind == "checkin" else "Reminder: you have not checked out",
+                                                       f"{d} · Office hours have {'started' if kind == 'checkin' else 'ended'} — open the app and punch now.", "/employee/attendance", tag=f"nudge-{kind}", kind="attendance"))
             try:
                 mid = await (send_attendance_reminder_email(real_email(emp), emp.get("name", ""), emp.get("employee_code", ""), d, link) if kind == "checkin"
                              else send_checkout_reminder_email(real_email(emp), emp.get("name", ""), d, fmt_t(rec["check_in"]), link))

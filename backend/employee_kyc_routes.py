@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from bson import ObjectId
 
 from email_service import send_employee_kyc_email
+import push_service
 
 FIELDS = ("full_name", "employee_code", "mobile", "father_name", "email", "dob", "address", "aadhaar", "pan", "ifsc", "bank_account", "bank_name", "branch")
 
@@ -121,6 +122,8 @@ def build_router(db, require_admin, require_employee, log_activity, pan_error, a
                "history": ((old or {}).get("history") or []) + [{"action": "resubmitted" if old else "submitted", "by": u.get("name", ""), "at": ts, "note": ""}]}
         await db.employee_kyc.update_one({"employee_id": emp["id"]}, {"$set": doc}, upsert=True)
         await log_activity(emp, "employee_kyc_submitted", request, entity_type="employee_kyc", entity_id=emp["id"], entity_label=u.get("name", ""), status="pending", detail=f"PAN {vals['pan']} · {vals['bank_name']}")
+        await push_service.notify_many([{"user_id": aid, "title": f"Employee KYC {'re-' if old else ''}submitted: {u.get('name', '')}", "body": f"PAN {vals['pan']} · {vals['bank_name']} · awaiting verification",
+                                         "link": "/admin/employee-kyc", "type": "kyc", "read": False, "created_at": ts} for aid in await push_service.admin_ids()])
         return employee_view(await db.employee_kyc.find_one({"employee_id": emp["id"]}))
 
     # ---------------- Admin ----------------
@@ -163,6 +166,8 @@ def build_router(db, require_admin, require_employee, log_activity, pan_error, a
         k = await _update(employee_id, {"status": "verified", "verified_at": now_iso(), "verified_by": admin.get("name", ""), "rejection_reason": ""}, "verified", admin, request)
         if k.get("email"):
             background.add_task(send_employee_kyc_email, k["email"], k.get("full_name", ""), "verified", "", portal_link(request))
+        await push_service.notify_one({"user_id": employee_id, "title": "KYC Verified ✓", "body": "Your employee KYC has been verified by the admin.",
+                                       "link": "/employee/kyc", "type": "kyc", "read": False, "created_at": now_iso()})
         return out(k)
 
     @r.put("/admin/employee-kyc/{employee_id}/reject")
@@ -172,6 +177,8 @@ def build_router(db, require_admin, require_employee, log_activity, pan_error, a
         k = await _update(employee_id, {"status": "rejected", "rejection_reason": body.reason.strip()[:300], "verified_at": None, "verified_by": ""}, "rejected", admin, request, body.reason.strip())
         if k.get("email"):
             background.add_task(send_employee_kyc_email, k["email"], k.get("full_name", ""), "rejected", k["rejection_reason"], portal_link(request))
+        await push_service.notify_one({"user_id": employee_id, "title": "KYC Rejected — action needed", "body": f"Reason: {k['rejection_reason']}. Please correct and resubmit.",
+                                       "link": "/employee/kyc", "type": "kyc", "read": False, "created_at": now_iso()})
         return out(k)
 
     @r.put("/admin/employee-kyc/{employee_id}/enable")

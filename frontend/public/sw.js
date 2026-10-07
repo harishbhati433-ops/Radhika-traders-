@@ -1,4 +1,4 @@
-const CACHE = "rt-pwa-v8";
+const CACHE = "rt-pwa-v9";
 const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png"];
 const NAV_TIMEOUT_MS = 4000;
 
@@ -43,3 +43,29 @@ self.addEventListener("fetch", (e) => {
 });
 
 self.addEventListener("message", (e) => { if (e.data === "SKIP_WAITING") self.skipWaiting(); });
+
+// Web Push: show a system notification (works with the app closed) and tell any open tab to play its alert sound.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
+  const title = d.title || "Radhika Traders";
+  const opts = {
+    body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: d.tag || "rt", renotify: true,
+    vibrate: [200, 100, 200, 100, 400], timestamp: Date.now(), requireInteraction: false, silent: false,
+    data: { url: d.url || "/", type: d.type || "" },
+  };
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(title, opts),
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => cs.forEach((c) => c.postMessage({ type: "PUSH", title, body: opts.body, url: opts.data.url, kind: opts.data.type }))),
+  ]));
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
+    const c = cs.find((x) => x.url.startsWith(self.location.origin));
+    if (c) return (c.navigate ? c.navigate(url) : Promise.resolve(c)).then((w) => (w || c).focus()).catch(() => c.focus());
+    return self.clients.openWindow(url);
+  }));
+});

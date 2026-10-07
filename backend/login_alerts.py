@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Request
 
 import contact_settings
+import push_service
 from email_service import send_login_alert_email, send_login_locked_email
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -41,7 +42,7 @@ async def record_admin_login(db, user: dict, request: Request, ip: str, origin: 
     when = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
     device = f"{browser} on {os_name}"
     await log_security(uid, "admin_login_new_device", request, f"{device} · IP {ip}")
-    await db.notifications.insert_one({"user_id": uid, "title": "New device login to Admin Panel", "body": f"{device} · IP {ip} · {when}. Not you? Reset your password now.",
+    await push_service.notify_one({"user_id": uid, "title": "New device login to Admin Panel", "body": f"{device} · IP {ip} · {when}. Not you? Reset your password now.",
                                        "link": "/admin/security", "type": "security", "read": False, "created_at": now})
     recipients = {(user.get("email") or "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
     for to in recipients:
@@ -54,7 +55,7 @@ async def notify_admin_login_locked(db, user: dict, request: Request, ip: str, l
     device = f"{browser} on {os_name}"
     when = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
     now = datetime.now(timezone.utc).isoformat()
-    await db.notifications.insert_one({"user_id": str(user["_id"]), "title": "Admin login locked — brute-force attempt blocked",
+    await push_service.notify_one({"user_id": str(user["_id"]), "title": "Admin login locked — brute-force attempt blocked",
                                        "body": f"{attempts} wrong passwords from {device} · IP {ip} · {when}. Login locked for {lock_minutes} min.",
                                        "link": "/admin/security", "type": "security", "read": False, "created_at": now})
     recipients = {(user.get("email") or "").lower(), contact_settings.CONTACT["owner_email"]} - {""}

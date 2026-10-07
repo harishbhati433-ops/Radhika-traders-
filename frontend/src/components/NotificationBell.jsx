@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { Bell, Megaphone, ShieldCheck, Info, CheckCheck } from "lucide-react";
+import { PushToggle } from "./PushToggle";
+import { onPushMessage, warmAudio } from "../lib/push";
 
 const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info };
 
@@ -13,6 +15,7 @@ export function NotificationBell() {
 
   const load = () => api.get("/notifications").then(({ data }) => setData(data)).catch(() => {});
   useEffect(() => { load(); const t = setInterval(() => document.visibilityState === "visible" && load(), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { warmAudio(); return onPushMessage(() => load()); }, []);
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", close);
@@ -39,6 +42,7 @@ export function NotificationBell() {
             <span className="font-display font-bold text-slate-900">Notifications</span>
             {data.unread > 0 && <button onClick={markAll} data-testid="notif-mark-all" className="inline-flex items-center gap-1 text-xs font-semibold text-red-600"><CheckCheck className="h-3.5 w-3.5" /> Mark all read</button>}
           </div>
+          <PushToggle />
           <div className="max-h-96 overflow-y-auto rt-scroll">
             {data.items.length === 0 && <p className="p-6 text-center text-sm text-slate-500" data-testid="notif-empty">No notifications yet.</p>}
             {data.items.map((n) => {

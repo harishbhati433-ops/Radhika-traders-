@@ -46,10 +46,12 @@ from team_routes import build_router as build_team_router
 from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked
 import contact_settings
+import push_service
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
+push_service.init(db)
 require_perm = make_require_perm(db)
 log_activity = make_log_activity(db)
 
@@ -1025,7 +1027,7 @@ async def _apply_kyc(uid: str, body: KycIn, by: str, keep_status: Optional[str] 
 @api.put("/profile/kyc")
 async def submit_kyc(body: KycIn, user: dict = Depends(get_current_user)):
     full = await _apply_kyc(user["id"], body, "self")
-    await db.notifications.insert_one({"user_id": user["id"], "title": "KYC Verified ✓", "body": "Your KYC details were verified successfully. Withdrawals are enabled.",
+    await push_service.notify_one({"user_id": user["id"], "title": "KYC Verified ✓", "body": "Your KYC details were verified successfully. Withdrawals are enabled.",
                                        "link": "/app/withdrawals", "type": "kyc", "read": False, "created_at": now_iso()})
     return public_user(full)
 
@@ -1270,7 +1272,7 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
         existing = await db.leads.find_one({"submit_key": submit_key})
         return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
     if partner:
-        await db.notifications.insert_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}" + (" (duplicate)" if original is not None else ""),
+        await push_service.notify_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}" + (" (duplicate)" if original is not None else ""),
                                            "body": f"{data.get('name') or 'A customer'} submitted details via your link." + (f" Marked duplicate of {original['lead_id']}." if original is not None else ""), "link": "/app/my-leads",
                                            "type": "lead", "read": False, "created_at": now_iso()})
     return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": original is not None}
@@ -1431,7 +1433,7 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
             await grant_signup_bonus(l["partner_id"], l)
     if l.get("partner_id") and (body.status or body.account_status):
         label = (body.account_status or body.status).replace("_", " ")
-        await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
+        await push_service.notify_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
                                            "body": f"{l.get('customer_name') or 'Customer'} · {l['campaign_name']}" + (f" · {body.reject_reason}" if body.reject_reason else ""),
                                            "link": "/app/my-leads", "type": "lead", "read": False, "created_at": now_iso()})
     await log_activity(admin, "lead_status_updated", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
@@ -1460,7 +1462,7 @@ async def admin_fund_lead(lid: str, body: LeadFundIn, request: Request, admin: d
                                       "source": "lead_fund", "created_by": admin["email"], "created_at": now_iso()})
     entry = {"amount": amount, "note": body.note.strip(), "ref_id": ref_id, "at": now_iso(), "by": admin["email"]}
     await db.leads.update_one({"_id": l["_id"]}, {"$push": {"fund_history": entry}, "$inc": {"fund_total": amount}, "$set": {"updated_at": now_iso()}})
-    await db.notifications.insert_one({"user_id": l["partner_id"], "title": f"₹{amount:g} credited for lead {l['lead_id']}",
+    await push_service.notify_one({"user_id": l["partner_id"], "title": f"₹{amount:g} credited for lead {l['lead_id']}",
                                        "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/app/wallet",
                                        "type": "wallet", "read": False, "created_at": now_iso()})
     wallet = await compute_wallet(l["partner_id"])
@@ -1591,7 +1593,7 @@ async def announce_campaign_status(c: dict, status: str, origin: str):
              "closed": "Closed — its link no longer accepts new leads. Approved earnings stay in your wallet."}[status])
     link = f"/campaign/{c['slug']}" if status == "live" else "/app/my-campaigns"
     if customers:
-        await db.notifications.insert_many([{
+        await push_service.notify_many([{
             "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live" if status == "live" else "campaign_status",
             "campaign_id": str(c["_id"]), "status": status, "read": False, "created_at": now_iso()} for u in customers])
     # Promotional (campaign live/pause/close) emails are disabled to save email quota — in-app notification only.
@@ -1754,7 +1756,7 @@ async def grant_signup_bonus(user_id: str, lead: dict) -> None:
         return
     await db.users.update_one({"_id": u["_id"]}, {"$set": {"signup_bonus_paid": True, "signup_bonus_paid_at": now_iso(), "signup_bonus_ref": ref_id}})
     await _signup_bonus_log(u, amount, "credited", lead, "credited", "", ref_id)
-    await db.notifications.insert_one({"user_id": user_id, "title": f"₹{amount:g} Signup Bonus credited", "body": f"Your lead {lead.get('lead_id', '')} was approved, so your Signup Bonus is now in your main wallet.",
+    await push_service.notify_one({"user_id": user_id, "title": f"₹{amount:g} Signup Bonus credited", "body": f"Your lead {lead.get('lead_id', '')} was approved, so your Signup Bonus is now in your main wallet.",
                                        "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
 
 
@@ -1788,7 +1790,7 @@ async def unlock_signup_bonus(user_id: str, lead: Optional[dict] = None) -> str:
                                                 "description": "Signup Bonus — first lead approved"}})
     await db.users.update_one({"_id": u["_id"]}, {"$set": {"signup_bonus_paid": True, "signup_bonus_paid_at": now_iso(), "signup_bonus_ref": locked[0].get("ref_id", "")}})
     await _signup_bonus_log(u, total, "credited", lead, "credited", "", locked[0].get("ref_id", ""))
-    await db.notifications.insert_one({"user_id": user_id, "title": f"₹{total:g} Signup Bonus moved to Main Wallet",
+    await push_service.notify_one({"user_id": user_id, "title": f"₹{total:g} Signup Bonus moved to Main Wallet",
                                        "body": "Congratulations! Your first lead was approved, so your Signup Bonus is now withdrawable.",
                                        "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return "credited"
@@ -2062,7 +2064,7 @@ async def _notify_admin_withdrawal(w: dict, customer_id: str, origin: str):
     for email in emails:
         await send_admin_withdrawal_alert(email, w, customer_id, when, link)
     if admins:
-        await db.notifications.insert_many([{"user_id": str(a["_id"]), "title": f"New withdrawal request ₹{w['amount']:g}",
+        await push_service.notify_many([{"user_id": str(a["_id"]), "title": f"New withdrawal request ₹{w['amount']:g}",
                                              "body": f"{w.get('user_name')} ({customer_id}) · {w.get('method')} · Pending", "link": "/admin/withdrawals",
                                              "type": "withdrawal", "read": False, "created_at": now_iso()} for a in admins])
 
@@ -2372,6 +2374,42 @@ async def list_notifications(user: dict = Depends(get_current_user)):
     return {"unread": unread, "items": [notif_out(n) for n in items]}
 
 
+class PushSubIn(BaseModel):
+    subscription: dict
+    device: Optional[str] = ""
+
+
+class PushUnsubIn(BaseModel):
+    endpoint: str
+
+
+@api.get("/push/vapid-public-key")
+async def push_vapid_key():
+    return {"key": push_service.VAPID_PUBLIC_KEY}
+
+
+@api.post("/push/subscribe")
+async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)):
+    if not body.subscription.get("endpoint") or not body.subscription.get("keys"):
+        raise HTTPException(status_code=400, detail="Invalid push subscription")
+    await push_service.save_subscription(user["id"], user["role"], body.subscription, body.device or "")
+    return {"message": "Push alerts enabled", "devices": await push_service.count_for(user["id"])}
+
+
+@api.post("/push/unsubscribe")
+async def push_unsubscribe(body: PushUnsubIn, user: dict = Depends(get_current_user)):
+    await push_service.remove_subscription(user["id"], body.endpoint)
+    return {"message": "Push alerts disabled", "devices": await push_service.count_for(user["id"])}
+
+
+@api.post("/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    r = await push_service.send_push([user["id"]], "Radhika Traders — Test alert", f"Hi {user.get('name', '')}, push alerts are working on this device.", "/", tag="test", kind="test")
+    if not r.get("devices"):
+        raise HTTPException(status_code=400, detail="No device subscribed. Turn on alerts first.")
+    return r
+
+
 @api.post("/notifications/read")
 async def mark_notifications_read(ids: List[str] = [], user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"]}
@@ -2433,7 +2471,7 @@ async def admin_update_kyc(uid: str, body: KycStatusIn, request: Request, admin:
            "rejected": f"Your KYC was rejected. {body.note or 'Please re-submit correct details.'}",
            "deactivated": f"Your KYC has been deactivated. {body.note or 'Contact support.'}",
            "pending": "Your KYC is under review."}[body.status]
-    await db.notifications.insert_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/app/profile",
+    await push_service.notify_one({"user_id": uid, "title": f"KYC {body.status.capitalize()}", "body": msg, "link": "/app/profile",
                                        "type": "kyc", "read": False, "created_at": now_iso()})
     await log_activity(admin, "kyc_status_updated", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""),
                        client_id=uid, client_name=u.get("name", ""), status=body.status, detail=body.note or "")
@@ -2463,7 +2501,7 @@ async def admin_broadcast(body: BroadcastIn, request: Request, background: Backg
 
 async def run_broadcast(bid, users: list, body: BroadcastIn, c: dict | None, link: str, origin: str):
     if "in_app" in body.channels and users:
-        await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": body.subject, "body": body.message[:300], "link": link,
+        await push_service.notify_many([{"user_id": str(u["_id"]), "title": body.subject, "body": body.message[:300], "link": link,
                                              "type": "broadcast", "read": False, "created_at": now_iso()} for u in users])
     sent = failed = 0
     if "email" in body.channels:
@@ -2635,7 +2673,7 @@ async def admin_adjust_wallet(body: WalletAdjustIn, request: Request, admin: dic
     await _log_security(admin["id"], f"wallet_{body.mode}", request, f"{u.get('email')} ₹{amount:g} — {reason}")
     await log_activity(admin, "wallet_adjusted", request, entity_type="wallet", entity_id=ref_id, entity_label=u.get("name", ""), client_id=body.user_id,
                        client_name=u.get("name", ""), status=body.mode, amount=amount, detail=f"{reason} · ₹{before['balance']:g} → ₹{after['balance']:g}")
-    await db.notifications.insert_one({"user_id": body.user_id, "title": f"Wallet {'credited' if ttype == 'credit' else 'debited'} ₹{amount:g}",
+    await push_service.notify_one({"user_id": body.user_id, "title": f"Wallet {'credited' if ttype == 'credit' else 'debited'} ₹{amount:g}",
                                        "body": f"{label}. Reason: {reason}", "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return {"message": f"{u.get('name')}: ₹{before['balance']:g} → ₹{after['balance']:g}", "ref_id": ref_id, "wallet": after}
 
@@ -2674,7 +2712,7 @@ async def admin_edit_kyc(uid: str, body: KycIn, request: Request, admin: dict = 
         raise HTTPException(status_code=404, detail="Customer not found")
     cur_status = u.get("kyc", {}).get("status", "not_submitted")
     full = await _apply_kyc(uid, body, admin.get("username") or admin["email"], keep_status="verified" if cur_status in ("not_submitted", "pending", "rejected", "verified") else cur_status)
-    await db.notifications.insert_one({"user_id": uid, "title": "KYC details updated", "body": "Radhika Traders updated your KYC / bank details. Check your profile.",
+    await push_service.notify_one({"user_id": uid, "title": "KYC details updated", "body": "Radhika Traders updated your KYC / bank details. Check your profile.",
                                        "link": "/app/profile", "type": "kyc", "read": False, "created_at": now_iso()})
     await log_activity(admin, "customer_kyc_edited", request, entity_type="kyc", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="updated")
     return public_user(full)
@@ -2861,7 +2899,7 @@ async def admin_send_report(request: Request, background: BackgroundTasks, file:
            "created_at": now_iso(), "expires_at": expires, "created_by": admin["id"], "downloaded_by": []}
     res = await db.reports.insert_one(doc)
     if users:
-        await db.notifications.insert_many([{"user_id": str(u["_id"]), "title": f"New report: {title}", "body": (note.strip()[:140] or "A new file has been shared with you. Download it from Reports."),
+        await push_service.notify_many([{"user_id": str(u["_id"]), "title": f"New report: {title}", "body": (note.strip()[:140] or "A new file has been shared with you. Download it from Reports."),
                                              "link": "/app/reports", "type": "report", "report_id": str(res.inserted_id), "read": False, "created_at": now_iso()} for u in users])
     origin = request.headers.get("origin") or str(request.base_url).rstrip("/")
     expires_on = datetime.fromisoformat(expires).astimezone(IST).strftime("%d %b %Y")
@@ -3111,7 +3149,7 @@ async def pay_dedicated_referral(new_user: dict):
     await db.dedicated_referrals.update_one({"_id": ded["_id"]}, {"$inc": {"eligible_count": 1, "total_earned": amount}, "$set": {"last_referral_at": now_iso()}})
     await _ded_log(rid, "referral_paid", f"{new_user.get('name', '')} ({new_user.get('email', '')}) joined via referral", "system", amount,
                    {"referred_user_id": str(new_user["_id"]), "ref_id": ref_id})
-    await db.notifications.insert_one({"user_id": rid, "title": f"₹{amount:g} dedicated referral bonus", "body": f"{new_user.get('name', 'A new partner')} joined with your link.",
+    await push_service.notify_one({"user_id": rid, "title": f"₹{amount:g} dedicated referral bonus", "body": f"{new_user.get('name', 'A new partner')} joined with your link.",
                                        "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
 
 
