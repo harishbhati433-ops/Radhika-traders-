@@ -1,5 +1,6 @@
 """Emergent object storage helper."""
 import os
+import time
 import logging
 import requests
 
@@ -25,20 +26,27 @@ def init_storage(force: bool = False):
 
 def put_object(path: str, data: bytes, content_type: str) -> dict:
     key = init_storage()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data, timeout=120,
-    )
-    if resp.status_code == 404:
-        key = init_storage(force=True)
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data, timeout=120,
-        )
-    resp.raise_for_status()
-    return resp.json()
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = requests.put(
+                f"{STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key, "Content-Type": content_type},
+                data=data, timeout=60,
+            )
+            if resp.status_code == 404:
+                key = init_storage(force=True)
+                continue
+            if resp.status_code >= 500:
+                last_err = requests.HTTPError(f"{resp.status_code} from storage", response=resp)
+                time.sleep(1.0 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_err = e
+            time.sleep(1.0 * (attempt + 1))
+    raise last_err or RuntimeError("Storage upload failed")
 
 
 def get_object(path: str):

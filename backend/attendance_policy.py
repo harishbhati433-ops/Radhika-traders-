@@ -1,4 +1,5 @@
 """Attendance verification policy: normal | gps | gps_selfie (global default + per-employee override), office geofence, selfie storage/cleanup."""
+import asyncio
 import base64
 import logging
 import math
@@ -121,7 +122,7 @@ async def store_selfie(db, data_url: str, employee_id: str) -> str:
     ext = "png" if m.group(1).lower() == "png" else "jpg"
     ct = "image/png" if ext == "png" else "image/jpeg"
     path = f"{APP_NAME}/selfies/{employee_id}/{uuid.uuid4().hex}.{ext}"
-    stored = put_object(path, raw, ct)
+    stored = await asyncio.to_thread(put_object, path, raw, ct)
     await db.files.insert_one({"storage_path": stored["path"], "original_filename": f"selfie.{ext}", "content_type": ct, "size": len(raw), "is_deleted": False,
                                "kind": "attendance_selfie", "created_at": datetime.now(timezone.utc).isoformat()})
     return f"/api/files/{stored['path']}"

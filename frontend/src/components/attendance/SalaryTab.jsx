@@ -80,12 +80,12 @@ function PayDialog({ row, onClose, onDone }) {
   };
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="sal-pay-dialog">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <form onSubmit={submit} className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-1 flex items-center justify-between"><h3 className="font-display text-lg font-bold">Pay {inr(row.net_payable)} · {row.employee_name}</h3><button type="button" onClick={onClose}><X className="h-5 w-5" /></button></div>
         <p className="mb-4 text-xs text-slate-500">Salary for {row.month}. Upload the transfer screenshot — the employee gets an email “Salary credited {inr(row.net_payable)}” with this proof.</p>
         <ImageUpload label="Payment screenshot (proof)" value={proof} onChange={setProof} testId="sal-pay-proof" />
         <div className="mt-3"><Label>UTR / Transaction ID (optional)</Label><Input value={utr} onChange={(e) => setUtr(e.target.value)} data-testid="sal-pay-utr" className="mt-1" placeholder="e.g. 4257XXXXXXXX" /></div>
-        <button disabled={busy} data-testid="sal-pay-confirm" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Confirm Paid & Email Employee</button>
+        <button disabled={busy} data-testid="sal-pay-confirm" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><CheckCircle className="h-4 w-4" /> Confirm Paid & Email Employee</>}</button>
       </form>
     </div>
   );

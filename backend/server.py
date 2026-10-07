@@ -2043,7 +2043,7 @@ async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: in
 
 
 @api.patch("/admin/withdrawals/{wid}")
-async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, admin: dict = Depends(require_perm("withdrawals", "edit"))):
+async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, background: BackgroundTasks, admin: dict = Depends(require_perm("withdrawals", "edit"))):
     if body.status not in ("pending", "approved", "paid", "rejected"):
         raise HTTPException(status_code=400, detail="Invalid status")
     w = await db.withdrawals.find_one({"_id": ObjectId(wid)})
@@ -2061,8 +2061,8 @@ async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, 
         })
         base = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
         proof_link = f"{base}{body.proof_url}" if body.proof_url and body.proof_url.startswith("/") else (body.proof_url or "")
-        await send_payment_email(w.get("user_email", ""), w.get("user_name", ""), w["amount"], w["method"],
-                                 w.get("details", ""), body.utr or "", proof_link)
+        background.add_task(send_payment_email, w.get("user_email", ""), w.get("user_name", ""), w["amount"], w["method"],
+                            w.get("details", ""), body.utr or "", proof_link)
     await log_activity(admin, "withdrawal_status_updated", request, entity_type="withdrawal", entity_id=f"WD-{wid[:8]}", entity_label=w.get("user_name", ""),
                        client_id=w["user_id"], client_name=w.get("user_name", ""), status=body.status, amount=w["amount"],
                        detail=f"{w.get('status')} -> {body.status}" + (f" UTR {body.utr}" if body.utr else "") + (f" · {body.admin_note}" if body.admin_note else ""))
@@ -2692,7 +2692,7 @@ async def upload_image(file: UploadFile = File(...), user: dict = Depends(get_cu
     ct = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
     path = f"{APP_NAME}/uploads/{uuid.uuid4().hex}.{ext}"
     data = await file.read()
-    result = put_object(path, data, ct)
+    result = await asyncio.to_thread(put_object, path, data, ct)
     await db.files.insert_one({
         "storage_path": result["path"], "original_filename": file.filename,
         "content_type": ct, "size": result.get("size"), "is_deleted": False,
@@ -2707,7 +2707,7 @@ async def serve_file(path: str):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
-    data, ct = get_object(path)
+    data, ct = await asyncio.to_thread(get_object, path)
     return Response(content=data, media_type=record.get("content_type", ct))
 
 
@@ -2785,7 +2785,7 @@ async def admin_send_report(request: Request, background: BackgroundTasks, file:
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
     ct = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
     path = f"{APP_NAME}/reports/{uuid.uuid4().hex}.{ext}"
-    stored = put_object(path, data, ct)
+    stored = await asyncio.to_thread(put_object, path, data, ct)
     await db.files.insert_one({"storage_path": stored["path"], "original_filename": file.filename, "content_type": ct, "size": len(data), "is_deleted": False, "created_at": now_iso()})
     ids = [i.strip() for i in user_ids.split(",") if i.strip()] if audience == "selected" else []
     if audience == "selected" and not ids:
@@ -2847,7 +2847,7 @@ async def download_report(rid: str, user: dict = Depends(get_current_user)):
     r = await db.reports.find_one({"_id": ObjectId(rid), **_report_access_q(user["id"])}) if ObjectId.is_valid(rid) else None
     if not r:
         raise HTTPException(status_code=404, detail="Report not found or expired")
-    data, ct = get_object(r["file_path"])
+    data, ct = await asyncio.to_thread(get_object, r["file_path"])
     await db.reports.update_one({"_id": r["_id"]}, {"$addToSet": {"downloaded_by": user["id"]}})
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", r["file_name"])
     return Response(content=data, media_type=r.get("content_type") or ct, headers={"Content-Disposition": f'attachment; filename="{safe}"'})

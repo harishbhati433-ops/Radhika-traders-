@@ -17,7 +17,7 @@ export function MarkPaidDialog({ w, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" data-testid="mark-paid-dialog">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <form onSubmit={submit} className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <h3 className="font-display text-lg font-bold text-slate-900">Mark ₹{w.amount} as Paid</h3>
         <p className="mt-1 text-xs text-slate-500">To {w.user_name} · {w.method} · {w.details}. Upload the payment screenshot — it will be emailed to the customer and shown in their dashboard.</p>
         <div className="mt-4 space-y-4">
@@ -25,9 +25,9 @@ export function MarkPaidDialog({ w, onClose, onConfirm }) {
           <div><Label>UTR / Transaction ID (optional)</Label><Input data-testid="paid-utr" value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="e.g. 4257XXXXXXXX" className="mt-1.5" /></div>
         </div>
         <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600">Cancel</button>
+          <button type="button" onClick={onClose} disabled={busy} className="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 disabled:opacity-60">Cancel</button>
           <button type="submit" data-testid="paid-confirm" disabled={busy} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirm Paid
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Check className="h-4 w-4" /> Confirm Paid</>}
           </button>
         </div>
       </form>
