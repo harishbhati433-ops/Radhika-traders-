@@ -1211,7 +1211,8 @@ async def join_info(slug: str, ref: Optional[str] = None):
         raise HTTPException(status_code=404, detail="Offer not available")
     partner = await db.users.find_one({"referral_code": (ref or "").upper(), "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
     return {"campaign": {"id": str(c["_id"]), "offer_name": c["offer_name"], "company": c.get("company", ""), "logo_url": c.get("logo_url", ""),
-                         "payout_amount": c.get("payout_amount", 0), "customer_benefit": c.get("customer_benefit", ""), "slug": slug},
+                         "payout_amount": c.get("payout_amount", 0), "customer_benefit": c.get("customer_benefit", ""), "slug": slug,
+                         "category": c.get("category", ""), "description": (c.get("description") or "")[:400]},
             "fields": [f for f in c.get("lead_fields", []) if f.get("enabled")],
             "referred_by": _mask_name(partner.get("name")) if partner else None, "ref": (ref or "").upper()}
 

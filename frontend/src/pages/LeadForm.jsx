@@ -5,6 +5,7 @@ import api, { formatApiErrorDetail, fileUrl } from "../lib/api";
 import { Input } from "../components/ui/input";
 import { formatPan, formatAadhaar, formatIfsc, panError, aadhaarError, ifscError } from "../lib/validators";
 import { IfscBankInfo } from "../components/IfscBankInfo";
+import { UserFlowSection } from "../components/UserFlowSection";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, UserCheck, ArrowRight } from "lucide-react";
@@ -45,7 +46,7 @@ export default function LeadForm() {
 
   const c = info.campaign;
   return (
-    <PublicLayout>
+    <PublicLayout footer={<UserFlowSection campaign={c} />}>
       <section className="mx-auto grid max-w-5xl gap-8 px-6 py-12 lg:grid-cols-5" data-testid="lead-form-page">
         <div className="lg:col-span-2">
           <div className="rounded-3xl bg-[#0B0F17] p-6 text-white">
