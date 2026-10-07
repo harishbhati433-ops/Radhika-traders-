@@ -41,7 +41,11 @@ export async function disablePush() {
 }
 
 export const getSound = () => localStorage.getItem(SOUND_KEY) || "alert";
-export const setSound = (s) => localStorage.setItem(SOUND_KEY, s);
+export const setSound = (s) => { localStorage.setItem(SOUND_KEY, s); api.put("/push/prefs", { sound: s }).catch(() => {}); };
+// Server copy survives reinstall / cleared site data — pull it once per session so the chosen sound is the same everywhere.
+export async function syncSound() {
+  try { const { data } = await api.get("/push/prefs"); if (data?.sound && data.sound !== localStorage.getItem(SOUND_KEY)) localStorage.setItem(SOUND_KEY, data.sound); return data.sound; } catch (_) { return getSound(); }
+}
 
 let ctx, alertAudio;
 const playFile = () => {

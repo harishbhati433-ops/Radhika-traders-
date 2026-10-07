@@ -1,15 +1,38 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BellRing, BellOff, Volume2, Loader2 } from "lucide-react";
+import { BellRing, BellOff, Volume2, Loader2, Download, Settings2 } from "lucide-react";
 import api from "../lib/api";
-import { SOUNDS, getPushState, enablePush, disablePush, getSound, setSound, playSound, isIosBrowser } from "../lib/push";
+import { SOUNDS, getPushState, enablePush, disablePush, getSound, setSound, playSound, isIosBrowser, syncSound } from "../lib/push";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
+import { Dialog, DialogContent } from "./ui/dialog";
+
+const isAndroid = () => /android/i.test(navigator.userAgent);
+
+function SoundSetupGuide({ open, onClose }) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md" data-testid="sound-setup-guide">
+        <div className="font-display text-lg font-extrabold text-slate-900">Same sound when the app is closed</div>
+        <p className="text-xs text-slate-600">Android plays the <b>phone's</b> notification sound for closed apps. To hear <b>RT Alert</b> there too, set it once in your phone settings (2 minutes, one time):</p>
+        <ol className="mt-1 space-y-2 text-xs text-slate-700">
+          <li className="flex gap-2"><span className="font-bold text-red-600">1.</span><span>Download the sound to your phone: <a href="/sounds/alert.mp3" download="RT-Alert.mp3" data-testid="sound-download" className="inline-flex items-center gap-1 font-semibold text-red-600 underline"><Download className="h-3 w-3" /> RT-Alert.mp3</a></span></li>
+          <li className="flex gap-2"><span className="font-bold text-red-600">2.</span><span>Long-press the <b>Radhika Traders</b> app icon → <b>App info</b> → <b>Notifications</b> (if not installed, this is under Chrome → Notifications → this site).</span></li>
+          <li className="flex gap-2"><span className="font-bold text-red-600">3.</span><span>Tap the notification category → <b>Sound</b> → <b>Add / Choose from files</b> → pick <b>RT-Alert.mp3</b> from Downloads.</span></li>
+          <li className="flex gap-2"><span className="font-bold text-red-600">4.</span><span>Come back and tap <b>Test</b> — the alert now rings with RT Alert even with the screen off.</span></li>
+        </ol>
+        <p className="text-[11px] text-slate-500">iPhone uses its own system sound for web apps and does not allow a custom one.</p>
+        <button onClick={onClose} data-testid="sound-setup-close" className="mt-2 w-full rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white">Got it</button>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function PushToggle() {
   const [state, setState] = useState("off");
   const [busy, setBusy] = useState(false);
+  const [guide, setGuide] = useState(false);
   const [sound, setSoundState] = useState(getSound());
-  useEffect(() => { getPushState().then(setState); }, []);
+  useEffect(() => { getPushState().then(setState); syncSound().then((s) => s && setSoundState(s)); }, []);
 
   const flip = async () => {
     setBusy(true);
@@ -45,12 +68,16 @@ export function PushToggle() {
           Install the app to see the Radhika Traders logo on alerts (instead of the browser's) →
         </button>
       )}
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Volume2 className="h-3.5 w-3.5 text-slate-500" /><span className="text-[11px] text-slate-500">Sound:</span>
         {SOUNDS.map(([k, label]) => (
           <button key={k} onClick={() => pick(k)} data-testid={`push-sound-${k}`} className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${sound === k ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"}`}>{label}</button>
         ))}
       </div>
+      {state === "on" && isAndroid() && (
+        <button onClick={() => setGuide(true)} data-testid="sound-setup-open" className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-red-600"><Settings2 className="h-3 w-3" /> Set RT Alert as the phone sound for closed-app alerts →</button>
+      )}
+      <SoundSetupGuide open={guide} onClose={() => setGuide(false)} />
     </div>
   );
 }

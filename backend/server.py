@@ -2413,6 +2413,24 @@ async def push_unsubscribe(body: PushUnsubIn, user: dict = Depends(get_current_u
     return {"message": "Push alerts disabled", "devices": await push_service.count_for(user["id"])}
 
 
+class PushPrefsIn(BaseModel):
+    sound: str
+
+
+@api.get("/push/prefs")
+async def push_prefs(user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"_id": ObjectId(user["id"])}, {"push_sound": 1})
+    return {"sound": (u or {}).get("push_sound") or "alert"}
+
+
+@api.put("/push/prefs")
+async def push_prefs_save(body: PushPrefsIn, user: dict = Depends(get_current_user)):
+    if body.sound not in ("alert", "chime", "bell", "pop"):
+        raise HTTPException(status_code=400, detail="Unknown sound")
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"push_sound": body.sound}})
+    return {"sound": body.sound}
+
+
 @api.post("/push/test")
 async def push_test(user: dict = Depends(get_current_user)):
     r = await push_service.send_push([user["id"]], "Radhika Traders — Test alert", f"Hi {user.get('name', '')}, push alerts are working on this device.", "/", tag="test", kind="test")
