@@ -15,3 +15,12 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: email-retry
+    description: "Every 5 min: re-send emails that failed because the email provider was down or rate-limited (5 → 10 → 15 → 30 → 60 → 120 min schedule)"
+    cron: "*/5 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/email-retry"
+    method: POST
+    headers:
+      Authorization: "Bearer {{WEBHOOK_CRON_SECRET}}"
+      Content-Type: "application/json"
+    body: '{"event":"schedule.triggered"}'

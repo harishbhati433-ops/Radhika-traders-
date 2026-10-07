@@ -1,5 +1,6 @@
 import os
 import asyncio
+import hmac
 import httpx
 import io
 import re
@@ -1592,19 +1593,31 @@ async def announce_campaign_live(c: dict, origin: str):
     await announce_campaign_status(c, "live", origin)
 
 
+@api.post("/cron/email-retry", status_code=202)
+async def cron_email_retry(request: Request, background: BackgroundTasks):
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    auth = request.headers.get("authorization", "")
+    token = auth[7:] if auth.lower().startswith("bearer ") else ""
+    if not secret or not token or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    background.add_task(email_service.process_outbox)
+    return {"ok": True, "queued": True}
+
+
 @api.get("/admin/email-log")
 async def admin_email_log(status: Optional[str] = None, q: Optional[str] = None, limit: int = 200, admin: dict = Depends(require_admin)):
     query = {}
-    if status in ("sent", "failed"):
+    if status in ("sent", "failed", "queued"):
         query["status"] = status
     if q:
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
         query["$or"] = [{"to": rx}, {"subject": rx}]
     items = await db.email_log.find(query).sort("created_at", -1).to_list(min(max(limit, 1), 500))
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    sent24, failed24 = await asyncio.gather(db.email_log.count_documents({"status": "sent", "created_at": {"$gte": since}}),
-                                            db.email_log.count_documents({"status": "failed", "created_at": {"$gte": since}}))
-    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items], "sent_24h": sent24, "failed_24h": failed24}
+    sent24, failed24, queued = await asyncio.gather(db.email_log.count_documents({"status": "sent", "created_at": {"$gte": since}}),
+                                                    db.email_log.count_documents({"status": "failed", "created_at": {"$gte": since}}),
+                                                    db.email_outbox.count_documents({"status": "queued"}))
+    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items], "sent_24h": sent24, "failed_24h": failed24, "queued": queued}
 
 
 @api.patch("/campaigns/{cid}/toggle-offer")

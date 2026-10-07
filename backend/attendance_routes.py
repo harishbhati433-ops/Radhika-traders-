@@ -15,6 +15,7 @@ from bson import ObjectId
 import pandas as pd
 
 import contact_settings
+import email_service
 import office_timing as ot
 import attendance_policy as ap
 from email_service import send_attendance_email, send_attendance_reminder_email, send_checkout_reminder_email, send_salary_paid_email, send_salary_published_email
@@ -944,6 +945,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         today = ist_today()
         await ot.refresh(db)
         await auto_close_stale()  # cron fires every 15 min, so forgotten sessions close within 15 min of the auto-close time even if nobody opens the app
+        await email_service.process_outbox()  # belt-and-braces: drain queued mails here too
         if is_sunday(today):
             return
         now_m = _ist_minutes(now_utc().isoformat())

@@ -563,3 +563,8 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Admin → Communication → **Email Log** (/admin/email-log, GET /api/admin/email-log) — every email with sent/failed, attempts, provider error; 24h stats; filters + search.
 - AdminCampaigns status buttons: data-testids status-live/paused/closed-{slug}, disabled in flight, descriptive toasts, error toasts.
 - Share fix (Oct 2026): ShareButtons appended the link at the very end of WhatsApp text, so "Apply using my link:" was empty and the URL landed after the WhatsApp number. Now the link stays inline where the caption puts it (WhatsApp); Telegram passes url separately with the inline link stripped from text. Applies to campaign share + Refer & Earn.
+
+## Automatic email re-send queue (Oct 2026)
+- email_service.send_email: if the provider is down / rate-limited after immediate retries (2–16 s), the mail (with html) is parked in `email_outbox` (status queued) and email_log shows status "queued". Permanent 4xx (bad address, rejected content) is logged "failed" and NOT retried.
+- process_outbox() re-sends due items on the schedule 5 → 10 → 15 → 30 → 60 → 120 min (6 tries), then marks failed + activity_logs email_failed. Cron `email-retry` every 5 min (UTC */5) → POST /api/cron/email-retry (Bearer WEBHOOK_CRON_SECRET). Email Log page has a "Waiting to retry" stat + Queued filter.
+- Simulated outage test: queued → cron → sent (attempts 1).

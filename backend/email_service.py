@@ -6,7 +6,7 @@ import time
 import ipaddress
 import logging
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html import escape
 import office_timing as ot
 from html.parser import HTMLParser
@@ -115,7 +115,22 @@ async def _log(to: str, subject: str, status: str, error: str = "", email_id: st
         pass
 
 
-async def send_email(*, to: str, subject: str, html: str) -> str | None:
+RETRY_GAPS_MIN = (5, 10, 15, 30, 60, 120)  # outbox re-send schedule after the immediate retries are exhausted
+
+
+def _permanent(err: str) -> bool:
+    return err.startswith("HTTP 4") and not err.startswith("HTTP 429")
+
+
+async def _queue_retry(to: str, subject: str, html: str, error: str) -> None:
+    if _db is None:
+        return
+    nxt = datetime.now(timezone.utc) + timedelta(minutes=RETRY_GAPS_MIN[0])
+    await _db.email_outbox.insert_one({"to": to, "subject": subject[:160], "html": html, "attempts": 0, "status": "queued", "last_error": error[:300],
+                                       "next_try_at": nxt.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()})
+
+
+async def send_email(*, to: str, subject: str, html: str, _from_outbox: bool = False) -> str | None:
     global _last_send
     _assert_safe_email(subject, html)
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
@@ -143,17 +158,47 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
         except httpx.HTTPStatusError as e:
             last_err = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
             logger.error(f"Email send error to {to}: {last_err}")
-            await _log(to, subject, "failed", last_err, attempts=attempt + 1)
+            await _log(to, subject, "failed", last_err, attempts=attempt + 1)  # 4xx = bad address / rejected content → retrying won't help
             return None
         except Exception as e:
             last_err = str(e)
             logger.warning(f"Email send retry {attempt + 1} for {to}: {last_err}")
             await asyncio.sleep(BACKOFF[attempt])
     logger.error(f"Email send gave up for {to}: {last_err}")
-    await _log(to, subject, "failed", last_err, attempts=len(BACKOFF))
+    if _from_outbox:
+        await _log(to, subject, "failed", last_err, attempts=len(BACKOFF))
+    else:  # provider down / rate-limited → park it and re-send automatically after 5, 10, 15, 30, 60, 120 min
+        await _log(to, subject, "queued", f"{last_err} — queued for automatic re-send in {RETRY_GAPS_MIN[0]} min", attempts=len(BACKOFF))
+        await _queue_retry(to, subject, html, last_err)
     return None
-    logger.error(f"Email send failed after retries to {to}")
-    return None
+
+
+async def process_outbox(limit: int = 50) -> dict:
+    """Called by the 5-min cron: re-send queued mails whose next_try_at has passed."""
+    if _db is None:
+        return {"processed": 0}
+    now = datetime.now(timezone.utc)
+    due = await _db.email_outbox.find({"status": "queued", "next_try_at": {"$lte": now.isoformat()}}).sort("next_try_at", 1).to_list(limit)
+    sent = failed = requeued = 0
+    for m in due:
+        mid = await send_email(to=m["to"], subject=m["subject"], html=m["html"], _from_outbox=True)
+        attempts = int(m.get("attempts", 0)) + 1
+        if mid:
+            sent += 1
+            await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "sent", "attempts": attempts, "email_id": mid, "sent_at": now.isoformat(), "updated_at": now.isoformat()}})
+        elif attempts >= len(RETRY_GAPS_MIN):
+            failed += 1
+            await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "failed", "attempts": attempts, "updated_at": now.isoformat()}})
+            await _db.activity_logs.insert_one({"actor_id": "system", "actor_name": "System", "actor_role": "system", "actor_username": "", "action": "email_failed", "entity_type": "email",
+                                                "entity_id": str(m["_id"]), "entity_label": m["to"], "campaign_id": "", "campaign_name": "", "client_id": "", "client_name": "", "status": "failed",
+                                                "amount": None, "detail": f"'{m['subject']}' to {m['to']} failed permanently after {attempts} scheduled retries (5→120 min)", "ip": "", "created_at": now.isoformat()})
+        else:
+            requeued += 1
+            nxt = now + timedelta(minutes=RETRY_GAPS_MIN[min(attempts, len(RETRY_GAPS_MIN) - 1)])
+            await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "queued", "attempts": attempts, "next_try_at": nxt.isoformat(), "updated_at": now.isoformat()}})
+    if due:
+        logger.info(f"email outbox: {sent} sent, {requeued} re-queued, {failed} failed of {len(due)} due")
+    return {"processed": len(due), "sent": sent, "requeued": requeued, "failed": failed}
 
 
 def _wrap(title: str, inner: str) -> str:
