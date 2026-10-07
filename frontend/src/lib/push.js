@@ -1,7 +1,8 @@
 import api from "./api";
 
 const SOUND_KEY = "rt_push_sound";
-export const SOUNDS = [["chime", "Chime"], ["bell", "Bell"], ["pop", "Pop"]];
+export const SOUNDS = [["alert", "RT Alert"], ["chime", "Chime"], ["bell", "Bell"], ["pop", "Pop"]];
+const ALERT_FILE = "/sounds/alert.mp3";
 
 export const isPushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 export const isIosBrowser = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.matchMedia("(display-mode: standalone)").matches && !navigator.standalone;
@@ -39,10 +40,15 @@ export async function disablePush() {
   await sub.unsubscribe();
 }
 
-export const getSound = () => localStorage.getItem(SOUND_KEY) || "chime";
+export const getSound = () => localStorage.getItem(SOUND_KEY) || "alert";
 export const setSound = (s) => localStorage.setItem(SOUND_KEY, s);
 
-let ctx;
+let ctx, alertAudio;
+const playFile = () => {
+  alertAudio = alertAudio || Object.assign(new Audio(ALERT_FILE), { preload: "auto" });
+  alertAudio.currentTime = 0;
+  alertAudio.play().catch(() => playSound("chime"));
+};
 const tone = (c, f, t0, dur, type = "sine", gain = 0.5) => {
   const o = c.createOscillator(), g = c.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t0);
@@ -51,6 +57,8 @@ const tone = (c, f, t0, dur, type = "sine", gain = 0.5) => {
 };
 
 export function playSound(name = getSound()) {
+  if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+  if (name === "alert") return playFile();
   try {
     ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === "suspended") ctx.resume();
@@ -58,13 +66,16 @@ export function playSound(name = getSound()) {
     if (name === "bell") { tone(ctx, 880, t, 1.2, "triangle", 0.6); tone(ctx, 1760, t, 0.9, "sine", 0.25); tone(ctx, 2637, t + 0.02, 0.5, "sine", 0.12); }
     else if (name === "pop") { tone(ctx, 620, t, 0.14, "square", 0.25); tone(ctx, 930, t + 0.11, 0.18, "sine", 0.45); }
     else { tone(ctx, 1046.5, t, 0.5, "sine", 0.55); tone(ctx, 1318.5, t + 0.16, 0.55, "sine", 0.5); tone(ctx, 1568, t + 0.32, 0.8, "sine", 0.45); }
-    if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
   } catch (_) { /* audio blocked until first tap */ }
 }
 
-// Pre-warm the AudioContext on first user tap so later pushes can sound even without a fresh gesture.
+// Pre-warm the AudioContext + alert clip on first user tap so later pushes can sound even without a fresh gesture.
 export function warmAudio() {
-  const once = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch (_) {} document.removeEventListener("pointerdown", once); };
+  const once = () => {
+    try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch (_) {}
+    try { alertAudio = alertAudio || Object.assign(new Audio(ALERT_FILE), { preload: "auto" }); alertAudio.load(); } catch (_) {}
+    document.removeEventListener("pointerdown", once);
+  };
   document.addEventListener("pointerdown", once, { once: true });
 }
 

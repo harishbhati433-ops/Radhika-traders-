@@ -1,5 +1,5 @@
-const CACHE = "rt-pwa-v9";
-const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png"];
+const CACHE = "rt-pwa-v10";
+const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png", "/sounds/alert.mp3"];
 const NAV_TIMEOUT_MS = 4000;
 
 self.addEventListener("install", (e) => {
@@ -27,7 +27,7 @@ self.addEventListener("fetch", (e) => {
   }
 
   const isFont = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
-  const isStatic = sameOrigin && (/\.[a-f0-9]{8,}\.(js|css)$/.test(url.pathname) || /\.(png|jpe?g|svg|webp|ico|woff2?)$/.test(url.pathname));
+  const isStatic = sameOrigin && (/\.[a-f0-9]{8,}\.(js|css)$/.test(url.pathname) || /\.(png|jpe?g|svg|webp|ico|woff2?|mp3|wav)$/.test(url.pathname));
   if (isStatic) {
     // Hashed build files never change: cache first.
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) put(req, res.clone()); return res; })));
