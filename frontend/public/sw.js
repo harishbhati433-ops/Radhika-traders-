@@ -1,5 +1,5 @@
-const CACHE = "rt-pwa-v10";
-const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/images/logo-full.jpeg", "/images/logo-tile.png", "/sounds/alert.mp3"];
+const CACHE = "rt-pwa-v11";
+const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/badge-96.png", "/images/logo-full.jpeg", "/images/logo-tile.png", "/sounds/alert.mp3"];
 const NAV_TIMEOUT_MS = 4000;
 
 self.addEventListener("install", (e) => {
@@ -50,7 +50,7 @@ self.addEventListener("push", (e) => {
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
   const title = d.title || "Radhika Traders";
   const opts = {
-    body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: d.tag || "rt", renotify: true,
+    body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/badge-96.png", tag: d.tag || "rt", renotify: true,
     vibrate: [200, 100, 200, 100, 400], timestamp: Date.now(), requireInteraction: false, silent: false,
     data: { url: d.url || "/", type: d.type || "" },
   };
