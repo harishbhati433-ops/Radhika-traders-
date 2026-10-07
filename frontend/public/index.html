@@ -75,10 +75,13 @@
         </div>
         <script>
             window.__rtSplashStart = Date.now();
+            window.__rtSplashQuick = /^\/(join|campaign|offer-ended)\//.test(location.pathname);
             window.__rtSplashDone = function () {
                 var s = document.getElementById("rt-splash"); if (!s) return;
-                var wait = Math.max(0, 1300 - (Date.now() - window.__rtSplashStart));
-                setTimeout(function () { s.classList.add("out"); setTimeout(function () { s.remove(); }, 550); }, wait);
+                var min = window.__rtSplashQuick ? 0 : 1300, fade = window.__rtSplashQuick ? 220 : 550;
+                var wait = Math.max(0, min - (Date.now() - window.__rtSplashStart));
+                if (window.__rtSplashQuick) s.style.transitionDuration = ".2s";
+                setTimeout(function () { s.classList.add("out"); setTimeout(function () { s.remove(); }, fade); }, wait);
             };
             setTimeout(window.__rtSplashDone, 9000);
         </script>

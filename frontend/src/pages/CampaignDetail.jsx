@@ -44,8 +44,9 @@ export default function CampaignDetail() {
   const origin = window.location.origin;
   const refCode = user?.referral_code;
   const primaryLink = (c.affiliate_links || []).find((l) => l.is_primary && l.is_active) || (c.affiliate_links || []).find((l) => l.is_active);
-  const referralLink = refCode ? `${origin}/api/go/${c.slug}?ref=${refCode}` : `${origin}/campaign/${c.slug}`;
-  const applyLink = `${origin}/api/go/${c.slug}${refCode ? `?ref=${refCode}` : ""}`;
+  const goBase = c.has_lead_form ? `${origin}/join/${c.slug}` : `${origin}/api/go/${c.slug}`;
+  const referralLink = refCode ? `${goBase}?ref=${refCode}` : `${origin}/campaign/${c.slug}`;
+  const applyLink = `${goBase}${refCode ? `?ref=${refCode}` : ""}`;
   const myClicks = clicks?.by_campaign?.[c.id] || 0;
 
   const copyRef = () => { navigator.clipboard.writeText(applyMessage); toast.success("Message with your referral link copied!"); };

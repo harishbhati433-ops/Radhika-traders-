@@ -18,12 +18,12 @@ import { CelebrationLayer } from "./components/Celebration";
 import MaintenancePage from "./pages/MaintenancePage";
 
 import Home from "./pages/Home";
+import LeadForm from "./pages/LeadForm";
+import { prefetchJoinFromLocation } from "./lib/joinPrefetch";
 
 const loadLogin = () => import("./pages/auth/Login");
-const loadLeadForm = () => import("./pages/LeadForm");
 const loadDashboard = () => import("./pages/customer/CustomerDashboard");
 const Login = lazy(loadLogin);
-const LeadForm = lazy(loadLeadForm);
 const OfferEnded = lazy(() => import("./pages/OfferEnded"));
 const CustomerDashboard = lazy(loadDashboard);
 
@@ -31,7 +31,7 @@ const CustomerDashboard = lazy(loadDashboard);
 try {
   const p = window.location.pathname;
   if (p.startsWith("/app/dashboard") || (getToken() && p === "/")) loadDashboard();
-  else if (p.startsWith("/join/")) loadLeadForm();
+  else if (p.startsWith("/join/")) prefetchJoinFromLocation();
   else if (p === "/app/login") loadLogin();
 } catch {}
 

@@ -79,7 +79,7 @@ export function OfferBanners() {
 
   if (!items.length) return null;
   const origin = window.location.origin;
-  const hrefFor = (b) => (b.campaign_slug ? `${origin}/api/go/${b.campaign_slug}${user?.referral_code ? `?ref=${user.referral_code}` : ""}` : b.link || "");
+  const hrefFor = (b) => (b.campaign_slug ? `${origin}/${b.has_lead_form ? "join" : "api/go"}/${b.campaign_slug}${user?.referral_code ? `?ref=${user.referral_code}` : ""}` : b.link || "");
 
   const Slide = ({ b, active }) => {
     const href = hrefFor(b);

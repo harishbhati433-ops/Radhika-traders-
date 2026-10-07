@@ -6,6 +6,7 @@ import { Input } from "../components/ui/input";
 import { formatPan, formatAadhaar, formatIfsc, panError, aadhaarError, ifscError } from "../lib/validators";
 import { IfscBankInfo } from "../components/IfscBankInfo";
 import { UserFlowSection } from "../components/UserFlowSection";
+import { fetchJoinInfo } from "../lib/joinPrefetch";
 import { Label } from "../components/ui/label";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck, UserCheck, ArrowRight } from "lucide-react";
@@ -24,7 +25,7 @@ export default function LeadForm() {
 
   useEffect(() => {
     if (params.get("ref")) localStorage.setItem(`rt_ref_${slug}`, params.get("ref"));
-    api.get(`/join/${slug}`, { params: ref ? { ref } : {} }).then(({ data }) => setInfo(data)).catch((e) => setErr(formatApiErrorDetail(e.response?.data?.detail) || "Offer not available"));
+    fetchJoinInfo(slug, ref, params.get("via") || "").then(setInfo).catch((e) => setErr(formatApiErrorDetail(e.response?.data?.detail) || "Offer not available"));
   }, [slug, ref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {

@@ -137,6 +137,7 @@ async def require_admin(request: Request) -> dict:
 def campaign_out(c: dict) -> dict:
     c = dict(c)
     c["id"] = str(c.pop("_id"))
+    c["has_lead_form"] = any(f.get("enabled") for f in c.get("lead_fields", []))
     return c
 
 
@@ -1122,13 +1123,14 @@ def _primary_link(c: dict) -> Optional[str]:
 @api.get("/go/{slug}")
 async def go_affiliate(slug: str, request: Request, background: BackgroundTasks, ref: Optional[str] = None):
     origin = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('x-forwarded-host', request.headers.get('host'))}"
-    c, partner = await asyncio.gather(
+    c, partner, shutdown = await asyncio.gather(
         db.campaigns.find_one({"slug": slug, "is_deleted": False}),
         db.users.find_one({"referral_code": ref, "account_status": {"$nin": ["disabled", "deleted"]}}, {"_id": 1}) if ref else asyncio.sleep(0, result=None),
+        shutdown_state(),
     )
     if not c:
         return RedirectResponse(url=f"{origin}/offer-ended", status_code=302)
-    if (await shutdown_state())["active"]:
+    if shutdown["active"]:
         return RedirectResponse(url=f"{origin}/maintenance", status_code=302)
     is_live = c.get("status") == "live" and c.get("offer_enabled", True)
     target = _primary_link(c) if is_live else None
@@ -1141,7 +1143,7 @@ async def go_affiliate(slug: str, request: Request, background: BackgroundTasks,
     if not is_live:
         return RedirectResponse(url=f"{origin}/offer-ended?c={slug}&s={c.get('status', 'closed')}", status_code=302)
     if any(f.get("enabled") for f in c.get("lead_fields", [])):
-        return RedirectResponse(url=f"{origin}/join/{slug}" + (f"?ref={ref}" if ref else ""), status_code=302)
+        return RedirectResponse(url=f"{origin}/join/{slug}?via=go" + (f"&ref={ref}" if ref else ""), status_code=302)
     return RedirectResponse(url=target or f"{origin}/campaign/{slug}", status_code=302)
 
 
@@ -1205,16 +1207,24 @@ def _dup_fields(original: dict, matched: list) -> dict:
 
 
 @api.get("/join/{slug}")
-async def join_info(slug: str, ref: Optional[str] = None):
-    c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
+async def join_info(slug: str, request: Request, background: BackgroundTasks, ref: Optional[str] = None, via: Optional[str] = None):
+    ref = (ref or "").upper()
+    c, partner = await asyncio.gather(
+        db.campaigns.find_one({"slug": slug, "is_deleted": False}),
+        db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}, {"_id": 1, "name": 1}) if ref else asyncio.sleep(0, result=None),
+    )
     if not c or c.get("status") != "live" or not c.get("offer_enabled", True):
         raise HTTPException(status_code=404, detail="Offer not available")
-    partner = await db.users.find_one({"referral_code": (ref or "").upper(), "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}) if ref else None
+    if via != "go":  # direct /join links (no /api/go hop) record the click here instead
+        background.add_task(db.clicks.insert_one, {
+            "campaign_id": str(c["_id"]), "slug": slug, "ref_code": ref, "user_id": str(partner["_id"]) if partner else None,
+            "redirected_to": "", "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
+            "user_agent": request.headers.get("user-agent", "")[:300], "created_at": now_iso()})
     return {"campaign": {"id": str(c["_id"]), "offer_name": c["offer_name"], "company": c.get("company", ""), "logo_url": c.get("logo_url", ""),
                          "payout_amount": c.get("payout_amount", 0), "customer_benefit": c.get("customer_benefit", ""), "slug": slug,
                          "category": c.get("category", ""), "description": (c.get("description") or "")[:400]},
             "fields": [f for f in c.get("lead_fields", []) if f.get("enabled")],
-            "referred_by": _mask_name(partner.get("name")) if partner else None, "ref": (ref or "").upper()}
+            "referred_by": _mask_name(partner.get("name")) if partner else None, "ref": ref}
 
 
 @api.post("/leads/{slug}")
@@ -2158,7 +2168,7 @@ def _auto_banner(c: dict) -> dict:
             "investment": c.get("investment", ""), "requirement": c.get("min_requirement") or c.get("requirements", ""),
             "customer_benefit": c.get("customer_benefit", ""), "benefits": c.get("benefits", ""), "description": c.get("description", ""),
             "link": "", "campaign_id": str(c["_id"]), "enabled": c.get("show_in_slider", True) is not False, "order": c.get("slider_order", 0) or 0,
-            "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True, "status": c.get("status")}
+            "campaign_slug": c["slug"], "campaign_name": c.get("offer_name", ""), "campaign_live": True, "status": c.get("status"), "has_lead_form": any(f.get("enabled") for f in c.get("lead_fields", []))}
 
 
 @api.get("/banners")
@@ -2177,6 +2187,7 @@ async def list_banners(all: bool = False, user: dict = Depends(get_current_user)
         o["campaign_slug"] = c["slug"] if c else ""
         o["campaign_name"] = c["offer_name"] if c else ""
         o["campaign_live"] = bool(c and c.get("status") == "live" and c.get("offer_enabled", True))
+        o["has_lead_form"] = bool(c and any(f.get("enabled") for f in c.get("lead_fields", [])))
         out.append(o)
     manual_ids = {b.get("campaign_id") for b in items if b.get("campaign_id")}
     cq = {"is_deleted": False, "status": "live", "offer_enabled": True}
@@ -2890,7 +2901,7 @@ async def share_poster(slug: str, request: Request, user: dict = Depends(get_cur
     if not c:
         raise HTTPException(status_code=404, detail="Campaign not found")
     origin = _share_origin(request)
-    link = f"{origin}/api/go/{slug}?ref={user.get('referral_code')}" if user.get("referral_code") else f"{origin}/campaign/{slug}"
+    link = (f"{origin}/join/{slug}?ref={user.get('referral_code')}" if any(f.get("enabled") for f in c.get("lead_fields", [])) else f"{origin}/api/go/{slug}?ref={user.get('referral_code')}") if user.get("referral_code") else f"{origin}/campaign/{slug}"
     logo = await _logo_bytes(c.get("logo_url", ""))
     png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo, user.get("mobile", "") if user.get("role") == "customer" else "")
     fname = f"{slug}-{user.get('referral_code', 'share')}.png"
