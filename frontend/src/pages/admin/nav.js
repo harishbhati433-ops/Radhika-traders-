@@ -12,7 +12,7 @@ export const adminNav = [
   { to: "/admin/suspicious-signups", label: "Suspicious Signups", icon: ShieldAlert, group: "Customers", adminOnly: true },
   { to: "/admin/withdrawals", label: "Withdrawals", icon: ArrowDownToLine, group: "Payments", perm: "withdrawals" },
   { to: "/admin/wallets", label: "Wallet Balances", icon: Wallet, group: "Payments", perm: "payments" },
-  { to: "/admin/broadcast", label: "Broadcast", icon: Send, group: "Communication", perm: "reports" },
+  { to: "/admin/broadcast", label: "Alerts & Broadcast", icon: Send, group: "Communication", perm: "reports" },
   { to: "/admin/reports", label: "Send Reports", icon: FolderUp, group: "Communication", perm: "reports" },
   { to: "/admin/email-log", label: "Email Log", icon: MailCheck, group: "Communication", adminOnly: true },
   { to: "/admin/employees", label: "Employees", icon: UserCog, group: "Team & HR", adminOnly: true },

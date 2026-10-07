@@ -5,13 +5,14 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
-import { Send, Loader2, Mail, Bell, Search } from "lucide-react";
+import { Send, Loader2, Mail, Bell, Search, Smartphone } from "lucide-react";
 
 export default function AdminBroadcast() {
   const [customers, setCustomers] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [history, setHistory] = useState([]);
-  const [f, setF] = useState({ subject: "", message: "", audience: "all", user_ids: [], campaign_id: "", channels: ["email", "in_app"] });
+  const [reach, setReach] = useState(null);
+  const [f, setF] = useState({ subject: "", message: "", audience: "all", user_ids: [], campaign_id: "", channels: ["in_app"] });
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -19,6 +20,7 @@ export default function AdminBroadcast() {
   useEffect(() => {
     api.get("/admin/customers").then(({ data }) => setCustomers(data));
     api.get("/campaigns", { params: { admin_view: true } }).then(({ data }) => setCampaigns(data));
+    api.get("/admin/push/reach").then(({ data }) => setReach(data)).catch(() => {});
     loadHistory();
   }, []);
 
@@ -45,14 +47,20 @@ export default function AdminBroadcast() {
   const filtered = customers.filter((c) => (c.name + c.email + c.mobile).toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <DashboardLayout nav={adminNav} title="Email & Notification Broadcast">
+    <DashboardLayout nav={adminNav} title="Alerts & Broadcast">
       <div className="grid gap-6 lg:grid-cols-5">
         <form onSubmit={send} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-3" data-testid="broadcast-form">
           <div className="flex flex-wrap gap-2">
-            {[["email", "Email", Mail], ["in_app", "Website 🔔", Bell]].map(([k, l, I]) => (
+            {[["in_app", "App + Phone Alert 🔔", Bell], ["email", "Email (uses quota)", Mail]].map(([k, l, I]) => (
               <button type="button" key={k} onClick={() => toggleChannel(k)} data-testid={`broadcast-channel-${k}`} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${f.channels.includes(k) ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-600"}`}><I className="h-3.5 w-3.5" /> {l}</button>
             ))}
           </div>
+          {reach && (
+            <div data-testid="broadcast-push-reach" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <Smartphone className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span><b>{reach.with_push}</b> of <b>{reach.customers}</b> customers have phone alerts ON ({reach.devices} device{reach.devices === 1 ? "" : "s"}) — they get this on their lock screen even with the app closed. Others see it in the app bell only.</span>
+            </div>
+          )}
           <div>
             <Label>Attach campaign (auto-adds campaign card + link)</Label>
             <select data-testid="broadcast-campaign" value={f.campaign_id} onChange={(e) => pickCampaign(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -96,7 +104,7 @@ export default function AdminBroadcast() {
               <div key={b.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm" data-testid={`broadcast-item-${b.id}`}>
                 <div className="flex items-center justify-between gap-2"><span className="truncate font-semibold text-slate-900">{b.subject}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${b.status === "sending" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{b.status || "done"}</span></div>
                 <div className="mt-1 text-xs text-slate-500">{b.kind === "campaign_live" ? "Auto · campaign live" : `Manual · ${b.audience}`} · {(b.created_at || "").slice(0, 16).replace("T", " ")}</div>
-                <div className="mt-1 text-xs"><span className="text-slate-500">To {b.recipients}</span> · <span className="font-semibold text-emerald-600">{b.sent} sent</span>{b.failed > 0 && <> · <span className="font-semibold text-rose-600">{b.failed} failed</span></>}</div>
+                <div className="mt-1 text-xs"><span className="text-slate-500">To {b.recipients}</span>{(b.channels || []).includes("in_app") && <> · <span className="font-semibold text-emerald-700">📱 {b.push_reach ?? 0} phone alert</span></>}{(b.channels || []).includes("email") && <> · <span className="font-semibold text-slate-600">{b.sent} email sent</span>{b.failed > 0 && <> · <span className="font-semibold text-rose-600">{b.failed} failed</span></>}</>}</div>
               </div>
             ))}
           </div>

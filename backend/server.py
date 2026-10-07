@@ -2488,15 +2488,23 @@ async def admin_broadcast(body: BroadcastIn, request: Request, background: Backg
             raise HTTPException(status_code=400, detail="Select at least one customer")
         q["_id"] = {"$in": [ObjectId(i) for i in body.user_ids if ObjectId.is_valid(i)]}
     users = await db.users.find(q, {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
+    push_reach = len(await db.push_subscriptions.distinct("user_id", {"user_id": {"$in": [str(u["_id"]) for u in users]}})) if "in_app" in body.channels else 0
     c = await db.campaigns.find_one({"_id": ObjectId(body.campaign_id)}) if body.campaign_id and ObjectId.is_valid(body.campaign_id) else None
     link = f"/campaign/{c['slug']}" if c else ""
     res = await db.broadcasts.insert_one({"kind": "manual", "subject": body.subject, "message": body.message, "audience": body.audience,
-                                          "campaign_id": body.campaign_id or "", "channels": body.channels, "recipients": len(users),
+                                          "campaign_id": body.campaign_id or "", "channels": body.channels, "recipients": len(users), "push_reach": push_reach,
                                           "sent": 0, "failed": 0, "status": "sending", "created_by": admin["email"], "created_at": now_iso()})
     background.add_task(run_broadcast, res.inserted_id, users, body, c, link, _origin(request))
     await log_activity(admin, "broadcast_sent", request, entity_type="broadcast", entity_id=str(res.inserted_id), entity_label=body.subject[:80],
                        campaign_id=body.campaign_id or "", campaign_name=c["offer_name"] if c else "", status="sending", amount=len(users), detail=f"{body.audience} · {','.join(body.channels)}")
-    return {"message": f"Sending to {len(users)} customers", "id": str(res.inserted_id), "recipients": len(users)}
+    return {"message": f"Sending to {len(users)} customers" + (f" · phone alert to {push_reach}" if "in_app" in body.channels else ""), "id": str(res.inserted_id), "recipients": len(users), "push_reach": push_reach}
+
+
+@api.get("/admin/push/reach")
+async def admin_push_reach(admin: dict = Depends(require_perm("reports", "view"))):
+    ids = [str(u["_id"]) async for u in db.users.find({"role": "customer", "email_verified": True}, {"_id": 1})]
+    with_push = await db.push_subscriptions.distinct("user_id", {"user_id": {"$in": ids}})
+    return {"customers": len(ids), "with_push": len(with_push), "devices": await db.push_subscriptions.count_documents({"user_id": {"$in": ids}})}
 
 
 async def run_broadcast(bid, users: list, body: BroadcastIn, c: dict | None, link: str, origin: str):
