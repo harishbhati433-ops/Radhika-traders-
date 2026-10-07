@@ -29,6 +29,7 @@ from auth_utils import (
     hash_password, verify_password, create_access_token, generate_otp, needs_rehash,
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
+import email_service
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
@@ -3170,6 +3171,7 @@ async def startup():
     await contact_settings.load_contact(db)
     await office_timing.load(db)
     await attendance_policy.load(db)
+    email_service.set_db(db)
     try:
         s = await get_settings()
         if s["signup_bonus_enabled"] and float(s["signup_bonus"] or 0) > 0:

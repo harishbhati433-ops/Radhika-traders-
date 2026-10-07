@@ -2,6 +2,7 @@
 import os
 import re
 import asyncio
+import time
 import ipaddress
 import logging
 import httpx
@@ -92,24 +93,65 @@ def _assert_safe_email(subject: str, html: str) -> None:
                 raise ValueError(f"Anchor text {m.group(1)!r} != real link host {real!r} (G3)")
 
 
+_db = None
+_send_lock = asyncio.Lock()
+_last_send = 0.0
+MIN_GAP = 0.6  # provider allows ~2 req/s — space sends so bursts (admin + employee mails per punch) never hit 429
+BACKOFF = (2, 4, 8, 12, 16)
+
+
+def set_db(db) -> None:
+    global _db
+    _db = db
+
+
+async def _log(to: str, subject: str, status: str, error: str = "", email_id: str | None = None, attempts: int = 0) -> None:
+    if _db is None:
+        return
+    try:
+        await _db.email_log.insert_one({"to": to, "subject": subject[:160], "status": status, "error": (error or "")[:300], "email_id": email_id, "attempts": attempts,
+                                        "created_at": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        pass
+
+
 async def send_email(*, to: str, subject: str, html: str) -> str | None:
+    global _last_send
     _assert_safe_email(subject, html)
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
     if EMAIL_REPLY_TO:
         payload["contact_email"] = EMAIL_REPLY_TO
-    for attempt in range(3):
+    last_err = ""
+    for attempt in range(len(BACKOFF)):
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send", headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+            async with _send_lock:  # serialise + throttle all outgoing mail
+                wait = MIN_GAP - (time.monotonic() - _last_send)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send", headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+                _last_send = time.monotonic()
             if resp.status_code == 429 or resp.status_code >= 500:
-                logger.warning(f"Email send retry {attempt + 1} for {to}: HTTP {resp.status_code}")
-                await asyncio.sleep(1.5 * (attempt + 1))
+                last_err = f"HTTP {resp.status_code}"
+                logger.warning(f"Email send retry {attempt + 1} for {to}: {last_err}")
+                await asyncio.sleep(BACKOFF[attempt])
                 continue
             resp.raise_for_status()
-            return resp.json().get("id")
-        except Exception as e:
-            logger.error(f"Email send error to {to}: {str(e)}")
+            email_id = resp.json().get("id")
+            await _log(to, subject, "sent", email_id=email_id, attempts=attempt + 1)
+            return email_id
+        except httpx.HTTPStatusError as e:
+            last_err = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+            logger.error(f"Email send error to {to}: {last_err}")
+            await _log(to, subject, "failed", last_err, attempts=attempt + 1)
             return None
+        except Exception as e:
+            last_err = str(e)
+            logger.warning(f"Email send retry {attempt + 1} for {to}: {last_err}")
+            await asyncio.sleep(BACKOFF[attempt])
+    logger.error(f"Email send gave up for {to}: {last_err}")
+    await _log(to, subject, "failed", last_err, attempts=len(BACKOFF))
+    return None
     logger.error(f"Email send failed after retries to {to}")
     return None
 
