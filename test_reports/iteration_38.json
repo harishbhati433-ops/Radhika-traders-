@@ -1,0 +1,34 @@
+{
+  "summary": "Full backend + frontend test of new Web Push (VAPID/pywebpush) feature across admin, customer, employee. 13/13 pytest cases pass. Admin+employee notification bell UI verified end-to-end. Leave notifications (apply -> admin, reject -> employee) verified. Campaign status toggle writes broadcast with channels=['in_app'] only — ZERO rows added to email_outbox with priority='bulk' (promo emails off, as required). Dead push subscription is auto-cleaned by /push/test. SW /sw.js contains both push and notificationclick listeners.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin dashboard (any page using it)", "issues": ["React warning: 'Encountered two children with the same key, 9' — duplicate key `9` repeating in some list. Pre-existing, unrelated to push feature. Low priority."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_push_notifications.py",
+    "/app/test_reports/pytest/push_results.xml"
+  ],
+  "action_items": [
+    "Optional: locate and fix the React duplicate-key `9` warning in an admin-side list (likely a .map using a non-unique field)."
+  ],
+  "critical_code_review_comments": [
+    "push_service.send_push: uses asyncio.gather on asyncio.to_thread for pywebpush — good (non-blocking). Logs include push_log row (sent/devices/gone/kind) — good observability.",
+    "_fire swallows RuntimeError silently when no running loop — fine for sync callers, but any send_push task failing silently will not surface. Consider adding task.add_done_callback for logging.",
+    "VAPID_* read with os.environ[...] at import — will crash if missing. Fine for prod but makes local dev brittle; consider dict.get with a clear error raise.",
+    "announce_campaign_status now writes channels=['in_app']; email_outbox bulk send is correctly removed. Verified in DB.",
+    "/push/subscribe does light validation (endpoint + keys present) but does not validate 'keys' is a dict or that p256dh/auth are present — invalid shape will reach pywebpush later. Acceptable but could 400 earlier.",
+    "/push/test deliberately raises 400 when the user has 0 subs — matches UI copy."
+  ],
+  "updated_files": ["/app/backend/tests/test_push_notifications.py"],
+  "success_rate": { "backend": "100% (13/13)", "frontend": "100% (admin + employee bell/panel/push toggles verified)" },
+  "test_credentials": "Admin bhatiharish276@gmail.com/Radhika@2023 (portal:admin), customer testcust@example.com/Test@1234, employee rahul.k/Emp@1234. Admin app-lock PIN 2580, employee app-lock PIN 2580 (NOT 1234 — review request said 1234 but /app/memory/test_credentials.md says employee PIN = 2580; the latter is correct).",
+  "seed_data_creation": "Created and auto-rejected a test leave for rahul.k on 2026-11-06 (reason 'pytest leave notif check') to validate leave notifications. Rejected leave cannot be deleted via API by design; it will remain as a historical rejected row (safe, harmless). Campaign 6a9d87a93ee34323c98dfdc1 was toggled paused->live and is restored to 'live'. All fake push_subscriptions cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Push backend endpoints all work; UI testids: notif-bell, notif-panel, push-toggle, push-enable-btn, push-unsupported, push-sound-chime|bell|pop. In headless Chromium of this test runner, serviceWorker + PushManager ARE supported but Notification.permission is 'denied' -> UI shows 'Phone alerts blocked' + 'Turn on' (push-enable-btn) rather than push-unsupported. If running in a browser without PushManager, push-unsupported would appear instead. SW is at /sw.js and contains push + notificationclick handlers. Review-request mentioned employee PIN 1234 but real credential is 2580 (per /app/memory/test_credentials.md).",
+  "rca of the issue": "N/A — no bugs found. Feature works as specified."
+}

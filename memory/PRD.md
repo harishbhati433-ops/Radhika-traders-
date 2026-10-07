@@ -578,3 +578,9 @@ Professional, secure, fully-dynamic affiliate campaign platform for Radhika Trad
 - Campaign Live/Pause/Close/New-campaign emails are OFF permanently (announce_campaign_status sends in-app notification only; broadcasts record channels=["in_app"], queued=0). Existing queued bulk mails were deleted from email_outbox.
 - Still emailed (transactional): OTP (signup/login/forgot/reset/resend), withdrawal/payout, admin withdrawal alert, employee attendance/warning mails, welcome letter, reports. Admin manual Broadcast with "email" channel still works (admin's explicit choice).
 - Quota note: Emergent Email Key has no published daily quota; 429s observed were burst/rate (~2 req/s). If guaranteed quota is needed → user's own Resend key (free 100/day, 3000/mo).
+
+## Web Push Notifications (June 2026) — DONE, tested iteration_38
+- VAPID keys in backend/.env (VAPID_PRIVATE_KEY/PUBLIC_KEY/SUBJECT), pywebpush. `push_service.py`: notify_one/notify_many replace ALL db.notifications.insert_* calls → every in-app notification also pushes to user's devices (push_subscriptions collection; dead endpoints auto-removed; push_log). Routes: GET /api/push/vapid-public-key, POST /api/push/subscribe|unsubscribe|test.
+- New pushes: leave request → admins; leave decision → employee; employee KYC submit → admins; verify/reject → employee; attendance punch → admins + employee; attendance nudges → employee.
+- sw.js (cache v9): push → showNotification (vibrate, badge) + postMessage to open tabs; notificationclick opens link. Frontend: lib/push.js (enable/disable, WebAudio sounds chime/bell/pop in localStorage, onPushMessage plays sound + refreshes bell), PushToggle.jsx inside NotificationBell panel; bell now visible for admin/employee/customer.
+- Limits (told to user): app closed → OS default notification sound (browsers don't allow custom); app open → custom sound. iPhone needs Add to Home Screen (iOS 16.4+).
