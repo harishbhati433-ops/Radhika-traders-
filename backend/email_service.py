@@ -96,6 +96,7 @@ def _assert_safe_email(subject: str, html: str) -> None:
 _db = None
 _send_lock = asyncio.Lock()
 _last_send = 0.0
+_last_failure = ""  # last provider error seen by send_email (e.g. 'HTTP 429') — lets the outbox worker stop early during a quota outage
 MIN_GAP = 0.6  # provider allows ~2 req/s — space sends so bursts (admin + employee mails per punch) never hit 429
 BACKOFF = (2, 4, 8, 12, 16)
 
@@ -131,7 +132,8 @@ async def _queue_retry(to: str, subject: str, html: str, error: str) -> None:
 
 
 async def send_email(*, to: str, subject: str, html: str, _from_outbox: bool = False) -> str | None:
-    global _last_send
+    global _last_send, _last_failure
+    _last_failure = ""
     _assert_safe_email(subject, html)
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
     if EMAIL_REPLY_TO:
@@ -165,12 +167,33 @@ async def send_email(*, to: str, subject: str, html: str, _from_outbox: bool = F
             logger.warning(f"Email send retry {attempt + 1} for {to}: {last_err}")
             await asyncio.sleep(BACKOFF[attempt])
     logger.error(f"Email send gave up for {to}: {last_err}")
+    _last_failure = last_err
     if _from_outbox:
-        await _log(to, subject, "failed", last_err, attempts=len(BACKOFF))
+        await _log(to, subject, "queued" if last_err.startswith("HTTP 429") else "failed", f"{last_err} — still waiting in queue" if last_err.startswith("HTTP 429") else last_err, attempts=len(BACKOFF))
     else:  # provider down / rate-limited → park it and re-send automatically after 5, 10, 15, 30, 60, 120 min
         await _log(to, subject, "queued", f"{last_err} — queued for automatic re-send in {RETRY_GAPS_MIN[0]} min", attempts=len(BACKOFF))
         await _queue_retry(to, subject, html, last_err)
     return None
+
+
+BULK_PER_RUN = 6          # low-priority (campaign) mails drained per 5-min cron run → max ~70/hour
+DAILY_SOFT_CAP = 400      # total sends/day before bulk is deferred to tomorrow (one-to-one mails are never deferred)
+
+
+async def sent_today() -> int:
+    if _db is None:
+        return 0
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    return await _db.email_log.count_documents({"status": "sent", "created_at": {"$gte": start}})
+
+
+async def enqueue_bulk(to: str, subject: str, html: str) -> None:
+    """Campaign / announcement mails never go out in a burst: they wait in the outbox and are drained slowly by the cron."""
+    if _db is None or not to:
+        return
+    now = datetime.now(timezone.utc)
+    await _db.email_outbox.insert_one({"to": to, "subject": subject[:160], "html": html, "attempts": 0, "status": "queued", "priority": "bulk", "last_error": "",
+                                       "next_try_at": now.isoformat(), "created_at": now.isoformat(), "updated_at": now.isoformat()})
 
 
 async def process_outbox(limit: int = 50) -> dict:
@@ -178,14 +201,25 @@ async def process_outbox(limit: int = 50) -> dict:
     if _db is None:
         return {"processed": 0}
     now = datetime.now(timezone.utc)
-    due = await _db.email_outbox.find({"status": "queued", "next_try_at": {"$lte": now.isoformat()}}).sort("next_try_at", 1).to_list(limit)
+    q = {"status": "queued", "next_try_at": {"$lte": now.isoformat()}}
+    due = await _db.email_outbox.find({**q, "priority": {"$ne": "bulk"}}).sort("next_try_at", 1).to_list(limit)   # retries of one-to-one mails first
+    if await sent_today() < DAILY_SOFT_CAP:
+        due += await _db.email_outbox.find({**q, "priority": "bulk"}).sort("created_at", 1).to_list(BULK_PER_RUN)
     sent = failed = requeued = 0
     for m in due:
         mid = await send_email(to=m["to"], subject=m["subject"], html=m["html"], _from_outbox=True)
         attempts = int(m.get("attempts", 0)) + 1
+        quota_outage = _last_failure.startswith("HTTP 429")
+        age_h = (now - datetime.fromisoformat(m["created_at"])).total_seconds() / 3600
         if mid:
             sent += 1
             await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "sent", "attempts": attempts, "email_id": mid, "sent_at": now.isoformat(), "updated_at": now.isoformat()}})
+        elif quota_outage and age_h < 48:
+            # provider quota exhausted: keep the mail for up to 48 h and try again every 30 min; stop this run — every other mail would hit the same wall
+            requeued += 1
+            await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "queued", "attempts": attempts, "last_error": _last_failure, "next_try_at": (now + timedelta(minutes=30)).isoformat(), "updated_at": now.isoformat()}})
+            logger.warning("email outbox: provider rate-limited (429) — pausing outbox drain for 30 min")
+            break
         elif attempts >= len(RETRY_GAPS_MIN):
             failed += 1
             await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "failed", "attempts": attempts, "updated_at": now.isoformat()}})
@@ -464,9 +498,7 @@ def _plain(inner: str) -> str:
     return f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222222;max-width:600px">{inner}</div>'
 
 
-async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
-    if not to:
-        return None
+def campaign_live_html(name: str, c: dict, link: str) -> tuple[str, str]:
     first = _first(name)
     offer = c.get("offer_name", "a new campaign")
     subject = f"{first}, I have added {offer} to your account"
@@ -482,7 +514,14 @@ async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> st
              f'<p>Your referral link for this one:<br><a href="{escape(link)}" style="color:#1a0dab">{escape(link)}</a></p>'
              f'<p>Share it with people who would be a good fit, and I will track the leads for you on your dashboard. If you have any question, just reply to this email, I read every message.</p>'
              f'<p>Thanks,<br>Harish Bhati<br>Radhika Traders<br>WhatsApp: {escape(wa_number())}</p>')
-    return await send_email(to=to, subject=subject, html=_plain(inner))
+    return _plain(inner), subject
+
+
+async def send_campaign_live_email(to: str, name: str, c: dict, link: str) -> str | None:
+    if not to:
+        return None
+    html, subject = campaign_live_html(name, c, link)
+    return await send_email(to=to, subject=subject, html=html)
 
 
 async def send_broadcast_email(to: str, name: str, subject: str, message: str, c: dict | None, link: str) -> str | None:
@@ -607,10 +646,8 @@ async def send_leave_decision_email(to: str, name: str, l: dict, label: str, por
     return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
 
 
-async def send_campaign_status_email(to: str, name: str, c: dict, status: str, link: str) -> str | None:
+def campaign_status_html(name: str, c: dict, status: str, link: str) -> tuple[str, str]:
     """Pause / Close / Resume (live again) notice for an existing campaign."""
-    if not to:
-        return None
     first, offer = _first(name), c.get("offer_name", "a campaign")
     cfg = {
         "paused": ("paused", "#b45309", f"{first}, {offer} is paused for now",
@@ -628,4 +665,11 @@ async def send_campaign_status_email(to: str, name: str, c: dict, status: str, l
              f'<ul style="font-size:13px;color:#334155;padding-left:18px">{"".join(f"<li>{escape(d)}</li>" for d in details)}</ul>'
              + (f'<p style="margin:16px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#991B1B;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open your referral link</a></p>' if status == "live" else
                 f'<p style="margin:16px 0 6px"><a href="{escape(link)}" style="display:inline-block;background:#0B0F17;color:#ffffff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px">Open your dashboard</a></p>'))
-    return await send_email(to=to, subject=subject, html=_wrap(subject, inner))
+    return _wrap(subject, inner), subject
+
+
+async def send_campaign_status_email(to: str, name: str, c: dict, status: str, link: str) -> str | None:
+    if not to:
+        return None
+    html, subject = campaign_status_html(name, c, status, link)
+    return await send_email(to=to, subject=subject, html=html)

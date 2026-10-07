@@ -31,7 +31,7 @@ from auth_utils import (
     generate_referral_code, get_current_user_from_db, ACCOUNT_STATUS_MESSAGES,
 )
 import email_service
-from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
+from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, campaign_live_html, campaign_status_html, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
 from rbac import make_require_perm, make_log_activity
@@ -1562,8 +1562,23 @@ async def _active_customers() -> list:
                                {"email": 1, "name": 1, "referral_code": 1}).to_list(10000)
 
 
+async def _engaged_customers(c: dict, first_live: bool) -> list:
+    """Transactional recipients only: customers who actually work this campaign (lead or click). New-campaign mail → customers active in the last 60 days. Capped so one event can never exhaust the shared email quota."""
+    cid = str(c["_id"])
+    if first_live:
+        since = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        ids = set(await db.leads.distinct("partner_id", {"created_at": {"$gte": since}})) | set(await db.clicks.distinct("user_id", {"created_at": {"$gte": since}}))
+    else:
+        ids = set(await db.leads.distinct("partner_id", {"campaign_id": cid})) | set(await db.clicks.distinct("user_id", {"campaign_id": cid}))
+    oids = [ObjectId(i) for i in ids if i and ObjectId.is_valid(i)]
+    if not oids:
+        return []
+    return await db.users.find({"_id": {"$in": oids}, "role": "customer", "email_verified": True, "account_status": {"$nin": ["disabled", "deleted"]}},
+                               {"email": 1, "name": 1, "referral_code": 1}).to_list(100)
+
+
 async def announce_campaign_status(c: dict, status: str, origin: str):
-    """live (first time) → 'new campaign' mail; live again / paused / closed → status mail. In-app notification always."""
+    """In-app notification to every active customer; EMAIL only to engaged customers, queued at low priority so one-to-one mails (OTP, payouts, attendance) always go first."""
     first_live = status == "live" and not c.get("live_announced_at")
     if first_live:
         claimed = await db.campaigns.update_one({"_id": c["_id"], "live_announced_at": {"$exists": False}}, {"$set": {"live_announced_at": now_iso()}})
@@ -1579,18 +1594,18 @@ async def announce_campaign_status(c: dict, status: str, origin: str):
         await db.notifications.insert_many([{
             "user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "campaign_live" if status == "live" else "campaign_status",
             "campaign_id": str(c["_id"]), "status": status, "read": False, "created_at": now_iso()} for u in customers])
-    sent = failed = 0
-    for u in customers:
+    recipients = await _engaged_customers(c, first_live)
+    queued = 0
+    for u in recipients:
+        if not u.get("email") or u["email"].endswith("@example.com"):
+            continue
         personal = f"{origin}/api/go/{c['slug']}?ref={u['referral_code']}" if u.get("referral_code") and status == "live" else f"{origin}/app/dashboard"
-        ok = await (send_campaign_live_email(u.get("email", ""), u.get("name", ""), c, personal) if first_live
-                    else send_campaign_status_email(u.get("email", ""), u.get("name", ""), c, status, personal))
-        sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
+        html, subject = (campaign_live_html(u.get("name", ""), c, personal) if first_live else campaign_status_html(u.get("name", ""), c, status, personal))
+        await email_service.enqueue_bulk(u["email"], subject, html)
+        queued += 1
     await db.broadcasts.insert_one({"kind": "campaign_live" if first_live else f"campaign_{status}", "campaign_id": str(c["_id"]), "subject": title, "message": body,
-                                    "audience": "all", "recipients": len(customers), "sent": sent, "failed": failed,
-                                    "channels": ["email", "in_app"], "created_at": now_iso()})
-    if failed:
-        await log_activity({"id": "system", "name": "System", "role": "system"}, "email_failed", None, entity_type="campaign", entity_id=str(c["_id"]), entity_label=c["offer_name"],
-                           campaign_id=str(c["_id"]), campaign_name=c["offer_name"], status=status, detail=f"{failed} of {len(customers)} '{title}' emails failed — see Email Log")
+                                    "audience": "engaged", "recipients": len(customers), "sent": 0, "failed": 0, "queued": queued,
+                                    "channels": ["in_app", "email"], "created_at": now_iso()})
 
 
 async def announce_campaign_live(c: dict, origin: str):
