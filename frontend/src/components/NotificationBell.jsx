@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { Bell, Megaphone, ShieldCheck, Info, CheckCheck } from "lucide-react";
+import { Bell, Megaphone, ShieldCheck, Info, CheckCheck, Wallet, Banknote, UserCog, CalendarCheck, FileText } from "lucide-react";
 import { PushToggle } from "./PushToggle";
 import { onPushMessage, warmAudio } from "../lib/push";
 
-const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info };
+const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info, wallet: Wallet, withdrawal: Banknote, account: UserCog, security: ShieldCheck, leave: CalendarCheck, attendance: CalendarCheck, lead: FileText, bonus: Wallet };
 
 export function NotificationBell() {
   const [data, setData] = useState({ unread: 0, items: [] });

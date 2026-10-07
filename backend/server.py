@@ -858,6 +858,8 @@ async def admin_change_customer_email(uid: str, body: AdminEmailChangeIn, reques
     await db.otp_codes.delete_many({"email": old_email})
     await _log_security(uid, "email_changed_by_admin", request, f"{old_email} → {new_email}")
     await log_activity(admin, "customer_email_changed", request, entity_type="customer", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status="updated", detail=f"{old_email} → {new_email}")
+    await push_service.notify_one({"user_id": uid, "title": "Login email updated", "body": f"Your login email is now {new_email}. Verify it with the OTP at your next login.",
+                                   "link": "/app/profile", "type": "security", "read": False, "created_at": now_iso()})
     if not old_email.endswith("@employee.radhikatraders.net"):
         asyncio.create_task(send_email(to=old_email, subject="Your Radhika Traders login email was changed",
                                        html=_wrap("Login email changed", f"<p>Hi {u.get('name', '')},</p><p>Radhika Traders updated the login email on your partner account to <b>{new_email}</b>. From now on, please log in with the new email. If you did not request this, contact us immediately at radhikatradersofficial@gmail.com.</p>")))
@@ -1929,6 +1931,8 @@ async def admin_reverse_double_payouts(request: Request, admin: dict = Depends(r
                                                 "ref_id": ref_id, "balance_before": w["balance"], "balance_after": after["balance"], "admin_id": admin["id"], "admin_email": admin["email"], "created_at": now_iso()})
         await log_activity(admin, "double_payout_reversed", request, entity_type="wallet", entity_id=ref_id, entity_label=r["name"], client_id=r["user_id"], client_name=r["name"],
                            status="deduct", amount=amt, detail=f"{r['ref_id']} for {r['joiner']} · ₹{w['balance']:g} → ₹{after['balance']:g}")
+        await push_service.notify_one({"user_id": r["user_id"], "title": f"Wallet adjusted −₹{amt:g}", "body": f"Duplicate referral payout {r['ref_id']} reversed · Balance now ₹{after['balance']:g}",
+                                       "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
         (done if amt >= r["ref_amount"] - 0.001 else partial).append(ref_id)
     return {"message": f"Reversed {len(done)} extra payout(s)" + (f", {len(partial)} partially (low balance)" if partial else "") + (f", {len(skipped)} skipped (no available balance — pending withdrawal untouched)" if skipped else "") + ".",
             "reversed": len(done), "partial": len(partial), "skipped": len(skipped)}
@@ -2129,6 +2133,13 @@ async def update_withdrawal(wid: str, body: WithdrawStatusIn, request: Request, 
     await log_activity(admin, "withdrawal_status_updated", request, entity_type="withdrawal", entity_id=f"WD-{wid[:8]}", entity_label=w.get("user_name", ""),
                        client_id=w["user_id"], client_name=w.get("user_name", ""), status=body.status, amount=w["amount"],
                        detail=f"{w.get('status')} -> {body.status}" + (f" UTR {body.utr}" if body.utr else "") + (f" · {body.admin_note}" if body.admin_note else ""))
+    if body.status != w.get("status"):
+        msg = {"paid": f"₹{w['amount']:g} has been sent to your {w['method']}" + (f" · UTR {body.utr}" if body.utr else "") + ". Check your bank/UPI.",
+               "approved": f"Your ₹{w['amount']:g} withdrawal is approved and will be paid shortly.",
+               "rejected": f"Your ₹{w['amount']:g} withdrawal was rejected" + (f": {body.admin_note}" if body.admin_note else ". Amount returned to your wallet."),
+               "pending": f"Your ₹{w['amount']:g} withdrawal is back under review."}[body.status]
+        await push_service.notify_one({"user_id": w["user_id"], "title": {"paid": f"₹{w['amount']:g} Paid ✓", "approved": "Withdrawal Approved", "rejected": "Withdrawal Rejected", "pending": "Withdrawal Under Review"}[body.status],
+                                       "body": msg, "link": "/app/withdrawals", "type": "withdrawal", "read": False, "created_at": now_iso()})
     return {"message": "Withdrawal updated"}
 
 
@@ -2626,6 +2637,12 @@ async def admin_set_account_status(uid: str, body: AccountStatusIn, request: Req
     await db.users.update_one({"_id": u["_id"]}, {"$set": upd, "$push": {"account_status_history": {"status": body.status, "reason": reason, "at": now_iso(), "by": admin.get("email")}}})
     await _log_security(admin["id"], f"customer_{body.status}", request, f"{u.get('email')} — {reason}")
     await log_activity(admin, "customer_status_changed", request, entity_type="customer", entity_id=u.get("referral_code", uid), entity_label=u.get("name", ""), client_id=uid, client_name=u.get("name", ""), status=body.status, detail=reason)
+    if body.status != u.get("account_status", "active"):
+        title, msg = {"active": ("Account Activated ✓", "Your Radhika Traders account is active again. You can share links and withdraw as usual."),
+                      "deactivated": ("Account Paused", f"Your account has been temporarily paused. Reason: {reason}. Contact support to resume."),
+                      "disabled": ("Account Disabled", f"Your account has been disabled. Reason: {reason}. Contact support for help."),
+                      "deleted": ("Account Closed", f"Your account has been closed. Reason: {reason}.")}[body.status]
+        await push_service.notify_one({"user_id": uid, "title": title, "body": msg, "link": "/app/dashboard", "type": "account", "read": False, "created_at": now_iso()})
     return {"message": f"{u.get('name')} is now {'paused' if body.status == 'deactivated' else body.status}", "account_status": body.status}
 
 
@@ -2643,6 +2660,8 @@ async def credit_wallet(body: CreditIn, request: Request, admin: dict = Depends(
     await db.transactions.insert_one(doc)
     await log_activity(admin, "wallet_credited", request, entity_type="wallet", entity_id=doc["ref_id"], entity_label=u.get("name", ""), client_id=body.user_id,
                        client_name=u.get("name", ""), campaign_id=body.campaign_id or "", status="credited", amount=abs(body.amount), detail=body.description)
+    await push_service.notify_one({"user_id": body.user_id, "title": f"₹{abs(body.amount):g} credited to your wallet", "body": f"{body.description} · Ref {doc['ref_id']}",
+                                   "link": "/app/wallet", "type": "wallet", "read": False, "created_at": now_iso()})
     return {"message": "Wallet credited"}
 
 
@@ -2710,6 +2729,8 @@ async def admin_update_profile(uid: str, body: ProfileIn, request: Request, admi
         raise HTTPException(status_code=404, detail="Customer not found")
     full = await _apply_profile_update(uid, body, admin.get("username") or admin["email"])
     await log_activity(admin, "customer_profile_edited", request, entity_type="customer", entity_id=full.get("referral_code", uid), entity_label=full.get("name", ""), client_id=uid, client_name=full.get("name", ""), status="updated")
+    await push_service.notify_one({"user_id": uid, "title": "Profile updated", "body": "Radhika Traders updated your profile details. Open your profile to review them.",
+                                   "link": "/app/profile", "type": "account", "read": False, "created_at": now_iso()})
     return public_user(full)
 
 
