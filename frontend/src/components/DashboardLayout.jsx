@@ -4,6 +4,7 @@ import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { Menu, X, LogOut, Download, ChevronDown } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { PushPrompt } from "./PushPrompt";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
 import { canUser } from "../lib/perm";
 import { ROUTE_PERM } from "../pages/admin/nav";
@@ -177,6 +178,7 @@ export function DashboardLayout({ nav, children, title }) {
           {isEmp && <AttendanceNudge />}
           {children}
         </main>
+        <PushPrompt />
       </div>
     </div>
   );
