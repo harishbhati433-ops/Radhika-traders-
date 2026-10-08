@@ -1,0 +1,34 @@
+{
+  "summary": "Attendance notification reliability overhaul fully verified. 11/11 pytest tests pass against the live preview URL: (1) employee check-in creates exactly one attendance_events doc with push.admin + push.employee + emails map, plus two push_log rows (…:in:admin and …:in:employee) — devices=0 with the expected 'no subscribed device…' reason, emails in 'sent' or 'queued/failed — see Email Log'; (2) check-out behaves the same for kind 'out'; (3) a repeat check-out returns 400 'Already checked out today' and no extra push_log rows (idempotent); (4) push_service.send_push called twice with the same event_key returns skipped='duplicate' on the second call (verified via motor + real push_service.init); (5) /api/cron/attendance-nudges called twice ~60s apart returns 202+run_id, both cron_runs rows finish, and attendance_reminders / nudge push_log have ≤1 row per (employee, kind) — no duplicates across runs; (6) GET /api/admin/push-log and /api/admin/attendance-events return 200 with items containing the required fields; without auth both return 401; (7) toggling campaign 6a9d87a93ee34323c98dfdc1 paused→live creates ZERO rows in email_outbox with priority='bulk' (promotional emails stay OFF — regression safe). Frontend /admin/email-log loads cleanly: heading 'Email & Push Delivery Log' present, data-testids push-log-section, push-log-stats, push-log-table and push-log-row-* all found; attendance-events-table was absent because teardown ran before the UI check (empty-state renders attendance-events-empty testid instead — expected). No console errors other than the pre-existing React duplicate-key `9` warning carried over from iteration_38. Cleanup verified: zero rows left in attendance / attendance_events / attendance_reminders / attendance_push_log / push_events / push_log for rahul.k, zero bulk emails in email_outbox.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin area (any page)", "issues": ["React warning 'Encountered two children with the same key `9`' still present — pre-existing, carried over from iteration_38. Low priority."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_attendance_notifications.py",
+    "/app/test_reports/pytest/attendance_notif.xml"
+  ],
+  "action_items": [
+    "Optional: fix the long-standing React duplicate-key `9` warning in an admin-side list."
+  ],
+  "critical_code_review_comments": [
+    "attendance_routes.notify_punch: uses attendance_events as the idempotency key (unique _id = punch:<eid>:<date>:<kind>) and inserts BEFORE sending — DuplicateKeyError short-circuits the whole notify, so push+email cannot fire twice. Clean design.",
+    "push_service.send_push: dedupes with push_events (unique _id = event_key) BEFORE loading subscriptions — correct ordering, prevents dedupe window race. push_log always written (even on devices=0) for full observability. Good.",
+    "run_attendance_nudges: separates the 'this kind was already pushed today' guard (attendance_push_log) from the 'this kind already got an email today' guard (attendance_reminders) — both are checked per employee per kind per date, so a 15-min cron that fires twice can never duplicate either channel. Correct.",
+    "/api/cron/attendance-nudges: uses hmac.compare_digest on the bearer token (constant-time), de-duplicates by run_id in cron_runs, and 202-acks before enqueueing the actual work. Good shape for a cron endpoint.",
+    "admin_push_log + admin_attendance_events: both strip Mongo _id and surface id as string — no ObjectId leak. 24h stats aggregated server-side.",
+    "Minor: notify_punch's `email_service.last_failure()` is used as a global 'last error', so if two emails fire back-to-back, the status/error pair for the first email can be overwritten by the second attempt's error in the attendance_events.emails map. Acceptable because status still reflects success/failure, but the error string may be slightly inaccurate for the earlier target. Not a bug — flagging only."
+  ],
+  "updated_files": ["/app/backend/tests/test_attendance_notifications.py"],
+  "success_rate": { "backend": "100% (11/11)", "frontend": "100% (push-log section + stats + table + rows verified; email-log page loads clean)" },
+  "test_credentials": "Admin bhatiharish276@gmail.com / Radhika@2023 (portal:admin); App-lock PIN testids are unlock-pin-key-0..9 (NOT pin-key-*). Employee rahul.k / Emp@1234 (id 6aa4f62060cf8b2d2a38c56b). Cron bearer = WEBHOOK_CRON_SECRET from /app/backend/.env.",
+  "seed_data_creation": "Test created a check-in + check-out for rahul.k today (IST date returned by API), triggered two /api/cron/attendance-nudges runs, and toggled campaign 6a9d87a93ee34323c98dfdc1 paused->live. teardown_module deletes: attendance / attendance_events (punch|nudge:<eid>:*) / attendance_reminders / attendance_push_log / push_events / push_log for rahul.k, plus attendance mail rows in email_outbox. Verified 0 rows remain. Campaign is restored to 'live'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "In this env emails hit HTTP 429 at the provider so attendance mails land in email_outbox as 'queued/failed — see Email Log' (status column in attendance_events.emails) rather than 'sent' — this is expected per the review request. Push devices are 0, so push_log rows show devices=0 with reason 'no subscribed device — user has not turned on phone alerts'. Admin app-lock PIN uses testids unlock-pin-key-{0..9} (iteration_38 noted pin-key-* which does not exist). PushDeliveryLog.jsx renders attendance-events-table ONLY when events.length > 0; empty-state uses attendance-events-empty testid.",
+  "rca of the issue": "N/A — no bugs found. The attendance-notification idempotency chain (attendance_events unique _id → push_events unique _id → attendance_reminders + attendance_push_log guards) is implemented correctly; promotional campaign broadcasts remain in-app only; admin observability endpoints and UI render the expected data-testids."
+}
