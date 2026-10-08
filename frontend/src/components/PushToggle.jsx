@@ -39,6 +39,7 @@ export function PushToggle() {
     try {
       if (state === "on") { await disablePush(); setState("off"); toast.success("Phone alerts turned off on this device"); }
       else { await enablePush(); setState("on"); playSound(); toast.success("Phone alerts ON — you will get alerts even when the app is closed"); }
+      window.dispatchEvent(new Event("rt-push-changed"));
     } catch (e) { toast.error(e?.response?.data?.detail || e.message); setState(await getPushState()); }
     setBusy(false);
   };
@@ -62,7 +63,7 @@ export function PushToggle() {
           </button>
         </div>
       </div>
-      {state === "denied" && <p className="mt-1 text-[11px] text-rose-600">Notifications are blocked — allow them in your browser/site settings, then reload.</p>}
+      {state === "denied" && <button onClick={() => window.dispatchEvent(new Event("rt-open-push-prompt"))} data-testid="push-unblock-help" className="mt-1 text-[11px] font-semibold text-rose-600 underline">Notifications are blocked — tap to see how to unblock</button>}
       {state === "on" && !isStandalone() && (
         <button onClick={() => { if (!triggerInstall()) toast.info("Browser menu (⋮) → Install app / Add to Home screen"); }} data-testid="push-install-hint" className="mt-1.5 text-[11px] font-semibold text-amber-700 hover:underline">
           Install the app to see the Radhika Traders logo on alerts (instead of the browser's) →

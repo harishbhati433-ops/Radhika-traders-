@@ -31,6 +31,18 @@ export function PushPrompt() {
     });
   }, [user?.id]);
 
+  // Re-open on demand from the header "Turn on alerts" button (ignores the snooze).
+  useEffect(() => {
+    const reopen = async () => {
+      const s = await getPushState();
+      setIos(s === "unsupported" && isIosBrowser());
+      setStep(s === "denied" ? "denied" : (s === "off" && !isStandalone()) ? "install" : "allow");
+      setOpen(true);
+    };
+    window.addEventListener("rt-open-push-prompt", reopen);
+    return () => window.removeEventListener("rt-open-push-prompt", reopen);
+  }, []);
+
   useEffect(() => {
     const sync = () => setCanInstall(!!window.__rtInstallPrompt);
     const installed = () => { setCanInstall(false); setStep("allow"); toast.success("App installed — alerts will now show the Radhika Traders logo"); };
@@ -42,7 +54,7 @@ export function PushPrompt() {
   const later = () => { localStorage.setItem(KEY + user.id, String(Date.now() + SNOOZE_MS)); setOpen(false); };
   const allow = async () => {
     setBusy(true);
-    try { await enablePush(); playSound(); localStorage.setItem(KEY + user.id, String(Date.now() + 365 * 24 * 3600 * 1000)); setOpen(false); toast.success("Alerts ON — you will now get updates even when the app is closed"); }
+    try { await enablePush(); playSound(); localStorage.setItem(KEY + user.id, String(Date.now() + 365 * 24 * 3600 * 1000)); setOpen(false); window.dispatchEvent(new Event("rt-push-changed")); toast.success("Alerts ON — you will now get updates even when the app is closed"); }
     catch (e) { toast.error(e?.response?.data?.detail || e.message); later(); }
     setBusy(false);
   };
@@ -58,13 +70,31 @@ export function PushPrompt() {
             <img src="/icons/icon-192.png" alt="Radhika Traders" className="h-14 w-14 rounded-2xl ring-2 ring-white/20" />
             <div>
               <div className="text-[10px] font-bold tracking-[0.2em] text-amber-200">RADHIKA TRADERS</div>
-              <div className="font-display text-xl font-extrabold">{step === "install" ? "Install the app" : "Turn on notifications"}</div>
-              <div className="text-sm text-red-100">{step === "install" ? "Step 1 of 2 — get alerts with the Radhika Traders logo" : "Allow alerts to get more updates — even when the app is closed."}</div>
+              <div className="font-display text-xl font-extrabold">{step === "install" ? "Install the app" : step === "denied" ? "Notifications are blocked" : "Turn on notifications"}</div>
+              <div className="text-sm text-red-100">{step === "install" ? "Step 1 of 2 — get alerts with the Radhika Traders logo" : step === "denied" ? "Your phone/browser blocked alerts for this app — unblock in 20 seconds." : "Allow alerts to get more updates — even when the app is closed."}</div>
             </div>
           </div>
         </div>
         <div className="px-6 py-5">
-          {step === "install" ? (
+          {step === "denied" ? (
+            <>
+              <ol className="space-y-2 text-sm text-slate-700" data-testid="push-prompt-denied">
+                {isStandalone() ? (<>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">1.</span><span>Long-press the <b>Radhika Traders</b> app icon → <b>App info</b></span></li>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">2.</span><span>Tap <b>Notifications</b> → turn <b>Allow notifications</b> ON</span></li>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">3.</span><span>Come back here and tap <b>Check again</b></span></li>
+                </>) : (<>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">1.</span><span>Tap the <b>🔒 lock / ⓘ icon</b> left of the web address</span></li>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">2.</span><span><b>Permissions</b> → <b>Notifications</b> → <b>Allow</b></span></li>
+                  <li className="flex gap-2"><span className="font-bold text-red-600">3.</span><span>Tap <b>Check again</b> below (page may reload)</span></li>
+                </>)}
+              </ol>
+              <div className="mt-5 flex items-center gap-2">
+                <button onClick={() => window.location.reload()} data-testid="push-prompt-recheck" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700">Check again</button>
+                <button onClick={later} data-testid="push-prompt-later" className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-100">Later</button>
+              </div>
+            </>
+          ) : step === "install" ? (
             <>
               <p className="text-sm text-slate-700">Install Radhika Traders on your phone so every alert shows <b>our logo and name</b> on your lock screen — not the browser's. It takes one tap and uses no extra space.</p>
               {!canInstall && (

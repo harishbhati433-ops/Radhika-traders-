@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { Menu, X, LogOut, Download, ChevronDown } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { PushPrompt } from "./PushPrompt";
+import { PushStatusButton } from "./PushStatusButton";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
 import { canUser } from "../lib/perm";
 import { ROUTE_PERM } from "../pages/admin/nav";
@@ -167,6 +168,7 @@ export function DashboardLayout({ nav, children, title }) {
             {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             <div className="flex items-center gap-2">
               <span className="hidden lg:block"><ThemeToggle /></span>
+              <PushStatusButton />
               <NotificationBell />
             </div>
           </div>
