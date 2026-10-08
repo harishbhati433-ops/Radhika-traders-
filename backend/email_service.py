@@ -206,10 +206,28 @@ async def enqueue_bulk(to: str, subject: str, html: str) -> None:
                                        "next_try_at": now.isoformat(), "created_at": now.isoformat(), "updated_at": now.isoformat()})
 
 
+QUEUE_MAX_AGE_H = 2       # a queued one-to-one mail older than this is EXPIRED, never sent late (a 3-hour-old check-in confirmation or OTP is useless/misleading)
+
+
+async def expire_stale(max_age_hours: float = QUEUE_MAX_AGE_H, reason: str = "") -> int:
+    """Marks queued outbox mails older than max_age_hours (or everything, when max_age_hours=0) as expired so they never go out after the provider quota resets."""
+    if _db is None:
+        return 0
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(hours=max_age_hours)).isoformat()
+    note = reason or f"expired — waited more than {max_age_hours:g} h for the email provider; not sent"
+    r = await _db.email_outbox.update_many({"status": "queued", "created_at": {"$lte": cutoff}}, {"$set": {"status": "expired", "last_error": note, "expired_at": now.isoformat(), "updated_at": now.isoformat()}})
+    if r.modified_count:
+        await _db.email_log.update_many({"status": "queued", "created_at": {"$lte": cutoff}}, {"$set": {"status": "expired", "error": note}})
+        logger.info(f"email outbox: expired {r.modified_count} stale queued mail(s)")
+    return r.modified_count
+
+
 async def process_outbox(limit: int = 50) -> dict:
-    """Called by the 5-min cron: re-send queued mails whose next_try_at has passed."""
+    """Called by the 5-min cron: re-send queued mails whose next_try_at has passed. Stale mails are expired first — nothing old is ever sent late."""
     if _db is None:
         return {"processed": 0}
+    expired = await expire_stale()
     now = datetime.now(timezone.utc)
     q = {"status": "queued", "next_try_at": {"$lte": now.isoformat()}}
     due = await _db.email_outbox.find({**q, "priority": {"$ne": "bulk"}}).sort("next_try_at", 1).to_list(limit)   # retries of one-to-one mails first
@@ -242,7 +260,7 @@ async def process_outbox(limit: int = 50) -> dict:
             await _db.email_outbox.update_one({"_id": m["_id"]}, {"$set": {"status": "queued", "attempts": attempts, "next_try_at": nxt.isoformat(), "updated_at": now.isoformat()}})
     if due:
         logger.info(f"email outbox: {sent} sent, {requeued} re-queued, {failed} failed of {len(due)} due")
-    return {"processed": len(due), "sent": sent, "requeued": requeued, "failed": failed}
+    return {"processed": len(due), "sent": sent, "requeued": requeued, "failed": failed, "expired": expired}
 
 
 def _wrap(title: str, inner: str) -> str:

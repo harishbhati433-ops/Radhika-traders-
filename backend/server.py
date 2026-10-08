@@ -1652,17 +1652,27 @@ async def admin_attendance_events(limit: int = 100, admin: dict = Depends(requir
 @api.get("/admin/email-log")
 async def admin_email_log(status: Optional[str] = None, q: Optional[str] = None, limit: int = 200, admin: dict = Depends(require_admin)):
     query = {}
-    if status in ("sent", "failed", "queued"):
+    if status in ("sent", "failed", "queued", "expired"):
         query["status"] = status
     if q:
         rx = {"$regex": re.escape(q.strip()), "$options": "i"}
         query["$or"] = [{"to": rx}, {"subject": rx}]
     items = await db.email_log.find(query).sort("created_at", -1).to_list(min(max(limit, 1), 500))
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    sent24, failed24, queued = await asyncio.gather(db.email_log.count_documents({"status": "sent", "created_at": {"$gte": since}}),
-                                                    db.email_log.count_documents({"status": "failed", "created_at": {"$gte": since}}),
-                                                    db.email_outbox.count_documents({"status": "queued"}))
-    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items], "sent_24h": sent24, "failed_24h": failed24, "queued": queued}
+    sent24, failed24, queued, expired = await asyncio.gather(db.email_log.count_documents({"status": "sent", "created_at": {"$gte": since}}),
+                                                             db.email_log.count_documents({"status": "failed", "created_at": {"$gte": since}}),
+                                                             db.email_outbox.count_documents({"status": "queued"}),
+                                                             db.email_outbox.count_documents({"status": "expired"}))
+    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items], "sent_24h": sent24, "failed_24h": failed24, "queued": queued, "expired": expired,
+            "queue_max_age_h": email_service.QUEUE_MAX_AGE_H}
+
+
+@api.post("/admin/email-outbox/expire-all")
+async def admin_email_outbox_expire_all(request: Request, admin: dict = Depends(require_admin)):
+    """Admin: drop every pending mail in the queue — nothing old will be sent when the provider quota resets."""
+    n = await email_service.expire_stale(0, reason=f"cleared by {admin.get('name') or admin['email']} — pending queue emptied, not sent")
+    await log_activity(admin, "email_queue_cleared", request, entity_type="email", entity_id="outbox", entity_label=f"{n} mails", status="expired", detail=f"{n} queued mail(s) expired by admin")
+    return {"expired": n, "message": f"{n} pending email(s) removed from the queue — they will not be sent"}
 
 
 @api.patch("/campaigns/{cid}/toggle-offer")
@@ -3346,6 +3356,12 @@ async def startup():
     await office_timing.load(db)
     await attendance_policy.load(db)
     email_service.set_db(db)
+    try:  # anything queued before this boot that is already older than the max age is stale — expire it so nothing old goes out when the provider quota resets
+        n = await email_service.expire_stale(reason="expired at server restart — stale queue is never sent late")
+        if n:
+            logger.info(f"startup: expired {n} stale queued email(s)")
+    except Exception as e:
+        logger.warning(f"startup outbox expiry failed: {e}")
     try:
         s = await get_settings()
         if s["signup_bonus_enabled"] and float(s["signup_bonus"] or 0) > 0:

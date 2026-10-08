@@ -4,12 +4,14 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api from "../../lib/api";
 import { Input } from "../../components/ui/input";
-import { Mail, RefreshCw, CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
+import { Mail, RefreshCw, CheckCircle2, XCircle, Loader2, Clock, Ban, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
-const FILTERS = [["", "All"], ["sent", "Sent"], ["queued", "Queued (auto-retry)"], ["failed", "Failed"]];
+const FILTERS = [["", "All"], ["sent", "Sent"], ["queued", "Queued (auto-retry)"], ["expired", "Expired"], ["failed", "Failed"]];
 const PILL = {
   sent: ["bg-emerald-50 text-emerald-700", CheckCircle2, "Sent"],
   queued: ["bg-amber-50 text-amber-800", Clock, "Queued · auto-retry"],
+  expired: ["bg-slate-100 text-slate-600", Ban, "Expired · not sent"],
   failed: ["bg-rose-50 text-rose-700", XCircle, "Failed"],
 };
 
@@ -18,6 +20,13 @@ export default function AdminEmailLog() {
   const [q, setQ] = useState("");
   const [data, setData] = useState(null);
   const load = () => api.get("/admin/email-log", { params: { status: status || undefined, q: q || undefined }, noCache: true }).then(({ data }) => setData(data)).catch(() => setData({ items: [], sent_24h: 0, failed_24h: 0 }));
+  const [clearing, setClearing] = useState(false);
+  const clearQueue = async () => {
+    if (!window.confirm(`Remove all ${data?.queued} pending emails from the queue? They will NOT be sent when the provider quota resets.`)) return;
+    setClearing(true);
+    try { const { data: r } = await api.post("/admin/email-outbox/expire-all"); toast.success(r.message); load(); } catch { toast.error("Could not clear the queue"); }
+    setClearing(false);
+  };
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [status, q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -26,11 +35,17 @@ export default function AdminEmailLog() {
         <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Last 24 h</div><div className="mt-1 font-mono text-2xl font-bold text-slate-900">{data ? data.sent_24h + data.failed_24h : "—"}</div><div className="text-[11px] text-slate-500">emails attempted</div></div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-emerald-700">Delivered</div><div className="mt-1 font-mono text-2xl font-bold text-emerald-800" data-testid="email-log-sent24">{data?.sent_24h ?? "—"}</div></div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-rose-700">Failed</div><div className="mt-1 font-mono text-2xl font-bold text-rose-800" data-testid="email-log-failed24">{data?.failed_24h ?? "—"}</div><div className="text-[11px] text-rose-700">bad address / rejected — not retried</div></div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-amber-800">Waiting to retry</div><div className="mt-1 font-mono text-2xl font-bold text-amber-900" data-testid="email-log-queued">{data?.queued ?? "—"}</div><div className="text-[11px] text-amber-800">provider down/limit · auto re-send 5→10→15→30→60→120 min · campaign mails drip 6 per 5 min</div></div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-amber-800">Waiting to retry</div><div className="mt-1 font-mono text-2xl font-bold text-amber-900" data-testid="email-log-queued">{data?.queued ?? "—"}</div><div className="text-[11px] text-amber-800">provider down/limit · auto re-send 5→10→15→30→60→120 min · anything older than {data?.queue_max_age_h ?? 2} h expires and is never sent late{data?.expired ? ` · ${data.expired} expired` : ""}</div>
+          {data?.queued > 0 && (
+            <button onClick={clearQueue} disabled={clearing} data-testid="email-queue-clear" className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-slate-700 disabled:opacity-60">
+              {clearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Clear pending queue — do not send
+            </button>
+          )}
+        </div>
       </div>
       {data?.items?.[0]?.error?.includes("429") && data?.queued > 0 && (
         <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900" data-testid="email-log-quota-banner">
-          <b>Email provider limit reached (HTTP 429).</b> The shared email service has a daily sending quota. Nothing is lost — every email is waiting in the queue and will be delivered automatically as soon as the quota resets (checked every 5 minutes). One-to-one emails (OTP, payouts, attendance, leave) go first; campaign announcements drip slowly afterwards.
+          <b>Email provider limit reached (HTTP 429).</b> The shared email service is rate-limited. New one-to-one emails wait in the queue and are re-sent automatically when the limit clears (checked every 5 minutes) — but only while they are fresh: anything older than {data?.queue_max_age_h ?? 2} hours expires and is never delivered late.
         </div>
       )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
