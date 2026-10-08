@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PushDeliveryLog } from "../../components/PushDeliveryLog";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api from "../../lib/api";
@@ -20,7 +21,7 @@ export default function AdminEmailLog() {
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [status, q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <DashboardLayout nav={adminNav} title="Email Delivery Log">
+    <DashboardLayout nav={adminNav} title="Email & Push Delivery Log">
       <div className="mb-5 grid gap-3 sm:grid-cols-3" data-testid="email-log-stats">
         <div className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Last 24 h</div><div className="mt-1 font-mono text-2xl font-bold text-slate-900">{data ? data.sent_24h + data.failed_24h : "—"}</div><div className="text-[11px] text-slate-500">emails attempted</div></div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-emerald-700">Delivered</div><div className="mt-1 font-mono text-2xl font-bold text-emerald-800" data-testid="email-log-sent24">{data?.sent_24h ?? "—"}</div></div>
@@ -59,6 +60,7 @@ export default function AdminEmailLog() {
           </table>
         )}
       </div>
+      <PushDeliveryLog />
     </DashboardLayout>
   );
 }

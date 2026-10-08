@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timezone
 
 from pywebpush import webpush, WebPushException
+from pymongo.errors import DuplicateKeyError
 
 logger = logging.getLogger("push")
 _db = None
@@ -43,44 +44,72 @@ async def admin_ids() -> list[str]:
     return [str(a["_id"]) async for a in _db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"_id": 1})]
 
 
-def _deliver(sub: dict, payload: str) -> str:
-    """Runs in a worker thread. Returns 'ok', 'gone' (subscription dead) or 'error'."""
+def _deliver(sub: dict, payload: str) -> tuple:
+    """Runs in a worker thread. Returns (status, detail): 'ok' | 'gone' (subscription dead) | 'error'."""
     try:
         webpush(subscription_info=sub, data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
-        return "ok"
+        return "ok", ""
     except WebPushException as e:
         code = getattr(e.response, "status_code", None)
         if code in (404, 410):
-            return "gone"
+            return "gone", f"HTTP {code} subscription expired"
         logger.warning(f"push failed ({code}): {str(e)[:160]}")
-        return "error"
+        return "error", f"HTTP {code}: {str(e)[:160]}" if code else str(e)[:200]
     except Exception as e:
         logger.warning(f"push error: {str(e)[:160]}")
-        return "error"
+        return "error", str(e)[:200]
 
 
-async def send_push(user_ids: list, title: str, body: str, link: str = "", tag: str = "", kind: str = "") -> dict:
+def _host(endpoint: str) -> str:
+    return endpoint.split("/")[2] if endpoint.startswith("http") else endpoint[:40]
+
+
+async def send_push(user_ids: list, title: str, body: str, link: str = "", tag: str = "", kind: str = "", event_key: str = "") -> dict:
+    """Pushes to every device of the given users. event_key (optional) makes the call idempotent: the same key is delivered once, ever."""
     ids = [str(u) for u in user_ids if u]
     if _db is None or not ids:
-        return {"sent": 0}
+        return {"sent": 0, "devices": 0, "reason": "no recipients"}
+    if event_key:
+        try:
+            await _db.push_events.insert_one({"_id": event_key, "title": title[:120], "users": ids, "created_at": _now()})
+        except DuplicateKeyError:
+            logger.info(f"push skipped — duplicate event {event_key}")
+            return {"sent": 0, "devices": 0, "skipped": "duplicate", "reason": f"duplicate event {event_key}"}
     subs = await _db.push_subscriptions.find({"user_id": {"$in": ids}}).to_list(2000)
+    entry = {"title": title[:120], "kind": kind, "event_key": event_key, "users": len(ids), "user_ids": ids[:50], "devices": len(subs), "sent": 0, "gone": 0, "failed": 0, "errors": [], "created_at": _now()}
     if not subs:
-        return {"sent": 0}
+        entry["reason"] = "no subscribed device — user has not turned on phone alerts"
+        await _db.push_log.insert_one(entry)
+        return {"sent": 0, "devices": 0, "reason": entry["reason"]}
     payload = json.dumps({"title": title[:120], "body": (body or "")[:300], "url": link or "/", "tag": tag or kind or "rt", "type": kind, "ts": _now()})
     results = await asyncio.gather(*[asyncio.to_thread(_deliver, s["subscription"], payload) for s in subs])
-    gone = [s["_id"] for s, r in zip(subs, results) if r == "gone"]
+    gone = [s["_id"] for s, (r, _) in zip(subs, results) if r == "gone"]
     if gone:
         await _db.push_subscriptions.delete_many({"_id": {"$in": gone}})
-    sent = sum(1 for r in results if r == "ok")
-    await _db.push_log.insert_one({"title": title[:120], "users": len(ids), "devices": len(subs), "sent": sent, "gone": len(gone), "kind": kind, "created_at": _now()})
-    return {"sent": sent, "devices": len(subs)}
+    entry["sent"] = sum(1 for r, _ in results if r == "ok")
+    entry["gone"] = len(gone)
+    entry["failed"] = sum(1 for r, _ in results if r == "error")
+    entry["errors"] = [{"user_id": s["user_id"], "device": _host(s["endpoint"]), "status": r, "error": d} for s, (r, d) in zip(subs, results) if r != "ok"][:50]
+    if entry["sent"] == 0:
+        entry["reason"] = "all devices failed/expired — see errors"
+    await _db.push_log.insert_one(entry)
+    return {"sent": entry["sent"], "devices": len(subs), "failed": entry["failed"], "gone": entry["gone"]}
+
+
+_tasks: set = set()
 
 
 def _fire(coro) -> None:
+    """Background task that is kept referenced until done — un-referenced tasks can be garbage-collected mid-flight and silently never deliver."""
     try:
-        asyncio.get_running_loop().create_task(coro)
+        t = asyncio.get_running_loop().create_task(coro)
+        _tasks.add(t)
+        t.add_done_callback(_tasks.discard)
     except RuntimeError:
         pass
+
+
+fire = _fire
 
 
 async def notify_one(doc: dict):

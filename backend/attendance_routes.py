@@ -1,5 +1,4 @@
 """Employee attendance (check-in/out, statuses) + monthly salary calculation, exports and dashboard summary."""
-import asyncio
 import calendar
 import hmac
 import io
@@ -13,6 +12,7 @@ from fastapi.responses import StreamingResponse
 import push_service
 from pydantic import BaseModel
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 import pandas as pd
 
 import contact_settings
@@ -173,7 +173,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         await db.attendance.update_many({"_id": {"$in": [a["_id"] for a in stale]}},
                                         {"$set": {"status": "checkout_missing", "auto_closed_at": ts, "hours": None, "worked_minutes": None, "short_minutes": None, "paid_fraction": None, "updated_at": ts}})
         for a in stale:
-            asyncio.create_task(notify_punch({"id": a["employee_id"]}, {**a, "status": "checkout_missing", "auto_closed_at": ts}, "auto"))
+            push_service.fire(notify_punch({"id": a["employee_id"]}, {**a, "status": "checkout_missing", "auto_closed_at": ts}, "auto"))
 
     async def employees(ids: Optional[list] = None, active_only: bool = False) -> dict:
         q = {"role": "employee", "account_status": {"$ne": "deleted"}}
@@ -329,6 +329,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         return st.replace("_", " ").title()
 
     async def notify_punch(emp: dict, rec: dict, kind: str, origin: str = "") -> None:
+        """One attendance event → one push to admins + employee, one email per target. Idempotent per (employee, date, kind); every delivery result is stored in attendance_events."""
+        event_key = f"punch:{emp['id']}:{rec['date']}:{kind}"
+        try:
+            await db.attendance_events.insert_one({"_id": event_key, "employee_id": emp["id"], "date": rec["date"], "kind": kind, "created_at": now_utc().isoformat(), "push": {}, "emails": {}})
+        except DuplicateKeyError:
+            logger.info(f"attendance notify skipped — duplicate event {event_key}")
+            return
         full = await db.users.find_one({"_id": ObjectId(emp["id"])}) if ObjectId.is_valid(emp["id"]) else None
         if not full:
             return
@@ -348,14 +355,24 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         if real_email(full):
             targets.setdefault(real_email(full), (full.get("name", ""), False))
         verb = {"in": "checked in", "out": "checked out", "auto": "did NOT check out (auto-closed)"}[kind]
-        asyncio.create_task(push_service.send_push([str(a["_id"]) for a in admins], f"{full.get('name', '')} {verb}", f"{d} · {when} · {st}" + (f" · {hours}" if hours else ""), "/admin/attendance", kind="attendance"))
-        asyncio.create_task(push_service.send_push([emp["id"]], f"You {verb}", f"{d} · {when} · {st}" + (f" · {hours}" if hours else ""), "/employee/attendance", kind="attendance"))
+        summary = f"{d} · {when} · {st}" + (f" · {hours}" if hours else "")
+        # Push FIRST and awaited (fire-and-forget tasks were being dropped) — one idempotent event per audience.
+        push_res = {}
+        for aud, uids, title, link in (("admin", [str(a["_id"]) for a in admins], f"{full.get('name', '')} {verb}", "/admin/attendance"),
+                                       ("employee", [emp["id"]], f"You {verb}", "/employee/attendance")):
+            try:
+                push_res[aud] = await push_service.send_push(uids, title, summary, link, kind="attendance", event_key=f"{event_key}:{aud}")
+            except Exception as e:
+                push_res[aud] = {"sent": 0, "reason": f"exception: {str(e)[:160]}"}
+                logger.warning(f"attendance push ({aud}) failed: {e}")
+        await db.attendance_events.update_one({"_id": event_key}, {"$set": {"push": push_res}})
         for to, (name, for_admin) in targets.items():
             try:
                 mid = await send_attendance_email(to, name, kind, full.get("name", ""), full.get("employee_code", ""), d, when, st, hours, for_admin, **extra)
             except Exception as e:  # never block attendance on email failure
                 logger.warning(f"attendance email to {to} failed: {e}")
                 mid = None
+            await db.attendance_events.update_one({"_id": event_key}, {"$set": {f"emails.{to.replace('.', '·')}": {"status": "sent" if mid else "queued/failed — see Email Log", "email_id": mid, "error": "" if mid else email_service.last_failure()}}})
             if not mid:
                 await log_activity(SYSTEM, "email_failed", None, entity_type="attendance", entity_id=rec["date"], entity_label=full.get("name", ""), status="failed",
                                    detail=f"{'Check-in' if kind == 'in' else 'Check-out' if kind == 'out' else 'Auto-close'} email to {to} failed after retries — see Email Log")
@@ -978,9 +995,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                 kind = "checkout"
             if not kind:
                 continue
-            if (eid, kind) not in pushed:  # phone alert once per kind per day, independent of email delivery
-                asyncio.create_task(push_service.send_push([eid], "Reminder: please check in now" if kind == "checkin" else "Reminder: you have not checked out",
-                                                           f"{d} · Office hours have {'started' if kind == 'checkin' else 'ended'} — open the app and punch now.", "/employee/attendance", tag=f"nudge-{kind}", kind="attendance"))
+            if (eid, kind) not in pushed:  # phone alert once per kind per day, independent of email delivery (awaited — not fire-and-forget)
+                try:
+                    await push_service.send_push([eid], "Reminder: please check in now" if kind == "checkin" else "Reminder: you have not checked out",
+                                                 f"{d} · Office hours have {'started' if kind == 'checkin' else 'ended'} — open the app and punch now.", "/employee/attendance",
+                                                 tag=f"nudge-{kind}", kind="attendance", event_key=f"nudge:{eid}:{today}:{kind}")
+                except Exception as e:
+                    logger.warning(f"{kind} reminder push to {eid} failed: {e}")
                 await db.attendance_push_log.insert_one({"employee_id": eid, "date": today, "kind": kind, "at": now_utc().isoformat()})
             if not real_email(emp):
                 continue
@@ -990,11 +1011,13 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             except Exception as e:
                 logger.warning(f"{kind} reminder to {emp['email']} failed: {e}")
                 mid = None
-            if not mid:  # not recorded as sent → the next 15-min run retries automatically
+            if not mid and email_service.is_permanent_failure():  # bad address etc. → retry on the next 15-min run
                 await log_activity(SYSTEM, "email_failed", None, entity_type="attendance", entity_id=today, entity_label=emp.get("name", ""), status="failed",
                                    detail=f"{'Check-in' if kind == 'checkin' else 'Check-out'} reminder to {real_email(emp)} failed — will retry in 15 min")
                 continue
-            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": real_email(emp), "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid})
+            # sent now, or parked in the outbox (provider down / rate-limited) which re-sends it automatically — either way record it so the next run does not queue a duplicate
+            await db.attendance_reminders.insert_one({"employee_id": eid, "date": today, "kind": kind, "email": real_email(emp), "sent_at": now_utc().isoformat(), "run_id": run_id, "email_id": mid,
+                                                      "status": "sent" if mid else f"queued — {email_service.last_failure()}"})
             sent += 1
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"finished_at": now_utc().isoformat(), "sent": sent}})
         logger.info(f"attendance nudges {run_id}: {sent} email(s) sent for {today}")

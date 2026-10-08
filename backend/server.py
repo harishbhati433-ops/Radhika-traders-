@@ -1630,6 +1630,25 @@ async def cron_email_retry(request: Request, background: BackgroundTasks):
     return {"ok": True, "queued": True}
 
 
+@api.get("/admin/push-log")
+async def admin_push_log(limit: int = 150, admin: dict = Depends(require_admin)):
+    items = await db.push_log.find({}).sort("created_at", -1).to_list(min(max(limit, 1), 500))
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    agg = await db.push_log.aggregate([{"$match": {"created_at": {"$gte": since}}}, {"$group": {"_id": None, "sent": {"$sum": "$sent"}, "failed": {"$sum": "$failed"}, "gone": {"$sum": "$gone"}, "events": {"$sum": 1},
+                                                                                              "no_device": {"$sum": {"$cond": [{"$eq": ["$devices", 0]}, 1, 0]}}}}]).to_list(1)
+    s = agg[0] if agg else {}
+    return {"items": [{**{k: v for k, v in i.items() if k != "_id"}, "id": str(i["_id"])} for i in items],
+            "sent_24h": s.get("sent", 0), "failed_24h": s.get("failed", 0) + s.get("gone", 0), "events_24h": s.get("events", 0), "no_device_24h": s.get("no_device", 0),
+            "subscribed_users": len(await db.push_subscriptions.distinct("user_id"))}
+
+
+@api.get("/admin/attendance-events")
+async def admin_attendance_events(limit: int = 100, admin: dict = Depends(require_admin)):
+    items = await db.attendance_events.find({}).sort("created_at", -1).to_list(min(max(limit, 1), 300))
+    names = {str(u["_id"]): u.get("name", "") for u in await db.users.find({"_id": {"$in": [ObjectId(i["employee_id"]) for i in items if ObjectId.is_valid(i["employee_id"])]}}, {"name": 1}).to_list(500)}
+    return [{**{k: v for k, v in i.items() if k != "_id"}, "id": i["_id"], "employee_name": names.get(i["employee_id"], "")} for i in items]
+
+
 @api.get("/admin/email-log")
 async def admin_email_log(status: Optional[str] = None, q: Optional[str] = None, limit: int = 200, admin: dict = Depends(require_admin)):
     query = {}

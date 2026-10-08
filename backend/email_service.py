@@ -159,6 +159,7 @@ async def send_email(*, to: str, subject: str, html: str, _from_outbox: bool = F
             return email_id
         except httpx.HTTPStatusError as e:
             last_err = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+            _last_failure = last_err
             logger.error(f"Email send error to {to}: {last_err}")
             await _log(to, subject, "failed", last_err, attempts=attempt + 1)  # 4xx = bad address / rejected content → retrying won't help
             return None
@@ -178,6 +179,15 @@ async def send_email(*, to: str, subject: str, html: str, _from_outbox: bool = F
 
 BULK_PER_RUN = 6          # low-priority (campaign) mails drained per 5-min cron run → max ~70/hour
 DAILY_SOFT_CAP = 400      # total sends/day before bulk is deferred to tomorrow (one-to-one mails are never deferred)
+
+
+def last_failure() -> str:
+    return _last_failure
+
+
+def is_permanent_failure() -> bool:
+    """True when the last send failed for good (bad address / rejected content) and was NOT parked in the outbox for automatic re-send."""
+    return bool(_last_failure) and _permanent(_last_failure)
 
 
 async def sent_today() -> int:
