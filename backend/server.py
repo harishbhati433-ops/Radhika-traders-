@@ -47,6 +47,7 @@ from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked
 import contact_settings
 import push_service
+import assistant_routes
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -3326,6 +3327,7 @@ api.include_router(build_leave_router(db, require_admin, _emp_router.require_emp
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
+api.include_router(assistant_routes.build_router(db))
 app.include_router(api)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 

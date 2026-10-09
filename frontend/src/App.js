@@ -11,6 +11,7 @@ import { NetworkBanner } from "./components/NetworkBanner";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
+import { AssistantWidget } from "./components/AssistantWidget";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ShutdownGate } from "./components/ShutdownGate";
@@ -232,6 +233,7 @@ function App() {
         </Suspense>
         </ShutdownGate>
         <WhatsAppFloat />
+        <AssistantWidget />
         <InstallPrompt />
         <NetworkBanner />
         <CelebrationLayer />

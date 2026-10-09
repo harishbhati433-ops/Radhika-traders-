@@ -1,0 +1,133 @@
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { Sparkles, X, Send, Mic, MicOff, Volume2, VolumeX, MessageCircle, Loader2 } from "lucide-react";
+import { useContact, waLink } from "../lib/contact";
+
+const API = process.env.REACT_APP_BACKEND_URL;
+const SID_KEY = "rt_assistant_sid";
+const SPEAK_KEY = "rt_assistant_speak";
+const HIDE_ON = ["/app/login", "/app/signup", "/app/forgot-password", "/app/forgot-email"];
+const SUGGEST = ["Earning kaise hoti hai?", "Withdrawal kaise milega?", "KYC kaise karein?", "Abhi kaun se offers live hain?"];
+
+const sid = () => { let s = localStorage.getItem(SID_KEY); if (!s) { s = "s" + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, s); } return s; };
+const clean = (t) => t.replace(/\[SUPPORT\]/g, "").trim();
+const isHindi = (t) => /[\u0900-\u097F]/.test(t);
+
+function speak(text) {
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(clean(text).slice(0, 600));
+    const voices = window.speechSynthesis.getVoices();
+    const want = isHindi(text) ? "hi" : "en-IN";
+    u.voice = voices.find((v) => v.lang.toLowerCase().startsWith(want)) || voices.find((v) => v.lang.toLowerCase().startsWith("en-in")) || voices.find((v) => v.lang.toLowerCase().startsWith("hi")) || null;
+    u.lang = u.voice?.lang || (isHindi(text) ? "hi-IN" : "en-IN");
+    u.rate = 1; window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+export function AssistantWidget({ enabled = true }) {
+  const { pathname } = useLocation();
+  const contact = useContact();
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speakOn, setSpeakOn] = useState(localStorage.getItem(SPEAK_KEY) !== "off");
+  const bottomRef = useRef(null);
+  const recRef = useRef(null);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  useEffect(() => {
+    if (!open || msgs.length) return;
+    fetch(`${API}/api/assistant/history/${sid()}`).then((r) => r.json()).then((h) => setMsgs(Array.isArray(h) && h.length ? h.map((m) => ({ role: m.role, text: m.content, support: m.content.includes("[SUPPORT]") })) : [{ role: "assistant", text: "Namaste! Main Radhika Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." }])).catch(() => {});
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, open]);
+
+  if (!enabled || HIDE_ON.includes(pathname) || pathname.startsWith("/admin") || pathname.startsWith("/employee") || pathname.startsWith("/rt-")) return null;
+
+  const ask = async (text) => {
+    const q = (text || input).trim();
+    if (!q || busy) return;
+    setInput(""); setBusy(true);
+    setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "", streaming: true }]);
+    try {
+      const res = await fetch(`${API}/api/assistant/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sid(), message: q }) });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Assistant unavailable"); }
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "", support = false;
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n"); buf = parts.pop();
+        for (const p of parts) {
+          if (!p.startsWith("data: ")) continue;
+          const d = JSON.parse(p.slice(6));
+          if (d.t) { full += d.t; setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: "assistant", text: full, streaming: true }; return c; }); }
+          if (d.done) support = d.support;
+        }
+      }
+      setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: "assistant", text: full, support: support || full.includes("[SUPPORT]") }; return c; });
+      if (speakOn) speak(full);
+    } catch (e) {
+      setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: "assistant", text: e.message || "Sorry, please try again.", support: true }; return c; });
+    }
+    setBusy(false);
+  };
+
+  const toggleMic = () => {
+    if (!SR) return;
+    if (listening) { recRef.current?.stop(); setListening(false); return; }
+    const rec = new SR(); rec.lang = "hi-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onresult = (e) => { const t = e.results[0][0].transcript; setListening(false); ask(t); };
+    rec.onerror = () => setListening(false); rec.onend = () => setListening(false);
+    recRef.current = rec; rec.start(); setListening(true);
+  };
+  const toggleSpeak = () => { const v = !speakOn; setSpeakOn(v); localStorage.setItem(SPEAK_KEY, v ? "on" : "off"); if (!v) window.speechSynthesis?.cancel(); };
+
+  return (
+    <>
+      {!open && (
+        <button onClick={() => setOpen(true)} data-testid="assistant-open" aria-label="Ask Radhika Assistant"
+          className="fixed bottom-[4.75rem] right-4 z-[60] inline-flex h-11 items-center gap-2 rounded-full bg-slate-950 pl-3 pr-4 text-xs font-bold text-white shadow-lg ring-2 ring-amber-400/70 transition-transform hover:scale-105">
+          <Sparkles className="h-4 w-4 text-amber-400" /> Ask Radhika
+        </button>
+      )}
+      {open && (
+        <div data-testid="assistant-panel" className="fixed bottom-4 right-4 z-[70] flex h-[min(34rem,calc(100vh-2rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex items-center gap-3 border-b-4 border-amber-400 bg-[#991B1B] px-4 py-3 text-white">
+            <img src="/icons/icon-192.png" alt="" className="h-9 w-9 rounded-xl" />
+            <div className="min-w-0 flex-1"><div className="text-[10px] font-bold tracking-[0.2em] text-amber-200">RADHIKA TRADERS</div><div className="truncate font-display text-sm font-extrabold">Radhika Assistant · AI Support</div></div>
+            <button onClick={toggleSpeak} data-testid="assistant-speak-toggle" title={speakOn ? "Voice reply on" : "Voice reply off"} className="rounded-full p-1.5 hover:bg-white/15">{speakOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button>
+            <button onClick={() => { setOpen(false); window.speechSynthesis?.cancel(); }} data-testid="assistant-close" className="rounded-full p-1.5 hover:bg-white/15"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-3" data-testid="assistant-messages">
+            {msgs.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-red-600 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800"}`} data-testid={`assistant-msg-${m.role}`}>
+                  {m.text ? clean(m.text) : <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                  {m.support && !m.streaming && (
+                    <a href={waLink(contact.support_mobile, "Hello Radhika Traders support, I need help with: ")} target="_blank" rel="noreferrer" data-testid="assistant-support-btn"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"><MessageCircle className="h-3.5 w-3.5" /> Contact Support (WhatsApp)</a>
+                  )}
+                </div>
+              </div>
+            ))}
+            {msgs.length <= 1 && (
+              <div className="flex flex-wrap gap-1.5 pt-1" data-testid="assistant-suggestions">
+                {SUGGEST.map((s) => <button key={s} onClick={() => ask(s)} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-red-300 hover:text-red-700">{s}</button>)}
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex items-center gap-2 border-t border-slate-200 bg-white p-2.5">
+            {SR && <button type="button" onClick={toggleMic} data-testid="assistant-mic" title="Speak your question" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${listening ? "animate-pulse bg-red-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>{listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}</button>}
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening… boliye" : "Apna sawaal likhiye…"} maxLength={600} data-testid="assistant-input"
+              className="h-10 min-w-0 flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-red-400" />
+            <button type="submit" disabled={busy || !input.trim()} data-testid="assistant-send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600 text-white disabled:opacity-40"><Send className="h-4 w-4" /></button>
+          </form>
+          <div className="bg-white px-3 pb-2 text-center text-[10px] text-slate-400">General info only · personal account details are never shared by AI</div>
+        </div>
+      )}
+    </>
+  );
+}
