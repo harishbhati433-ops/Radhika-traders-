@@ -3327,7 +3327,7 @@ api.include_router(build_leave_router(db, require_admin, _emp_router.require_emp
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
-api.include_router(assistant_routes.build_router(db))
+api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet))
 app.include_router(api)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 

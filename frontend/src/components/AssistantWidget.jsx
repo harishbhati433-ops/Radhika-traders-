@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sparkles, X, Send, Mic, MicOff, Volume2, VolumeX, MessageCircle, Loader2 } from "lucide-react";
 import { useContact, waLink } from "../lib/contact";
+import { getToken } from "../lib/portal";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SID_KEY = "rt_assistant_sid";
 const SPEAK_KEY = "rt_assistant_speak";
 const HIDE_ON = ["/app/login", "/app/signup", "/app/forgot-password", "/app/forgot-email"];
 const SUGGEST = ["Earning kaise hoti hai?", "Withdrawal kaise milega?", "KYC kaise karein?", "Abhi kaun se offers live hain?"];
+const SUGGEST_IN = ["Mera wallet balance kitna hai?", "Meri withdrawal ka status?", "Meri KYC verified hai?", "Mere leads ka status batao"];
+const authHeaders = () => { const t = getToken("customer"); return t ? { Authorization: `Bearer ${t}` } : {}; };
+const loggedIn = () => !!getToken("customer");
 
 const sid = () => { let s = localStorage.getItem(SID_KEY); if (!s) { s = "s" + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, s); } return s; };
 const clean = (t) => t.replace(/\[SUPPORT\]/g, "").trim();
@@ -40,7 +44,7 @@ export function AssistantWidget({ enabled = true }) {
 
   useEffect(() => {
     if (!open || msgs.length) return;
-    fetch(`${API}/api/assistant/history/${sid()}`).then((r) => r.json()).then((h) => setMsgs(Array.isArray(h) && h.length ? h.map((m) => ({ role: m.role, text: m.content, support: m.content.includes("[SUPPORT]") })) : [{ role: "assistant", text: "Namaste! Main Radhika Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." }])).catch(() => {});
+    fetch(`${API}/api/assistant/history/${sid()}`).then((r) => r.json()).then((h) => setMsgs(Array.isArray(h) && h.length ? h.map((m) => ({ role: m.role, text: m.content, support: m.content.includes("[SUPPORT]") })) : [{ role: "assistant", text: "Namaste! Main Radhika Voice Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." }])).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, open]);
 
@@ -52,7 +56,7 @@ export function AssistantWidget({ enabled = true }) {
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "", streaming: true }]);
     try {
-      const res = await fetch(`${API}/api/assistant/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sid(), message: q }) });
+      const res = await fetch(`${API}/api/assistant/chat`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ session_id: sid(), message: q }) });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || "Assistant unavailable"); }
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "", support = false;
       for (;;) {
@@ -87,16 +91,16 @@ export function AssistantWidget({ enabled = true }) {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} data-testid="assistant-open" aria-label="Ask Radhika Assistant"
+        <button onClick={() => setOpen(true)} data-testid="assistant-open" aria-label="Radhika Voice Assistant"
           className="fixed bottom-[4.75rem] right-4 z-[60] inline-flex h-11 items-center gap-2 rounded-full bg-slate-950 pl-3 pr-4 text-xs font-bold text-white shadow-lg ring-2 ring-amber-400/70 transition-transform hover:scale-105">
-          <Sparkles className="h-4 w-4 text-amber-400" /> Ask Radhika
+          <Sparkles className="h-4 w-4 text-amber-400" /> Radhika Voice Assistant
         </button>
       )}
       {open && (
         <div data-testid="assistant-panel" className="fixed bottom-4 right-4 z-[70] flex h-[min(34rem,calc(100vh-2rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center gap-3 border-b-4 border-amber-400 bg-[#991B1B] px-4 py-3 text-white">
             <img src="/icons/icon-192.png" alt="" className="h-9 w-9 rounded-xl" />
-            <div className="min-w-0 flex-1"><div className="text-[10px] font-bold tracking-[0.2em] text-amber-200">RADHIKA TRADERS</div><div className="truncate font-display text-sm font-extrabold">Radhika Assistant · AI Support</div></div>
+            <div className="min-w-0 flex-1"><div className="text-[10px] font-bold tracking-[0.2em] text-amber-200">RADHIKA TRADERS</div><div className="truncate font-display text-sm font-extrabold">Radhika Voice Assistant</div></div>
             <button onClick={toggleSpeak} data-testid="assistant-speak-toggle" title={speakOn ? "Voice reply on" : "Voice reply off"} className="rounded-full p-1.5 hover:bg-white/15">{speakOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button>
             <button onClick={() => { setOpen(false); window.speechSynthesis?.cancel(); }} data-testid="assistant-close" className="rounded-full p-1.5 hover:bg-white/15"><X className="h-4 w-4" /></button>
           </div>
@@ -114,7 +118,7 @@ export function AssistantWidget({ enabled = true }) {
             ))}
             {msgs.length <= 1 && (
               <div className="flex flex-wrap gap-1.5 pt-1" data-testid="assistant-suggestions">
-                {SUGGEST.map((s) => <button key={s} onClick={() => ask(s)} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-red-300 hover:text-red-700">{s}</button>)}
+                {(loggedIn() ? SUGGEST_IN : SUGGEST).map((s) => <button key={s} onClick={() => ask(s)} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-red-300 hover:text-red-700">{s}</button>)}
               </div>
             )}
             <div ref={bottomRef} />
@@ -125,7 +129,7 @@ export function AssistantWidget({ enabled = true }) {
               className="h-10 min-w-0 flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-red-400" />
             <button type="submit" disabled={busy || !input.trim()} data-testid="assistant-send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600 text-white disabled:opacity-40"><Send className="h-4 w-4" /></button>
           </form>
-          <div className="bg-white px-3 pb-2 text-center text-[10px] text-slate-400">General info only · personal account details are never shared by AI</div>
+          <div className="bg-white px-3 pb-2 text-center text-[10px] text-slate-400">{loggedIn() ? "Your account details are shown only to you, after secure login" : "General info · log in to ask about your own wallet, KYC & leads"}</div>
         </div>
       )}
     </>
