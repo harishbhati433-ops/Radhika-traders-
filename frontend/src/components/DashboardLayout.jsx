@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { Menu, X, LogOut, Download, ChevronDown } from "lucide-react";
+import { Menu, X, LogOut, Download, ChevronDown, Mic } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { PushPrompt } from "./PushPrompt";
 import { PushStatusButton } from "./PushStatusButton";
@@ -169,6 +169,13 @@ export function DashboardLayout({ nav, children, title }) {
             <div className="flex items-center gap-2">
               <span className="hidden lg:block"><ThemeToggle /></span>
               <PushStatusButton />
+              {user && user.role !== "admin" && user.role !== "employee" && (
+                <button type="button" data-testid="header-voice-assistant-btn" aria-label="Radhika Voice Assistant" title="Radhika Voice Assistant"
+                  onClick={() => window.dispatchEvent(new CustomEvent("rt-assistant-open", { detail: { mic: true } }))}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-amber-400 shadow-sm ring-2 ring-amber-400/70 transition-transform hover:scale-105 active:scale-95">
+                  <Mic className="h-4 w-4" />
+                </button>
+              )}
               <NotificationBell />
             </div>
           </div>

@@ -40,6 +40,7 @@ export function AssistantWidget({ enabled = true }) {
   const [speakOn, setSpeakOn] = useState(localStorage.getItem(SPEAK_KEY) !== "off");
   const bottomRef = useRef(null);
   const recRef = useRef(null);
+  const wantMic = useRef(false);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   useEffect(() => {
@@ -47,8 +48,16 @@ export function AssistantWidget({ enabled = true }) {
     fetch(`${API}/api/assistant/history/${sid()}`).then((r) => r.json()).then((h) => setMsgs(Array.isArray(h) && h.length ? h.map((m) => ({ role: m.role, text: m.content, support: m.content.includes("[SUPPORT]") })) : [{ role: "assistant", text: "Namaste! Main Radhika Voice Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." }])).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, open]);
+  useEffect(() => {
+    const onOpen = (e) => { setOpen(true); if (e.detail?.mic) wantMic.current = true; };
+    window.addEventListener("rt-assistant-open", onOpen);
+    return () => window.removeEventListener("rt-assistant-open", onOpen);
+  }, []);
+  useEffect(() => {
+    if (open && wantMic.current) { wantMic.current = false; setTimeout(() => startMic(), 250); }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!enabled || HIDE_ON.includes(pathname) || pathname.startsWith("/admin") || pathname.startsWith("/employee") || pathname.startsWith("/rt-")) return null;
+  const hidden = !enabled || HIDE_ON.includes(pathname) || pathname.startsWith("/admin") || pathname.startsWith("/employee") || pathname.startsWith("/rt-");
 
   const ask = async (text) => {
     const q = (text || input).trim();
@@ -78,16 +87,21 @@ export function AssistantWidget({ enabled = true }) {
     setBusy(false);
   };
 
-  const toggleMic = () => {
-    if (!SR) return;
-    if (listening) { recRef.current?.stop(); setListening(false); return; }
+  const startMic = () => {
+    if (!SR || listening || recRef.current) return;
     const rec = new SR(); rec.lang = "hi-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
     rec.onresult = (e) => { const t = e.results[0][0].transcript; setListening(false); ask(t); };
-    rec.onerror = () => setListening(false); rec.onend = () => setListening(false);
+    rec.onerror = () => { setListening(false); recRef.current = null; }; rec.onend = () => { setListening(false); recRef.current = null; };
     recRef.current = rec; rec.start(); setListening(true);
+  };
+  const toggleMic = () => {
+    if (!SR) return;
+    if (listening) { recRef.current?.stop(); recRef.current = null; setListening(false); return; }
+    startMic();
   };
   const toggleSpeak = () => { const v = !speakOn; setSpeakOn(v); localStorage.setItem(SPEAK_KEY, v ? "on" : "off"); if (!v) window.speechSynthesis?.cancel(); };
 
+  if (hidden) return null;
   return (
     <>
       {!open && (
