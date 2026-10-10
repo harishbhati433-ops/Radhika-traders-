@@ -384,10 +384,15 @@ def new_lead_token() -> str:
     return "RT-" + "".join(secrets.choice(TOKEN_ALPHABET) for _ in range(8))
 
 
+PLACEHOLDER_RX = re.compile(r"\{\{?\s*(user_?unique_?id|user_?id|token)\s*\}?\}", re.I)
+
+
 def _redirect_with_token(c: dict, slug: str, token: str) -> str:
     url = _primary_link(c) or f"/campaign/{slug}"
     if not c.get("token_passing") or not token:
-        return url
+        return PLACEHOLDER_RX.sub("", url)
+    if PLACEHOLDER_RX.search(url):
+        return PLACEHOLDER_RX.sub(token, url)
     from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
     param = re.sub(r"[^A-Za-z0-9_\-\.]", "", c.get("token_param") or "") or "user_id"
     parts = urlsplit(url)

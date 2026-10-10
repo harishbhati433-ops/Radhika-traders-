@@ -1,0 +1,32 @@
+{
+  "summary": "Comprehensive end-to-end testing of User Unique ID Passing feature on Radhika Traders. Backend pytest suite (9 tests) and full UI flows (admin, customer, public lead form) all PASSED. Feature works correctly for both ON and OFF states; tokens match ^RT-[A-Z2-9]{8}$; CSV/XLSX exports include 'User Unique ID' as 2nd column; admin search finds leads by token; customer My Leads shows token badges; public lead form redirect contains sub_id=RT-... param when ON.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Multiple admin pages", "issues": ["Console warning: 'Encountered two children with the same key' (duplicate React keys, 5x). Non-fatal but should be fixed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_token_passing.py",
+    "/app/test_reports/pytest/token_passing_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Fix duplicate React key warning observed in console on admin pages (not blocking)."
+  ],
+  "critical_code_review_comments": [
+    "Token generation uses an 8-char A-Z/2-9 alphabet with unique mongo index + backfill on startup; verified via duplicate submissions (unique tokens).",
+    "redirect_url correctly omits token param when token_passing is OFF while still returning the token in response body (used by customer dashboards/exports).",
+    "Export (CSV + XLSX) correctly injects 'User Unique ID' column at index 1 right after 'Lead ID' and includes it when filtering by search or campaign_id.",
+    "_lead_query matches token in search; verified via GET /api/admin/leads?search=RT-XXXXXXXX."
+  ],
+  "updated_files": ["/app/backend/tests/test_token_passing.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100%"},
+  "test_credentials": "Used admin bhatiharish276@gmail.com / Radhika@2023 (PIN 2580) and customer testcust@example.com / Test@1234 (PIN 2468) as per /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 3 QA Token test leads during testing. CLEANED UP: all 4 QA Token leads deleted from mongo (deletedCount=4) and campaign token_passing reset to false, token_param='user_id'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Feature 'User Unique ID Passing' is production-ready. Campaign axis-mutual-fund-sip is now in OFF state. test_token_passing.py is self-cleaning (last test resets campaign). Login response key is 'token' (NOT access_token). Public lead form auto-redirects quickly; use page.route to intercept offertracking.in URL or read lead-continue href within ~0.9s. Admin PIN screen uses on-screen digit buttons (click, not keyboard).",
+  "rca of the issue": "No issues found."
+}
