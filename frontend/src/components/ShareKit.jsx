@@ -11,6 +11,7 @@ export function useBlobUrl(path, deps = []) {
   useEffect(() => {
     let active = true, obj = "";
     setUrl("");
+    if (!path) return;
     api.get(path, { responseType: "blob" }).then(({ data }) => { if (!active) return; obj = URL.createObjectURL(data); setUrl(obj); }).catch(() => {});
     return () => { active = false; if (obj) URL.revokeObjectURL(obj); };
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,7 +61,7 @@ export function ShareKit({ c, link, user }) {
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-testid="share-kit-poster">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500"><ImageIcon className="h-3.5 w-3.5" /> Poster (1080×1080)</div>
-          <div className="aspect-square overflow-hidden rounded-xl bg-[#0B0F17]">{poster ? <img src={poster} alt="Campaign poster" className="h-full w-full object-cover" data-testid="share-kit-poster-img" /> : <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>}</div>
+          <div className="aspect-square overflow-hidden rounded-xl bg-[#0B0F17]">{poster ? <img src={poster} alt="Campaign poster" className="h-full w-full object-contain" data-testid="share-kit-poster-img" /> : <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>}</div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => poster && dl(poster, fname)} disabled={!poster} data-testid="share-kit-poster-download" className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Download</button>
             <button onClick={sharePoster} disabled={!poster || sharing} data-testid="share-kit-poster-share" className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-50">{sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />} Share on WhatsApp</button>

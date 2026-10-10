@@ -14,7 +14,7 @@ const EMPTY = {
   description: "", requirements: "", important_notes: "", min_requirement: "", max_payout: "",
   special_bonus: "", payment_timeline: "", validity: "", important_conditions: "",
   start_date: "", end_date: "", budget: "", report_frequency: "", payment_terms: "",
-  logo_url: "", banner_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [], token_passing: false, token_param: "user_id",
+  logo_url: "", banner_url: "", poster_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [], token_passing: false, token_param: "user_id",
 };
 const LEAD_FIELDS = [["name", "Full Name"], ["mobile", "Mobile Number"], ["email", "Gmail / Email ID"], ["pan", "PAN Number"], ["dob", "Date of Birth"], ["aadhaar", "Aadhaar Number"], ["bank_account", "Bank Account Number"], ["ifsc", "IFSC Code"], ["upi", "UPI ID"], ["address", "Address"]];
 const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
@@ -115,6 +115,10 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
           <Row>
             <ImageUpload label="Logo" value={f.logo_url} onChange={(v) => setF({ ...f, logo_url: v })} testId="cf-upload-logo" fit="contain"
               hint="Square 512×512 px PNG (1:1), logo centred with ~15% blank margin on all sides, white or transparent background, under 300 KB. Shown as a small rounded tile — avoid tiny text." />
+            <ImageUpload label="Share Poster — 1080×1080 px (1:1)" value={f.poster_url} onChange={(v) => setF({ ...f, poster_url: v })} testId="cf-upload-poster" fit="contain"
+              hint="Your own designed poster. Goes attached automatically when a partner shares this campaign's referral link on WhatsApp / Telegram / Instagram / Facebook. If empty, the auto-generated poster is used." />
+          </Row>
+          <Row>
             <div>
               <ImageUpload label="Banner — 1200×400 px (3:1). Auto-shows in the customer dashboard slider while the campaign is live." value={f.banner_url} onChange={(v) => setF({ ...f, banner_url: v })} testId="cf-upload-banner" />
               <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-700">

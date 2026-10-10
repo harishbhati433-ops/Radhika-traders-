@@ -22,6 +22,7 @@ export function ReferEarnCard({ code }) {
 
   const link = `${window.location.origin}/app/signup?ref=${code}`;
   const qr = useBlobUrl(`/share/qr?url=${encodeURIComponent(link)}&size=400`, [link]);
+  const poster = useBlobUrl("/share/refer-poster", []);
   const partnerName = (user?.name || "a partner").replace(/\b\w/g, (m) => m.toUpperCase());
   const bonusLine = signupBonus > 0 ? `\n🎁 Sign up with my link and receive a *₹${signupBonus} welcome bonus*` : "";
   const inviteMessage =
@@ -98,7 +99,7 @@ export function ReferEarnCard({ code }) {
           <button onClick={() => { if (!qr) return; const a = document.createElement("a"); a.href = qr; a.download = `invite-qr-${code}.png`; a.click(); }} disabled={!qr} data-testid="refer-qr-download" className="mt-2 inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50"><Download className="h-3 w-3" /> Download</button>
         </div>
       </div>
-      <div className="mt-3"><ShareButtons link={link} message={shareMsg} copyText={inviteMessage} testPrefix="refer-share" /></div>
+      <div className="mt-3"><ShareButtons link={link} message={shareMsg} copyText={inviteMessage} testPrefix="refer-share" posterUrl={poster} posterName={`refer-earn-${code}.png`} /></div>
       {stats?.recent?.length > 0 && (
         <div className="mt-5 rounded-xl border border-slate-200 bg-white" data-testid="refer-joined-list">
           <button type="button" onClick={() => setOpen(!open)} data-testid="refer-joined-toggle" className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-bold text-slate-800">

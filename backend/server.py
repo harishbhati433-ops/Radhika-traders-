@@ -168,6 +168,7 @@ class SettingsIn(BaseModel):
     referral_monthly_limit: Optional[int] = None
     withdrawal_days: Optional[List[int]] = None
     withdrawal_dates: Optional[List[int]] = None
+    refer_poster_url: Optional[str] = None
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -194,7 +195,9 @@ async def get_settings() -> dict:
             "signup_bonus": float(s.get("signup_bonus", 50)), "signup_bonus_enabled": bool(s.get("signup_bonus_enabled", True)), "withdrawals_enabled": bool(s.get("withdrawals_enabled", True)),
             "withdrawals_paused_message": s.get("withdrawals_paused_message") or "Withdrawals are temporarily paused by Radhika Traders. Please check back soon.",
             "referral_daily_limit": int(s.get("referral_daily_limit", 2)), "referral_monthly_limit": int(s.get("referral_monthly_limit", 10)),
-            "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])]}
+            "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])],
+            "refer_poster_url": s.get("refer_poster_url") or "",
+            **{k: s[k] for k in ("extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
 
 
 DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -375,6 +378,7 @@ class CampaignIn(BaseModel):
     lead_fields: List[dict] = []
     token_passing: bool = False
     token_param: str = "user_id"
+    poster_url: str = ""
 
 
 TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -670,7 +674,7 @@ async def pay_referral_bonus(new_user: dict):
 async def public_settings():
     s = await get_settings()
     is_open, reason = withdrawals_open(s)
-    return {**s, "signup_bonus": s["signup_bonus"] if s["signup_bonus_enabled"] else 0, "withdrawals_open": is_open, "withdrawals_closed_reason": reason}
+    return {**s, "signup_bonus": s["signup_bonus"] if s["signup_bonus_enabled"] else 0, "withdrawals_open": is_open, "withdrawals_closed_reason": reason, "refer_poster_url": s.get("refer_poster_url", "")}
 
 
 @api.put("/admin/settings")
@@ -704,6 +708,8 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
         upd["withdrawal_days"] = sorted({int(d) for d in body.withdrawal_days if 0 <= int(d) <= 6})
     if body.withdrawal_dates is not None:
         upd["withdrawal_dates"] = sorted({int(d) for d in body.withdrawal_dates if 1 <= int(d) <= 31})
+    if body.refer_poster_url is not None:
+        upd["refer_poster_url"] = body.refer_poster_url.strip()[:500]
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.settings.update_one({"key": "app"}, {"$set": {**upd, "updated_at": now_iso()}}, upsert=True)
@@ -2967,11 +2973,37 @@ async def _logo_bytes(logo_url: str) -> Optional[bytes]:
         return None
 
 
+async def _uploaded_poster(url: str):
+    """Admin-uploaded poster bytes + content type, or None."""
+    if not url:
+        return None
+    path = url.split("/api/files/", 1)[1] if "/api/files/" in url else url
+    data = await _logo_bytes(path if not url.startswith("http") or "/api/files/" in url else url)
+    if not data:
+        return None
+    ext = path.rsplit(".", 1)[-1].lower() if "." in path else "png"
+    return data, MIME_TYPES.get(ext, "image/png"), ext
+
+
+@api.get("/share/refer-poster")
+async def share_refer_poster(user: dict = Depends(get_current_user)):
+    s = await get_settings()
+    up = await _uploaded_poster(s.get("refer_poster_url", ""))
+    if not up:
+        raise HTTPException(status_code=404, detail="No Refer & Earn poster uploaded")
+    data, ct, ext = up
+    return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="refer-earn-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, max-age=3600"})
+
+
 @api.get("/share/poster/{slug}")
 async def share_poster(slug: str, request: Request, user: dict = Depends(get_current_user)):
     c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
     if not c:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    up = await _uploaded_poster(c.get("poster_url", ""))
+    if up:
+        data, ct, ext = up
+        return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="{slug}-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, max-age=3600"})
     origin = _share_origin(request)
     link = (f"{origin}/join/{slug}?ref={user.get('referral_code')}" if any(f.get("enabled") for f in c.get("lead_fields", [])) else f"{origin}/api/go/{slug}?ref={user.get('referral_code')}") if user.get("referral_code") else f"{origin}/campaign/{slug}"
     logo = await _logo_bytes(c.get("logo_url", ""))

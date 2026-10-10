@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShareButtons } from "../components/ShareButtons";
-import { ShareKit } from "../components/ShareKit";
+import { ShareKit, useBlobUrl } from "../components/ShareKit";
 import api, { fileUrl } from "../lib/api";
 import { useLivePoll } from "../lib/useLivePoll";
 import { useAuth } from "../context/AuthContext";
@@ -37,6 +37,7 @@ export default function CampaignDetail() {
   useEffect(() => {
     if (user) api.get("/my-clicks").then(({ data }) => setClicks(data)).catch(() => {});
   }, [user]);
+  const poster = useBlobUrl(user?.role === "customer" ? `/share/poster/${slug}` : "", [slug, user?.role]);
 
   if (notFound) return <PublicLayout><div className="mx-auto max-w-2xl px-6 py-24 text-center"><h1 className="font-display text-2xl font-bold">Campaign not found</h1><Link to="/campaigns" className="mt-4 inline-block text-red-600">← Back to campaigns</Link></div></PublicLayout>;
   if (!c) return <PublicLayout><div className="flex justify-center py-32"><div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div></PublicLayout>;
@@ -139,7 +140,7 @@ export default function CampaignDetail() {
                     <input data-testid="referral-link-input" readOnly value={referralLink} className="flex-1 bg-transparent text-xs text-slate-600 outline-none" />
                     <button data-testid="referral-copy-btn" onClick={copyRef} className="rounded-md bg-slate-900 p-1.5 text-white"><Copy className="h-3.5 w-3.5" /></button>
                   </div>
-                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage} copyText={applyMessage} testPrefix="detail-share" /></div>
+                  <div className="mt-4"><ShareButtons link={referralLink} message={applyMessage} copyText={applyMessage} testPrefix="detail-share" posterUrl={poster} posterName={`${c.slug}-${refCode || "share"}.png`} /></div>
                   <div className="mt-4 flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
                     <span className="flex items-center gap-1.5 font-semibold text-emerald-800"><MousePointerClick className="h-3.5 w-3.5" /> Clicks on your link</span>
                     <span className="font-mono font-bold text-emerald-700" data-testid="referral-clicks">{myClicks}</span>

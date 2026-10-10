@@ -631,3 +631,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Lead leaves approved: issued card → cancelled; scratched card → reversed + debit scratch_reward_reversal; extra bonus net → debit lead_extra_bonus_reversal. If main balance insufficient → pending_adjustments (open) auto-recovered on next credit (lead fund / scratch / extra) ; admin can Waive. Activity log action lead_rewards_reversed.
 - Frontend: ScratchCards.jsx (customer dashboard, canvas scratch), BonusWalletCard shows remaining/released, RewardsSetting.jsx on Admin Dashboard (settings + Users/Cards/Bonus txns/Adjustments tabs).
 - Verified by /app/backend/tests/sim_rewards_flow.py (approve→extra+card→scratch→reject reversal→re-approve→pending) + UI screenshots.
+
+## Update (Oct 2026) — Admin-uploaded Share Posters
+- Campaign field poster_url (CampaignForm "Share Poster" ImageUpload, cf-upload-poster). Settings refer_poster_url (Admin Dashboard "Refer & Earn Poster" card, ReferPosterSetting.jsx, refer-poster-upload). get_settings now also passes through reward settings keys (bug fix: previously filtered out).
+- GET /api/share/poster/{slug} returns uploaded poster if set, else auto-generated (fallback per user choice). GET /api/share/refer-poster returns uploaded invite poster (404 if none).
+- ShareButtons.jsx: when posterUrl provided → "With Poster | Normal Link" toggle; poster mode shares poster file + message via navigator.share (mobile), desktop fallback = download poster + copy message + open WhatsApp/Telegram. Used in CampaignDetail (detail-share-*) and ReferEarnCard (refer-share-*). Link preview (OG) intentionally NOT changed (user choice).
+- Verified: upload → settings/campaign → poster endpoints return identical bytes; UI toggle + Share Kit shows uploaded poster. Test posters cleared afterwards.
