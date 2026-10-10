@@ -393,6 +393,8 @@ def _redirect_with_token(c: dict, slug: str, token: str) -> str:
         return PLACEHOLDER_RX.sub("", url)
     if PLACEHOLDER_RX.search(url):
         return PLACEHOLDER_RX.sub(token, url)
+    if url.endswith(("_", "-", "=", "/", ":")):
+        return url + token
     from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
     param = re.sub(r"[^A-Za-z0-9_\-\.]", "", c.get("token_param") or "") or "user_id"
     parts = urlsplit(url)

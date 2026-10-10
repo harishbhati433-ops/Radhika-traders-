@@ -171,20 +171,22 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
             {f.token_passing && (() => {
               const primary = (f.affiliate_links.find((l) => l.is_primary && l.url) || f.affiliate_links.find((l) => l.url) || {}).url || "https://broker.com/open";
               const hasPh = /\{\{?\s*(user_?unique_?id|user_?id|token)\s*\}?\}/i.test(primary);
+              const tail = /[_\-=\/:]$/.test(primary);
               const param = (f.token_param || "").replace(/[^A-Za-z0-9_\-.]/g, "") || "user_id";
-              const preview = hasPh ? primary.replace(/\{\{?\s*(user_?unique_?id|user_?id|token)\s*\}?\}/gi, "RT-A7K92PK4") : `${primary}${primary.includes("?") ? "&" : "?"}${param}=RT-A7K92PK4`;
+              const preview = hasPh ? primary.replace(/\{\{?\s*(user_?unique_?id|user_?id|token)\s*\}?\}/gi, "RT-A7K92PK4") : tail ? `${primary}RT-A7K92PK4` : `${primary}${primary.includes("?") ? "&" : "?"}${param}=RT-A7K92PK4`;
               return (
                 <div className="mt-3 space-y-2">
                   <div className="grid gap-2 sm:grid-cols-[1fr_2fr] sm:items-center">
                     <div>
                       <Label className="text-xs">URL parameter name</Label>
-                      <Input data-testid="cf-token-param" value={f.token_param || ""} onChange={set("token_param")} placeholder="user_id" disabled={hasPh} className="mt-1 h-9 font-mono text-sm disabled:opacity-50" />
+                      <Input data-testid="cf-token-param" value={f.token_param || ""} onChange={set("token_param")} placeholder="user_id" disabled={hasPh || tail} className="mt-1 h-9 font-mono text-sm disabled:opacity-50" />
                     </div>
                     <div className="text-xs text-slate-500 break-all" data-testid="cf-token-preview">Redirect preview: <span className="font-mono text-slate-800">{preview}</span></div>
                   </div>
                   <div className="rounded-lg bg-white/70 p-2 text-[11px] text-slate-600" data-testid="cf-token-placeholder-hint">
                     {hasPh ? <>Link में <span className="font-mono font-bold text-emerald-700">{"{USER_ID}"}</span> मिला — ID ठीक उसी जगह pass होगी।</>
-                      : <>Agar ID URL ke beech me chahiye (jaise <span className="font-mono">..._398888_{"{USER_ID}"}</span>), to affiliate link me us jagah <span className="font-mono font-bold text-amber-700">{"{USER_ID}"}</span> likh dein. Warna ID upar wale parameter ke saath URL ke end me jud jayegi.</>}
+                      : tail ? <>Link का last character <span className="font-mono font-bold text-emerald-700">"{primary.slice(-1)}"</span> है — ID सीधे उसके आगे जुड़ जाएगी (जैसे <span className="font-mono">..._398888_RT-A7K92PK4</span>)।</>
+                      : <>Agar ID URL ke beech me chahiye (jaise <span className="font-mono">..._398888_{"{USER_ID}"}</span>), to affiliate link me us jagah <span className="font-mono font-bold text-amber-700">{"{USER_ID}"}</span> likh dein ya link ko <span className="font-mono">_</span> par khatam karein. Warna ID upar wale parameter ke saath URL ke end me jud jayegi.</>}
                   </div>
                 </div>
               );

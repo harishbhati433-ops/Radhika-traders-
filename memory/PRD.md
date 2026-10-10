@@ -621,3 +621,4 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Redirect after lead form submit (POST /api/leads/{slug} -> redirect_url): ON + `{USER_ID}` placeholder in affiliate URL -> replaced in place (e.g. ..._398888_{USER_ID}); ON without placeholder -> appended as ?<token_param>=RT-...; OFF -> plain URL (placeholder stripped).
 - Exports: /api/admin/leads/export csv+xlsx have "User Unique ID" column (2nd). Shown in Admin Leads table/detail, customer My Leads; admin lead search matches token.
 - Tested: iteration_40.json (backend+frontend PASS).
+- Trailing-char rule: if affiliate URL ends with `_` `-` `=` `/` `:` (e.g. HDFC Sky `..._398888_`), ID is appended directly at the end (no new param). Verified via live lead POST (ON -> ..._398888_RT-XXXX, OFF -> plain).
