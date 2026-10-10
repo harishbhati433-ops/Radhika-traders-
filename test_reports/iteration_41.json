@@ -1,0 +1,43 @@
+{
+  "summary": "Full end-to-end testing of Signup Bonus Locked Wallet → Scratch Cards + 5% extra bonus feature. Backend: wrote /app/backend/tests/test_scratch_rewards.py with 23 tests covering settings validation, happy path (approve → extra+card, idempotent reapprove, scratch, idempotent reject, reversal, re-approve, pending state cancels card), pending-adjustment path (zero balance → pending → auto recover on next credit → admin waive), scratch-amount cap (room-limited at remaining locked), legacy regression (no_bonus skip, no extra), and admin /api/admin/rewards shape — 23/23 PASS when run serially. Frontend: customer scratchtest@example.com flow verified end-to-end (login → PIN → dashboard scratch-cards-section, bonus-wallet-card ‘Signup Bonus · Locked’ with released-so-far note, canvas drag reveals card, done chip ₹20 appears, bonus locked decreases 180→140, wallet page shows SC-/XB- transactions). Admin flow verified at /admin: rewards-setting panel with rw-extra-pct/save (10→reload persists→restore 5), rw-scratch-toggle (OFF→ON), rw-scratch-mode select, and all four tabs rw-tab-{users,cards,extra,adj} with rw-table-* populated (Scratch Tester row visible in Users). Settings restored to defaults (5% / fixed ₹20 / scratch ON).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "pytest config", "issue": "Default addopts in /app/backend/pytest.ini enables xdist loadscope. Running test_scratch_rewards.py in parallel causes cross-interference because 4 test classes all mutate the same scratchtest@example.com customer state. Must run with `-n 0 -o addopts=` for correctness. Tests pass 100% serially."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Customer dashboard & Admin dashboard", "issues": ["Console error (non-fatal, repeating): 'Encountered two children with the same key' React warning. Same warning noted in iteration_40. Still not fixed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scratch_rewards.py",
+    "/app/test_reports/pytest/scratch_rewards.xml"
+  ],
+  "action_items": [
+    "(Optional) Fix persistent duplicate React key warning across admin & customer dashboards (carry-over from iteration_40).",
+    "(Optional) Add pytest marker/fixture or document in docstring that test_scratch_rewards.py must be run serially: `pytest test_scratch_rewards.py -n 0 -o addopts=`.",
+    "(State hygiene) scratchtest@example.com left with locked ₹140 (not 200) and balance ₹155 because 3 UI-test leads remain 'approved' with scratched cards. Not blocking — main agent may reject the 3 QA UI leads via /admin to restore to 200. Settings have been reset to defaults."
+  ],
+  "critical_code_review_comments": [
+    "rewards.py:_reverse correctly handles insufficient balance by debiting what's available and inserting a pending_adjustment row with remaining=unmet amount — balance can never go negative (verified test_simulate_zero_balance_and_reject).",
+    "rewards.py:apply_pending_adjustments is called from on_lead_approved (after extra credit) and from scratch endpoint, enabling auto-recovery (verified).",
+    "rewards.py:on_lead_approved idempotency uses `_extra_net(lid) <= 0` check — correctly skips re-crediting (verified test_idempotent_reapprove). Scratch card is only created once because reversed-but-reapproved only re-issues when active cards don't block (reversed/cancelled are inactive).",
+    "Scratch card amount is correctly capped by `remaining - outstanding_cards` so setting scratch_amount=500 produces card of only remaining locked room (verified test_cap_and_release_then_restore).",
+    "GET /api/scratch-cards hides cancelled/reversed cards (filter: status in [issued, scratched]) — matches spec that 'Scratch card list for customer must not show cancelled cards' (verified test_pending_cancels_card).",
+    "Settings validation PUT /api/admin/rewards/settings correctly rejects percent>100, mode not in {fixed,range}, and negative amounts with 400 (verified)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scratch_rewards.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23 serial)", "frontend": "100%"},
+  "test_credentials": "Used admin bhatiharish276@gmail.com / Radhika@2023 (PIN 2580), customer scratchtest@example.com / Test@1234 (PIN 2468), legacy testcust@example.com / Test@1234 — per /app/memory/test_credentials.md.",
+  "seed_data_creation": "~15 QA leads created on campaign axis-mutual-fund-sip for scratchtest and 1 for testcust. Legacy lead was rejected by the test for cleanup. 3 UI-generated leads remain approved+scratched on scratchtest (leaves locked at ₹140 instead of ₹200). Simulated qa_sim debit transaction was inserted and deleted during pending-adjustment test. No persistent DB pollution expected beyond approved leads.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests MUST run serially: `pytest /app/backend/tests/test_scratch_rewards.py -n 0 -o addopts= -v`. Scratch Card UI requires: (a) PIN keypad is on-screen digit buttons, not text input (click buttons whose innerText matches each digit); (b) customer login via API + localStorage.rt_token_customer/rt_user_customer is fastest; (c) scratch canvas needs horizontal drags covering >50% to trigger reveal — 12-14 row raster works. Admin rewards panel is on /admin dashboard home, auto-scroll into view. All data-testids documented in the review request are present and working.",
+  "rca of the issue": "No feature-level issues found. The only test-infra observation was pytest-xdist parallelism causing self-interference since all four test classes operate on the single scratchtest customer; running serially gives 100% pass. The React duplicate-key console warning is pre-existing from previous iterations and unrelated to this feature."
+}
