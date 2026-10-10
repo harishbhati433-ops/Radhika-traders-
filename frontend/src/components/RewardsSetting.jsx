@@ -37,29 +37,34 @@ export function RewardsSetting() {
         <div className="rounded-xl bg-amber-500 p-2.5 text-white"><Gift className="h-5 w-5" /></div>
         <div>
           <div className="font-display font-bold text-slate-900">Scratch Card & Extra Bonus (Signup Bonus release)</div>
-          <div className="text-xs text-slate-600">Signup Bonus stays LOCKED. On every approved lead (while locked balance &gt; ₹0) the customer gets a Scratch Card that moves money from Locked → Main Wallet, plus an extra % of the campaign payout. Both stop automatically at ₹0. Rejecting an approved lead cancels/reverses its rewards.</div>
+          <div className="text-xs text-slate-600">Signup Bonus stays LOCKED. On every approved lead (while locked balance &gt; ₹0) the customer gets a Scratch Card worth a % of that campaign's payout — the amount moves from Locked → Main Wallet. Stops automatically at ₹0. Rejecting an approved lead cancels/reverses its rewards. The company-paid extra bonus is a separate optional switch (OFF by default).</div>
         </div>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-amber-200 bg-white p-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Percent className="h-4 w-4 text-amber-600" /> Extra bonus per approved lead</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Percent className="h-4 w-4 text-amber-600" /> Extra bonus (company-paid, optional)</div>
+            <button type="button" disabled={busy} onClick={() => save({ extra_bonus_enabled: !s.extra_bonus_enabled }, s.extra_bonus_enabled ? "Extra bonus turned OFF" : "Extra bonus turned ON")} data-testid="rw-extra-toggle"
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-white ${s.extra_bonus_enabled ? "bg-emerald-600" : "bg-slate-500"}`}><Power className="h-3.5 w-3.5" /> {s.extra_bonus_enabled ? "ON" : "OFF"}</button>
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <input data-testid="rw-extra-pct" {...num("extra_bonus_percent")} step="0.5" /> <span className="text-slate-600">% of campaign payout → Main Wallet (0 = off)</span>
+            <input data-testid="rw-extra-pct" {...num("extra_bonus_percent")} step="0.5" /> <span className="text-slate-600">% of campaign payout, paid extra by company → Main Wallet</span>
             <button type="button" disabled={busy} onClick={() => save({ extra_bonus_percent: Number(s.extra_bonus_percent) })} data-testid="rw-extra-save" className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" /> Save</button>
           </div>
+          <div className="mt-1 text-[11px] text-slate-500">Default OFF. Only when ON, each approved lead also credits this extra amount on top of the Scratch Card.</div>
         </div>
         <div className="rounded-xl border border-amber-200 bg-white p-3">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Ticket className="h-4 w-4 text-amber-600" /> Scratch Card</div>
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900"><Ticket className="h-4 w-4 text-amber-600" /> Scratch Card (releases Signup Bonus)</div>
             <button type="button" disabled={busy} onClick={() => save({ scratch_enabled: !s.scratch_enabled }, s.scratch_enabled ? "Scratch Cards disabled" : "Scratch Cards enabled")} data-testid="rw-scratch-toggle"
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-white ${s.scratch_enabled ? "bg-emerald-600" : "bg-slate-500"}`}><Power className="h-3.5 w-3.5" /> {s.scratch_enabled ? "ON" : "OFF"}</button>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <select data-testid="rw-scratch-mode" value={s.scratch_mode} onChange={(e) => setF({ ...f, scratch_mode: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><option value="fixed">Fixed amount</option><option value="range">Random range</option></select>
-            {s.scratch_mode === "range" ? <>₹<input data-testid="rw-scratch-min" {...num("scratch_min")} /> to ₹<input data-testid="rw-scratch-max" {...num("scratch_max")} /></> : <>₹<input data-testid="rw-scratch-amount" {...num("scratch_amount")} /> per card</>}
-            <button type="button" disabled={busy} onClick={() => save({ scratch_mode: s.scratch_mode, scratch_amount: Number(s.scratch_amount), scratch_min: Number(s.scratch_min), scratch_max: Number(s.scratch_max) })} data-testid="rw-scratch-save" className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save</button>
+            <select data-testid="rw-scratch-mode" value={s.scratch_mode} onChange={(e) => setF({ ...f, scratch_mode: e.target.value })} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><option value="percent">% of campaign payout</option><option value="fixed">Fixed amount</option><option value="range">Random range</option></select>
+            {s.scratch_mode === "percent" ? <><input data-testid="rw-scratch-pct" {...num("scratch_percent")} step="0.5" /> <span className="text-slate-600">% of payout per card</span></> : s.scratch_mode === "range" ? <>₹<input data-testid="rw-scratch-min" {...num("scratch_min")} /> to ₹<input data-testid="rw-scratch-max" {...num("scratch_max")} /></> : <>₹<input data-testid="rw-scratch-amount" {...num("scratch_amount")} /> per card</>}
+            <button type="button" disabled={busy} onClick={() => save({ scratch_mode: s.scratch_mode, scratch_percent: Number(s.scratch_percent), scratch_amount: Number(s.scratch_amount), scratch_min: Number(s.scratch_min), scratch_max: Number(s.scratch_max) })} data-testid="rw-scratch-save" className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save</button>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">Card amount never exceeds the customer's remaining locked balance.</div>
+          <div className="mt-1 text-[11px] text-slate-500">Card amount is deducted from the customer's Locked Signup Bonus and moved to Main Wallet — never exceeds the remaining locked balance. Example: payout ₹300 × 5% = ₹15 card.</div>
         </div>
       </div>
 

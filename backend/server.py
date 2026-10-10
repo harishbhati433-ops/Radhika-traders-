@@ -198,7 +198,7 @@ async def get_settings() -> dict:
             "referral_daily_limit": int(s.get("referral_daily_limit", 2)), "referral_monthly_limit": int(s.get("referral_monthly_limit", 10)),
             "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])],
             "refer_poster_url": s.get("refer_poster_url") or "",
-            **{k: s[k] for k in ("extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
+            **{k: s[k] for k in ("extra_bonus_enabled", "extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_percent", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
 
 
 DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -1913,11 +1913,13 @@ async def admin_signup_bonus_backfill(request: Request, admin: dict = Depends(re
 
 async def compute_wallet(user_id: str) -> dict:
     txns, wds, cards = await asyncio.gather(
-        db.transactions.find({"user_id": user_id}, {"amount": 1, "type": 1, "status": 1}).to_list(5000),
+        db.transactions.find({"user_id": user_id}, {"amount": 1, "type": 1, "status": 1, "source": 1}).to_list(5000),
         db.withdrawals.find({"user_id": user_id}, {"amount": 1, "status": 1}).to_list(5000),
         db.scratch_cards.find({"user_id": user_id, "status": "scratched"}, {"amount": 1}).to_list(5000))
     total_credited = sum(t["amount"] for t in txns if t["type"] == "credit")
     total_debited = sum(t["amount"] for t in txns if t["type"] == "debit")
+    # Reversals / admin deductions carry a `source`; withdrawal-paid debits do not. Earnings exclude the former.
+    adjust_debits = sum(t["amount"] for t in txns if t["type"] == "debit" and t.get("source"))
     bonus_total = sum(t["amount"] for t in txns if t["type"] == "bonus" and t.get("status") == "locked")
     bonus_released = sum(c["amount"] for c in cards)
     bonus_locked = max(0.0, bonus_total - bonus_released)
@@ -1928,7 +1930,7 @@ async def compute_wallet(user_id: str) -> dict:
     balance = total_credited - total_debited - pending_withdrawal
     return {
         "balance": round(balance, 2),
-        "total_earnings": round(total_credited, 2),
+        "total_earnings": round(total_credited - adjust_debits, 2),
         "total_credited": round(total_credited, 2),
         "total_withdrawn": round(total_withdrawn, 2),
         "pending_withdrawal": round(pending_withdrawal, 2),
@@ -2030,16 +2032,20 @@ async def admin_reverse_double_payouts(request: Request, admin: dict = Depends(r
 
 async def wallet_rows(show: str = "holding") -> dict:
     tx = await db.transactions.aggregate([{"$group": {"_id": {"u": "$user_id", "t": "$type"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
+    adj = await db.transactions.aggregate([{"$match": {"type": "debit", "source": {"$exists": True, "$ne": None}}}, {"$group": {"_id": "$user_id", "s": {"$sum": "$amount"}}}]).to_list(100000)
     wd = await db.withdrawals.aggregate([{"$group": {"_id": {"u": "$user_id", "s": "$status"}, "s": {"$sum": "$amount"}, "last": {"$max": "$created_at"}}}]).to_list(100000)
     agg: dict = {}
     for r in tx:
-        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
+        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "adjust": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
         if r["_id"]["t"] in ("credit", "debit"):
             a[r["_id"]["t"]] += r["s"]
         if r["_id"]["t"] == "credit":
             a["last_credit"] = max(a["last_credit"], r["last"] or "")
+    for r in adj:
+        if r["_id"] in agg:
+            agg[r["_id"]]["adjust"] += r["s"]
     for r in wd:
-        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
+        a = agg.setdefault(r["_id"]["u"], {"credit": 0, "debit": 0, "adjust": 0, "pending": 0, "paid": 0, "last_credit": "", "last_wd": ""})
         if r["_id"]["s"] in ("pending", "approved"):
             a["pending"] += r["s"]
         if r["_id"]["s"] == "paid":
@@ -2061,7 +2067,7 @@ async def wallet_rows(show: str = "holding") -> dict:
         rows.append({"user_id": uid, "name": u.get("name"), "mobile": u.get("mobile", ""), "email": u.get("email", ""), "customer_id": u.get("referral_code", ""),
                      "account_status": u.get("account_status", "active"), "kyc_status": k.get("status", "not_submitted"),
                      "bank_account": k.get("bank_account", ""), "ifsc": k.get("ifsc", ""), "account_holder": k.get("account_holder", ""), "upi": k.get("upi", ""),
-                     "balance": balance, "pending_withdrawal": pending, "total_earned": round(a["credit"], 2), "total_withdrawn": round(a["paid"], 2),
+                     "balance": balance, "pending_withdrawal": pending, "total_earned": round(a["credit"] - a["adjust"], 2), "total_withdrawn": round(a["paid"], 2),
                      "last_credit_at": a["last_credit"], "last_paid_at": a["last_wd"]})
     rows.sort(key=lambda r: (r["balance"] + r["pending_withdrawal"]), reverse=True)
     return {"items": rows, "summary": {"customers": len(rows), "total_balance": round(sum(r["balance"] for r in rows), 2),
@@ -2679,7 +2685,7 @@ async def list_customers(include_deleted: bool = False, search: Optional[str] = 
     else:
         users = await db.users.find(q).sort("created_at", -1).to_list(5000)
     ids = [str(u["_id"]) for u in users]
-    agg = {i: {"credit": 0.0, "debit": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
+    agg = {i: {"credit": 0.0, "debit": 0.0, "adjust": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
     txn_rows = await db.transactions.aggregate([
         {"$match": {"user_id": {"$in": ids}, "type": {"$in": ["credit", "debit"]}}},
         {"$group": {"_id": {"u": "$user_id", "t": "$type"}, "total": {"$sum": "$amount"}}},
@@ -2688,6 +2694,10 @@ async def list_customers(include_deleted: bool = False, search: Optional[str] = 
         a = agg.get(r["_id"]["u"])
         if a:
             a[r["_id"]["t"]] += float(r["total"] or 0)
+    for r in await db.transactions.aggregate([{"$match": {"user_id": {"$in": ids}, "type": "debit", "source": {"$exists": True, "$ne": None}}},
+                                               {"$group": {"_id": "$user_id", "total": {"$sum": "$amount"}}}]).to_list(None):
+        if r["_id"] in agg:
+            agg[r["_id"]]["adjust"] += float(r["total"] or 0)
     wd_rows = await db.withdrawals.aggregate([
         {"$match": {"user_id": {"$in": ids}, "status": {"$in": ["paid", "pending", "approved"]}}},
         {"$group": {"_id": {"u": "$user_id", "s": "$status"}, "total": {"$sum": "$amount"}}},
@@ -2704,7 +2714,7 @@ async def list_customers(include_deleted: bool = False, search: Optional[str] = 
         pu = public_user(u)
         pu["wallet"] = {
             "balance": round(a["credit"] - a["debit"] - a["pending"], 2),
-            "total_earnings": round(a["credit"], 2),
+            "total_earnings": round(a["credit"] - a["adjust"], 2),
             "total_credited": round(a["credit"], 2),
             "total_withdrawn": round(a["paid"], 2),
             "pending_withdrawal": round(a["pending"], 2),
@@ -2892,13 +2902,14 @@ async def admin_dashboard(admin: dict = Depends(require_admin)):
     total_campaigns, live, paused, closed, enabled = await asyncio.gather(
         db.campaigns.count_documents(cq), db.campaigns.count_documents({**cq, "status": "live"}), db.campaigns.count_documents({**cq, "status": "paused"}),
         db.campaigns.count_documents({**cq, "status": "closed"}), db.campaigns.count_documents({**cq, "offer_enabled": True}))
-    total_customers, earn, cust_oids, money, recent = await asyncio.gather(
+    total_customers, earn, adj_earn, cust_oids, money, recent = await asyncio.gather(
         db.users.count_documents({"role": "customer", "email_verified": True}),
         db.transactions.aggregate([{"$match": {"type": "credit"}}, {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1),
+        db.transactions.aggregate([{"$match": {"type": "debit", "source": {"$exists": True, "$ne": None}}}, {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1),
         db.users.distinct("_id", {"role": "customer", "account_status": {"$ne": "deleted"}}),
         wallet_rows("holding"),
         db.campaigns.find(cq).sort("updated_at", -1).to_list(5))
-    total_earnings = float(earn[0]["s"]) if earn else 0.0
+    total_earnings = (float(earn[0]["s"]) if earn else 0.0) - (float(adj_earn[0]["s"]) if adj_earn else 0.0)
     cust_ids = [str(i) for i in cust_oids]
     wd = {r["_id"]: r for r in await db.withdrawals.aggregate([{"$match": {"user_id": {"$in": cust_ids}}},
                                                                  {"$group": {"_id": "$status", "n": {"$sum": 1}, "s": {"$sum": "$amount"}}}]).to_list(20)}

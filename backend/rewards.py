@@ -19,15 +19,17 @@ def _oid(x: str) -> Optional[ObjectId]:
 
 
 def reward_settings(s: dict) -> dict:
-    return {"extra_bonus_percent": float(s.get("extra_bonus_percent", 5)), "scratch_enabled": bool(s.get("scratch_enabled", True)),
-            "scratch_mode": s.get("scratch_mode") or "fixed", "scratch_amount": float(s.get("scratch_amount", 20)),
+    return {"extra_bonus_enabled": bool(s.get("extra_bonus_enabled", False)), "extra_bonus_percent": float(s.get("extra_bonus_percent", 5)), "scratch_enabled": bool(s.get("scratch_enabled", True)),
+            "scratch_mode": s.get("scratch_mode") or "percent", "scratch_percent": float(s.get("scratch_percent", 5)), "scratch_amount": float(s.get("scratch_amount", 20)),
             "scratch_min": float(s.get("scratch_min", 10)), "scratch_max": float(s.get("scratch_max", 50))}
 
 
 class RewardSettingsIn(BaseModel):
+    extra_bonus_enabled: Optional[bool] = None
     extra_bonus_percent: Optional[float] = None
     scratch_enabled: Optional[bool] = None
     scratch_mode: Optional[str] = None
+    scratch_percent: Optional[float] = None
     scratch_amount: Optional[float] = None
     scratch_min: Optional[float] = None
     scratch_max: Optional[float] = None
@@ -97,11 +99,12 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
             return {"skipped": "exhausted"}
         s = reward_settings(await get_settings())
         camp = await db.campaigns.find_one({"_id": _oid(lead.get("campaign_id", ""))}, {"payout_amount": 1}) if lead.get("campaign_id") else None
+        payout = float((camp or {}).get("payout_amount") or 0)
         out = {"extra": 0.0, "card": None}
         lid = str(lead["_id"])
         pct = s["extra_bonus_percent"]
-        if pct > 0 and camp and await _extra_net(lid) <= 0:
-            extra = round(float(camp.get("payout_amount") or 0) * pct / 100, 2)
+        if s["extra_bonus_enabled"] and pct > 0 and payout > 0 and await _extra_net(lid) <= 0:
+            extra = round(payout * pct / 100, 2)
             if extra > 0:
                 await db.transactions.insert_one({"user_id": uid, "amount": extra, "type": "credit", "status": "completed", "source": "lead_extra_bonus", "lead_id": lid,
                                                   "lead_ref": lead.get("lead_id", ""), "campaign_id": lead.get("campaign_id"), "ref_id": f"XB-{uuid.uuid4().hex[:8].upper()}",
@@ -109,7 +112,12 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
                 out["extra"] = extra
         if s["scratch_enabled"]:
             room = round(summ["remaining"] - await _outstanding_cards(uid), 2)
-            amt = s["scratch_amount"] if s["scratch_mode"] != "range" else float(random.randint(int(min(s["scratch_min"], s["scratch_max"])), int(max(s["scratch_min"], s["scratch_max"]))))
+            if s["scratch_mode"] == "percent":
+                amt = round(payout * s["scratch_percent"] / 100, 2)
+            elif s["scratch_mode"] == "range":
+                amt = float(random.randint(int(min(s["scratch_min"], s["scratch_max"])), int(max(s["scratch_min"], s["scratch_max"]))))
+            else:
+                amt = s["scratch_amount"]
             amt = round(min(amt, room), 2)
             if amt > 0:
                 card = {"user_id": uid, "lead_id": lid, "lead_ref": lead.get("lead_id", ""), "campaign_name": lead.get("campaign_name", ""), "amount": amt,
@@ -210,15 +218,21 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
     @api.put("/admin/rewards/settings")
     async def admin_reward_settings(body: RewardSettingsIn, request: Request, admin: dict = Depends(require_admin)):
         upd = {}
+        if body.extra_bonus_enabled is not None:
+            upd["extra_bonus_enabled"] = body.extra_bonus_enabled
         if body.extra_bonus_percent is not None:
             if not 0 <= body.extra_bonus_percent <= 100:
                 raise HTTPException(status_code=400, detail="Percent must be between 0 and 100")
             upd["extra_bonus_percent"] = body.extra_bonus_percent
+        if body.scratch_percent is not None:
+            if not 0 <= body.scratch_percent <= 100:
+                raise HTTPException(status_code=400, detail="Percent must be between 0 and 100")
+            upd["scratch_percent"] = body.scratch_percent
         if body.scratch_enabled is not None:
             upd["scratch_enabled"] = body.scratch_enabled
         if body.scratch_mode is not None:
-            if body.scratch_mode not in ("fixed", "range"):
-                raise HTTPException(status_code=400, detail="Mode must be fixed or range")
+            if body.scratch_mode not in ("percent", "fixed", "range"):
+                raise HTTPException(status_code=400, detail="Mode must be percent, fixed or range")
             upd["scratch_mode"] = body.scratch_mode
         for k in ("scratch_amount", "scratch_min", "scratch_max"):
             v = getattr(body, k)

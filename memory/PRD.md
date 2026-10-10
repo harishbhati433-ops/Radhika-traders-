@@ -651,3 +651,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - .emergent/crons.yml: visitor-report "0 0 * * *" Asia/Kolkata (12:00 AM IST).
 - Frontend: VisitTracker.jsx (App.js, pings on every route change), VisitorStats.jsx on Admin Dashboard (Live badge, 30s poll, 4 stat cards, quick ranges, date filter, recharts area chart with Hindi day labels for ≤14 days, table, top pages, "Email report" button).
 - Verified: pings 202, summary + filter, cron 401/202/dup, report email sent, UI screenshot OK.
+
+## Update (Oct 2026) — Rewards fix per user feedback
+- Scratch Card amount now = scratch_percent (default 5%) of the campaign payout, deducted from Locked Signup Bonus → Main Wallet (scratch_mode "percent" is default; fixed/range still available).
+- Company-paid extra bonus is now OPTIONAL: extra_bonus_enabled default False (admin toggle rw-extra-toggle). No separate 5% credit unless turned ON.
+- Total Earnings (customer wallet, admin customers list, admin wallets, admin dashboard KPI) now exclude reversal/adjustment debits (any debit txn with a `source`: scratch_reward_reversal, lead_extra_bonus_reversal, ADJ recoveries, admin_adjust deduct). Withdrawal-paid debits (no source) do not reduce earnings.
+- Verified by tests/sim_rewards_pct.py (approve → ₹25 card for ₹500 payout, no extra; scratch; reject → earnings/locked restored; extra ON path; admin customers earnings match).
