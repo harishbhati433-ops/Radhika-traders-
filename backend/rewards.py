@@ -19,13 +19,16 @@ def _oid(x: str) -> Optional[ObjectId]:
 
 
 def reward_settings(s: dict) -> dict:
-    return {"extra_bonus_enabled": bool(s.get("extra_bonus_enabled", False)), "extra_bonus_percent": float(s.get("extra_bonus_percent", 5)), "scratch_enabled": bool(s.get("scratch_enabled", True)),
+    return {"extra_bonus_enabled": bool(s.get("extra_bonus_enabled", False)), "extra_bonus_mode": s.get("extra_bonus_mode") or "fixed", "extra_bonus_amount": float(s.get("extra_bonus_amount", 10)),
+            "extra_bonus_percent": float(s.get("extra_bonus_percent", 5)), "scratch_enabled": bool(s.get("scratch_enabled", True)),
             "scratch_mode": s.get("scratch_mode") or "percent", "scratch_percent": float(s.get("scratch_percent", 5)), "scratch_amount": float(s.get("scratch_amount", 20)),
             "scratch_min": float(s.get("scratch_min", 10)), "scratch_max": float(s.get("scratch_max", 50))}
 
 
 class RewardSettingsIn(BaseModel):
     extra_bonus_enabled: Optional[bool] = None
+    extra_bonus_mode: Optional[str] = None
+    extra_bonus_amount: Optional[float] = None
     extra_bonus_percent: Optional[float] = None
     scratch_enabled: Optional[bool] = None
     scratch_mode: Optional[str] = None
@@ -40,13 +43,13 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
 
     async def locked_summary(user_id: str) -> dict:
         txns, cards = await db.transactions.find({"user_id": user_id, "type": "bonus", "status": "locked"}, {"amount": 1}).to_list(50), \
-            await db.scratch_cards.find({"user_id": user_id, "status": "scratched"}, {"amount": 1}).to_list(5000)
+            await db.scratch_cards.find({"user_id": user_id, "status": "scratched", "kind": {"$ne": "extra"}}, {"amount": 1}).to_list(5000)
         total = round(sum(t["amount"] for t in txns), 2)
         released = round(sum(c["amount"] for c in cards), 2)
         return {"total": total, "released": released, "remaining": round(max(0.0, total - released), 2)}
 
     async def _outstanding_cards(user_id: str) -> float:
-        cards = await db.scratch_cards.find({"user_id": user_id, "status": "issued"}, {"amount": 1}).to_list(1000)
+        cards = await db.scratch_cards.find({"user_id": user_id, "status": "issued", "kind": {"$ne": "extra"}}, {"amount": 1}).to_list(1000)
         return round(sum(c["amount"] for c in cards), 2)
 
     async def apply_pending_adjustments(user_id: str) -> None:
@@ -87,29 +90,38 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
         if not u or u.get("role") != "customer":
             return {"skipped": "no_partner"}
         await lock_signup_bonus(u)
-        summ = await locked_summary(uid)
-        if summ["total"] <= 0:
-            return {"skipped": "no_bonus"}
         dup, f = await signup_dup(u)
         if dup:
             await db.transactions.update_many({"user_id": uid, "type": "bonus", "status": "locked"},
                                               {"$set": {"status": "cancelled", "cancelled_at": now_iso(), "description": "Signup Bonus cancelled — duplicate account"}})
             return {"skipped": "duplicate"}
-        if summ["remaining"] <= 0:
-            return {"skipped": "exhausted"}
         s = reward_settings(await get_settings())
         camp = await db.campaigns.find_one({"_id": _oid(lead.get("campaign_id", ""))}, {"payout_amount": 1}) if lead.get("campaign_id") else None
         payout = float((camp or {}).get("payout_amount") or 0)
-        out = {"extra": 0.0, "card": None}
+        out = {"extra": 0.0, "card": None, "extra_card": None}
         lid = str(lead["_id"])
-        pct = s["extra_bonus_percent"]
-        if s["extra_bonus_enabled"] and pct > 0 and payout > 0 and await _extra_net(lid) <= 0:
-            extra = round(payout * pct / 100, 2)
+        lead_ref, camp_name = lead.get("lead_id", ""), lead.get("campaign_name", "")
+
+        async def issue(kind, amt, title, body):
+            card = {"user_id": uid, "lead_id": lid, "kind": kind, "lead_ref": lead_ref, "campaign_name": camp_name, "amount": amt, "status": "issued", "active": True, "created_at": now_iso()}
+            try:
+                res = await db.scratch_cards.insert_one(card)
+            except DuplicateKeyError:
+                return None
+            await push_service.notify_one({"user_id": uid, "title": title, "body": body, "link": "/app/dashboard", "type": "wallet", "read": False, "created_at": now_iso()})
+            return str(res.inserted_id)
+
+        # Festival / extra bonus: company-paid, admin switches it on when wanted; delivered as its own Scratch Card.
+        if s["extra_bonus_enabled"] and await _extra_net(lid) <= 0 and not await db.scratch_cards.find_one({"lead_id": lid, "kind": "extra", "active": True}):
+            extra = round(payout * s["extra_bonus_percent"] / 100, 2) if s["extra_bonus_mode"] == "percent" else round(s["extra_bonus_amount"], 2)
             if extra > 0:
-                await db.transactions.insert_one({"user_id": uid, "amount": extra, "type": "credit", "status": "completed", "source": "lead_extra_bonus", "lead_id": lid,
-                                                  "lead_ref": lead.get("lead_id", ""), "campaign_id": lead.get("campaign_id"), "ref_id": f"XB-{uuid.uuid4().hex[:8].upper()}",
-                                                  "description": f"{pct:g}% extra bonus · Lead {lead.get('lead_id', '')} · {lead.get('campaign_name', '')}", "created_at": now_iso()})
+                out["extra_card"] = await issue("extra", extra, "🎉 Extra Bonus Scratch Card!", f"Lead {lead_ref} approved — scratch your extra bonus card on the dashboard.")
                 out["extra"] = extra
+        summ = await locked_summary(uid)
+        if summ["total"] <= 0:
+            return {**out, "skipped": "no_bonus"}
+        if summ["remaining"] <= 0:
+            return {**out, "skipped": "exhausted"}
         if s["scratch_enabled"]:
             room = round(summ["remaining"] - await _outstanding_cards(uid), 2)
             if s["scratch_mode"] == "percent":
@@ -120,17 +132,7 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
                 amt = s["scratch_amount"]
             amt = round(min(amt, room), 2)
             if amt > 0:
-                card = {"user_id": uid, "lead_id": lid, "lead_ref": lead.get("lead_id", ""), "campaign_name": lead.get("campaign_name", ""), "amount": amt,
-                        "status": "issued", "active": True, "created_at": now_iso()}
-                try:
-                    res = await db.scratch_cards.insert_one(card)
-                    out["card"] = str(res.inserted_id)
-                    await push_service.notify_one({"user_id": uid, "title": "🎁 You got a Scratch Card!", "body": f"Lead {lead.get('lead_id', '')} approved — scratch it on your dashboard to unlock bonus money.",
-                                                   "link": "/app/dashboard", "type": "wallet", "read": False, "created_at": now_iso()})
-                except DuplicateKeyError:
-                    pass
-        if out["extra"]:
-            await apply_pending_adjustments(uid)
+                out["card"] = await issue("bonus", amt, "🎁 You got a Scratch Card!", f"Lead {lead_ref} approved — scratch it on your dashboard to unlock bonus money.")
         return out
 
     async def on_lead_unapproved(lead: dict, actor: str = "") -> dict:
@@ -146,7 +148,7 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
                 out["cancelled"] += 1
             elif c["status"] == "scratched":
                 r = await db.scratch_cards.update_one({"_id": c["_id"], "status": "scratched"}, {"$set": {"status": "reversed", "active": False, "reversed_at": now_iso(), "reversed_by": actor}})
-                if r.modified_count:
+                if r.modified_count and c.get("kind") != "extra":  # extra-card money is reversed below via the lead_extra_bonus net
                     rv = await _reverse(uid, c["amount"], "scratch_reward_reversal", lead, f"Scratch Card reward reversed · Lead {lead.get('lead_id', '')} no longer approved")
                     out["reversed"] += c["amount"]; out["pending"] += rv["pending"]
         net = await _extra_net(lid)
@@ -172,6 +174,18 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
             raise HTTPException(status_code=404, detail="Scratch card not found")
         if card["status"] != "issued":
             raise HTTPException(status_code=400, detail="This card has already been used")
+        if card.get("kind") == "extra":
+            # Company-paid extra bonus: does not touch the locked Signup Bonus.
+            ref = f"XB-{uuid.uuid4().hex[:8].upper()}"
+            r = await db.scratch_cards.update_one({"_id": card["_id"], "status": "issued"}, {"$set": {"status": "scratched", "scratched_at": now_iso(), "ref_id": ref}})
+            if not r.modified_count:
+                raise HTTPException(status_code=400, detail="This card has already been used")
+            amt = round(float(card["amount"]), 2)
+            await db.transactions.insert_one({"user_id": user["id"], "amount": amt, "type": "credit", "status": "completed", "source": "lead_extra_bonus", "lead_id": card["lead_id"],
+                                              "lead_ref": card.get("lead_ref", ""), "scratch_id": str(card["_id"]), "ref_id": ref,
+                                              "description": f"Extra Bonus Scratch Card · Lead {card.get('lead_ref', '')} · {card.get('campaign_name', '')}", "created_at": now_iso()})
+            await apply_pending_adjustments(user["id"])
+            return {"amount": amt, "ref_id": ref, "kind": "extra", "bonus": await locked_summary(user["id"]), "wallet": await compute_wallet(user["id"])}
         amt = round(min(float(card["amount"]), summ["remaining"]), 2)
         if amt <= 0:
             await db.scratch_cards.update_one({"_id": card["_id"]}, {"$set": {"status": "cancelled", "active": False, "cancelled_at": now_iso(), "cancel_reason": "no locked balance"}})
@@ -220,6 +234,14 @@ def build(db, get_settings, compute_wallet, push_service, log_activity, require_
         upd = {}
         if body.extra_bonus_enabled is not None:
             upd["extra_bonus_enabled"] = body.extra_bonus_enabled
+        if body.extra_bonus_mode is not None:
+            if body.extra_bonus_mode not in ("fixed", "percent"):
+                raise HTTPException(status_code=400, detail="Extra bonus mode must be fixed or percent")
+            upd["extra_bonus_mode"] = body.extra_bonus_mode
+        if body.extra_bonus_amount is not None:
+            if body.extra_bonus_amount < 0:
+                raise HTTPException(status_code=400, detail="Amount cannot be negative")
+            upd["extra_bonus_amount"] = body.extra_bonus_amount
         if body.extra_bonus_percent is not None:
             if not 0 <= body.extra_bonus_percent <= 100:
                 raise HTTPException(status_code=400, detail="Percent must be between 0 and 100")

@@ -44,14 +44,15 @@ function ScratchCard({ card, onDone }) {
     if (clear / (d.length / 64) > 0.45) finish();
   };
 
+  const extra = card.kind === "extra";
   return (
-    <div data-testid={`scratch-card-${card.id}`} className={`relative w-44 shrink-0 overflow-hidden rounded-2xl border p-3 ${revealed ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-white"}`}>
-      <div className="mb-2 truncate text-[10px] font-bold uppercase tracking-wider text-slate-500">Lead {card.lead_ref}</div>
+    <div data-testid={`scratch-card-${card.id}`} className={`relative w-44 shrink-0 overflow-hidden rounded-2xl border p-3 ${revealed ? "border-emerald-300 bg-emerald-50" : extra ? "border-pink-300 bg-pink-50/40" : "border-amber-300 bg-white"}`}>
+      <div className="mb-2 flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span className="truncate">Lead {card.lead_ref}</span>{extra && <span className="rounded-full bg-pink-600 px-1.5 py-0.5 text-[9px] text-white" data-testid={`scratch-kind-extra-${card.id}`}>EXTRA</span>}</div>
       <div className="relative h-24 select-none overflow-hidden rounded-xl bg-slate-900">
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-          <Sparkles className={`h-4 w-4 text-amber-300 ${revealed ? "animate-bounce" : ""}`} />
+          <Sparkles className={`h-4 w-4 ${extra ? "text-pink-300" : "text-amber-300"} ${revealed ? "animate-bounce" : ""}`} />
           <div className="font-mono text-2xl font-extrabold" data-testid={`scratch-amount-${card.id}`}>₹{amount}</div>
-          <div className="text-[10px] text-slate-300">{revealed ? "Moved to Main Wallet" : "Bonus unlock"}</div>
+          <div className="text-[10px] text-slate-300">{revealed ? "Moved to Main Wallet" : extra ? "Extra bonus 🎉" : "Bonus unlock"}</div>
         </div>
         {!revealed && (
           <canvas ref={ref} width={176} height={96} data-testid={`scratch-canvas-${card.id}`} className="absolute inset-0 h-full w-full cursor-pointer touch-none"

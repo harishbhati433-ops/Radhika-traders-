@@ -662,3 +662,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - components/Collapsible.jsx (remembers open/closed per id in localStorage, Show/Hide chevron).
 - Admin Dashboard: "Settings & Bonus Controls" (7 panels) collapsed by default; "Website Visitors (Live)" collapsible (default open). RewardsSetting records table hidden until "Show records"/tab click; max-h-80 scroll with sticky header.
 - Customer Dashboard: Refer & Earn card collapsed by default (Show to expand); Scratch Cards section auto-expands when new cards exist, otherwise Show/Hide toggle.
+
+## Update (Oct 2026) — Extra bonus as its own Scratch Card
+- scratch_cards.kind: "bonus" (from locked Signup Bonus, % of payout default 5%) | "extra" (company-paid festival bonus). Unique index now (lead_id, kind) partial active; old cards backfilled kind=bonus.
+- Settings: extra_bonus_enabled (default OFF), extra_bonus_mode fixed|percent, extra_bonus_amount (₹10 default), extra_bonus_percent. When ON, each approved lead issues a separate EXTRA card; scratching credits lead_extra_bonus (XB-) to Main Wallet without touching locked balance. OFF → only bonus card.
+- Reversal: extra card scratched → card marked reversed, money reversed once via lead_extra_bonus net (fixed double-reversal bug). Verified by tests/sim_rewards_extra_card.py.
+- UI: RewardsSetting extra block has ON/OFF + mode + amount; cards table shows Type; customer card shows pink EXTRA badge.

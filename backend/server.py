@@ -198,7 +198,7 @@ async def get_settings() -> dict:
             "referral_daily_limit": int(s.get("referral_daily_limit", 2)), "referral_monthly_limit": int(s.get("referral_monthly_limit", 10)),
             "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])],
             "refer_poster_url": s.get("refer_poster_url") or "",
-            **{k: s[k] for k in ("extra_bonus_enabled", "extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_percent", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
+            **{k: s[k] for k in ("extra_bonus_enabled", "extra_bonus_mode", "extra_bonus_amount", "extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_percent", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
 
 
 DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -1915,7 +1915,7 @@ async def compute_wallet(user_id: str) -> dict:
     txns, wds, cards = await asyncio.gather(
         db.transactions.find({"user_id": user_id}, {"amount": 1, "type": 1, "status": 1, "source": 1}).to_list(5000),
         db.withdrawals.find({"user_id": user_id}, {"amount": 1, "status": 1}).to_list(5000),
-        db.scratch_cards.find({"user_id": user_id, "status": "scratched"}, {"amount": 1}).to_list(5000))
+        db.scratch_cards.find({"user_id": user_id, "status": "scratched", "kind": {"$ne": "extra"}}, {"amount": 1}).to_list(5000))
     total_credited = sum(t["amount"] for t in txns if t["type"] == "credit")
     total_debited = sum(t["amount"] for t in txns if t["type"] == "debit")
     # Reversals / admin deductions carry a `source`; withdrawal-paid debits do not. Earnings exclude the former.
@@ -3503,7 +3503,12 @@ async def startup():
         async for l in db.leads.find({"$or": [{"token": {"$exists": False}}, {"token": ""}]}, {"_id": 1}):
             await db.leads.update_one({"_id": l["_id"]}, {"$set": {"token": new_lead_token()}})
         await db.leads.create_index("token", unique=True, partialFilterExpression={"token": {"$type": "string"}})
-        await db.scratch_cards.create_index("lead_id", unique=True, partialFilterExpression={"active": True})
+        await db.scratch_cards.update_many({"kind": {"$exists": False}}, {"$set": {"kind": "bonus"}})
+        try:
+            await db.scratch_cards.drop_index("lead_id_1")
+        except Exception:
+            pass
+        await db.scratch_cards.create_index([("lead_id", 1), ("kind", 1)], unique=True, partialFilterExpression={"active": True})
         await db.scratch_cards.create_index([("user_id", 1), ("status", 1)])
         await db.pending_adjustments.create_index([("user_id", 1), ("status", 1)])
         await visits_api.ensure_indexes()
