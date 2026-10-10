@@ -3401,7 +3401,7 @@ api.include_router(build_leave_router(db, require_admin, _emp_router.require_emp
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
-api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet))
+api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet, push_service, log_activity))
 rewards_api = rewards.build(db, get_settings, compute_wallet, push_service, log_activity, require_perm, require_admin, get_current_user, _signup_dup, lock_signup_bonus)
 api.include_router(rewards_api)
 app.include_router(api)

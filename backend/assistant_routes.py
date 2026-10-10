@@ -1,23 +1,41 @@
 """Customer-only AI support assistant ("Ask Radhika"). Public knowledge only — it never sees the database, admin/employee panels or any personal account data."""
 import asyncio
+import base64
+import io
 import json
 import logging
 import os
 import re
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from bson import ObjectId
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+from PIL import Image
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
 
 import contact_settings
 
 logger = logging.getLogger("assistant")
 MODEL = ("openai", "gpt-5.5")
 MAX_PER_HOUR = 40
+MAX_IMAGES_PER_HOUR = 10
+IMAGE_MAX_BYTES = 6 * 1024 * 1024
+IMAGE_MAX_SIDE = 1280
+ABUSE_STRIKES = 3
+ABUSE_BLOCK_HOURS = 24
 HISTORY_TURNS = 8
+
+IMAGE_RULES = """
+IMAGES: The user may attach a photo/screenshot (e.g. a broker app screen, payment or withdrawal screenshot, KYC document, an offer poster). Look at it and help ONLY within the scope above (is the account open? what does this status mean? what is wrong in this document? which campaign is this?). Never read out or repeat sensitive numbers in full (mask PAN / account / Aadhaar numbers except last 4 digits). If the image shows an admin/employee panel, salary, attendance or anything internal, say you cannot discuss it. If the image is unrelated to Radhika Traders, say so politely in one line. The image is never stored.
+"""
+
+SAFETY_PROMPT = """You are an image safety classifier for a customer-support chat of an Indian financial referral platform. Decide if the attached image is acceptable to process.
+UNSAFE categories: sexual/adult/nudity (including suggestive), violence/gore, hate symbols, self-harm, drugs/weapons, child safety concerns, harassment/obscene text or gestures.
+Everything else (screenshots, documents, people in normal clothing, posters, selfies, random photos) is SAFE.
+Reply with ONLY compact JSON, nothing else: {"safe": true|false, "category": "<one word or empty>"}"""
 
 # Fixed, hand-written facts about the customer product. This is the ONLY world the assistant knows.
 STATIC_FACTS = """
@@ -49,8 +67,68 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def build_router(db, get_current_user, compute_wallet):
+def _prepare_image(b64: str) -> str:
+    """Validate + downscale in memory (never written to disk). Returns JPEG base64."""
+    try:
+        raw = base64.b64decode(b64.split(",", 1)[1] if b64.startswith("data:") else b64, validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image data")
+    if len(raw) > IMAGE_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image is too large (max 6 MB)")
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im.load()
+        if im.format not in ("JPEG", "PNG", "WEBP", "GIF", "BMP", "MPO"):
+            raise ValueError("format")
+        im = im.convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG or WEBP images are supported")
+    if max(im.size) > IMAGE_MAX_SIDE:
+        im.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+    out = io.BytesIO()
+    im.save(out, format="JPEG", quality=85)
+    return base64.b64encode(out.getvalue()).decode()
+
+
+def build_router(db, get_current_user, compute_wallet, push_service=None, log_activity=None):
     r = APIRouter(prefix="/assistant")
+
+    async def image_is_safe(api_key: str, b64: str) -> tuple[bool, str]:
+        llm = LlmChat(api_key=api_key, session_id=f"safety-{int(datetime.now().timestamp() * 1000)}", system_message=SAFETY_PROMPT).with_model(*MODEL)
+        try:
+            res = await llm.send_message(UserMessage(text="Classify this image.", file_contents=[ImageContent(image_base64=b64)]))
+            m = re.search(r"\{.*\}", str(res), re.S)
+            d = json.loads(m.group(0)) if m else {}
+            return bool(d.get("safe", False)), str(d.get("category") or "")[:40]
+        except Exception as e:
+            logger.warning(f"image safety check failed: {e}")
+            return False, "check_failed"
+
+    async def record_abuse(me: dict, category: str, request: Request) -> int:
+        """Log the incident (no image kept), alert admins, auto-block after repeated strikes. Returns strike count in 24h."""
+        since = (datetime.now(timezone.utc) - timedelta(hours=ABUSE_BLOCK_HOURS)).isoformat()
+        await db.assistant_abuse.insert_one({"user_id": me["id"], "name": me.get("name", ""), "email": me.get("email", ""), "mobile": me.get("mobile", ""), "category": category,
+                                             "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else "")[:60], "created_at": _now()})
+        strikes = await db.assistant_abuse.count_documents({"user_id": me["id"], "created_at": {"$gte": since}})
+        blocked = strikes >= ABUSE_STRIKES
+        if blocked:
+            until = (datetime.now(timezone.utc) + timedelta(hours=ABUSE_BLOCK_HOURS)).isoformat()
+            await db.users.update_one({"_id": ObjectId(me["id"])}, {"$set": {"assistant_blocked_until": until}})
+        if log_activity:
+            try:
+                await log_activity({"id": me["id"], "name": me.get("name", ""), "role": "customer"}, "assistant_unsafe_image", request, entity_type="assistant", entity_id=me["id"],
+                                   entity_label=me.get("name", ""), client_id=me["id"], client_name=me.get("name", ""), status="blocked_24h" if blocked else f"strike_{strikes}",
+                                   detail=f"Unsafe image ({category or 'unsafe'}) sent to Radhika Voice Assistant — rejected, not stored. Strike {strikes}/{ABUSE_STRIKES} in 24h.")
+            except Exception as e:
+                logger.warning(f"abuse log failed: {e}")
+        if push_service:
+            try:
+                async for a in db.users.find({"role": "admin"}, {"_id": 1}):
+                    await push_service.notify_one({"user_id": str(a["_id"]), "title": "⚠️ Unsafe image in Voice Assistant", "type": "security", "read": False, "created_at": _now(), "link": "/admin/activity-logs",
+                                                   "body": f"{me.get('name', 'A customer')} ({me.get('mobile', '')}) sent an unsafe image ({category or 'unsafe'}). Strike {strikes}/{ABUSE_STRIKES}." + (" Assistant blocked for 24h." if blocked else "")})
+            except Exception as e:
+                logger.warning(f"abuse push failed: {e}")
+        return strikes
 
     async def verified_customer(request: Request):
         """Identity comes ONLY from the signed JWT on this request — never from the chat text. Customers only."""
@@ -116,37 +194,59 @@ def build_router(db, get_current_user, compute_wallet):
 
     class ChatIn(BaseModel):
         session_id: str = Field(min_length=8, max_length=80)
-        message: str = Field(min_length=1, max_length=600)
+        message: str = Field(default="", max_length=600)
+        image_base64: Optional[str] = Field(default=None, max_length=9_000_000)
 
     @r.post("/chat")
     async def chat(body: ChatIn, request: Request):
         sid = re.sub(r"[^A-Za-z0-9_-]", "", body.session_id)
+        if not body.message.strip() and not body.image_base64:
+            raise HTTPException(status_code=400, detail="Message is empty")
         since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         if await db.assistant_messages.count_documents({"session_id": sid, "role": "user", "created_at": {"$gte": since}}) >= MAX_PER_HOUR:
             raise HTTPException(status_code=429, detail="Too many questions in a short time. Please try again in a while or contact support.")
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if not api_key:
             raise HTTPException(status_code=503, detail="Assistant is not configured")
+        me = await verified_customer(request)
+        image_b64 = None
+        if body.image_base64:
+            if not me:
+                raise HTTPException(status_code=401, detail="Please log in to your Radhika Traders account to send images.")
+            until = (await db.users.find_one({"_id": ObjectId(me["id"])}, {"assistant_blocked_until": 1}) or {}).get("assistant_blocked_until")
+            if until and until > _now():
+                raise HTTPException(status_code=403, detail="Image sending is paused for your account for 24 hours because of unsafe images. You can still ask questions by text.")
+            if await db.assistant_messages.count_documents({"user_id": me["id"], "role": "user", "has_image": True, "created_at": {"$gte": since}}) >= MAX_IMAGES_PER_HOUR:
+                raise HTTPException(status_code=429, detail="Too many images in a short time. Please try again later.")
+            image_b64 = await asyncio.to_thread(_prepare_image, body.image_base64)
+            safe, category = await image_is_safe(api_key, image_b64)
+            if not safe:
+                strikes = await record_abuse(me, category, request)
+                await db.assistant_messages.insert_one({"session_id": sid, "role": "user", "content": "📷 [image rejected — not allowed]", "has_image": True, "user_id": me["id"], "created_at": _now()})
+                warn = ("Yeh image allowed nahi hai. Radhika Voice Assistant sirf Radhika Traders se judi screenshots/documents dekh sakta hai. "
+                        + ("Aapke account par image bhejna 24 ghante ke liye band kar diya gaya hai." if strikes >= ABUSE_STRIKES else f"Warning {strikes}/{ABUSE_STRIKES} — baar-baar aisa karne par image bhejna band ho jayega."))
+                await db.assistant_messages.insert_one({"session_id": sid, "role": "assistant", "content": warn, "created_at": _now()})
+                raise HTTPException(status_code=422, detail=warn)
         history = await db.assistant_messages.find({"session_id": sid}, {"role": 1, "content": 1}).sort("created_at", -1).to_list(HISTORY_TURNS * 2)
         history.reverse()
         convo = "\n".join(f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content'][:500]}" for m in history)
-        me = await verified_customer(request)
         personal = ""
         if me:
             try:
                 personal = "\n\nTHIS CUSTOMER'S OWN ACCOUNT (verified by login — use for 'my ...' questions):\n" + await account_section(me)
             except Exception as e:
                 logger.warning(f"assistant account section failed for {me['id']}: {e}")
-        system = SYSTEM_RULES + "\n\nKNOWLEDGE:\n" + await knowledge() + personal + (f"\n\nCONVERSATION SO FAR:\n{convo}" if convo else "")
-        msg = body.message.strip()
+        system = SYSTEM_RULES + IMAGE_RULES + "\n\nKNOWLEDGE:\n" + await knowledge() + personal + (f"\n\nCONVERSATION SO FAR:\n{convo}" if convo else "")
+        msg = body.message.strip() or "Is image ko dekh kar batao — yeh kya hai aur mujhe kya karna chahiye?"
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "")[:60]
-        await db.assistant_messages.insert_one({"session_id": sid, "role": "user", "content": msg, "ip": ip, "user_id": me["id"] if me else None, "created_at": _now()})
+        await db.assistant_messages.insert_one({"session_id": sid, "role": "user", "content": ("📷 " if image_b64 else "") + msg, "has_image": bool(image_b64), "ip": ip, "user_id": me["id"] if me else None, "created_at": _now()})
         llm = LlmChat(api_key=api_key, session_id=f"{sid}-{int(datetime.now().timestamp())}", system_message=system).with_model(*MODEL)
+        user_msg = UserMessage(text=msg, file_contents=[ImageContent(image_base64=image_b64)]) if image_b64 else UserMessage(text=msg)
 
         async def gen():
             full = []
             try:
-                async for ev in llm.stream_message(UserMessage(text=msg)):
+                async for ev in llm.stream_message(user_msg):
                     if isinstance(ev, TextDelta):
                         full.append(ev.content)
                         yield f"data: {json.dumps({'t': ev.content})}\n\n"

@@ -640,3 +640,8 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## Update (Oct 2026) — Time-based greeting
 - lib/greeting.js: timeGreeting() (IST: Morning 5-12, Afternoon 12-17, Evening 17-21, else Night) + emoji + capitalizeName. Used in CustomerDashboard & EmployeeDashboard header title (e.g. 'Good Afternoon, Harish ☀️'). Header h1 now text-xl on mobile.
+
+## Update (Oct 2026) — Voice Assistant image upload (safe)
+- AssistantWidget: paperclip → menu (Gallery / All files), client-side downscale to 1280px JPEG data URL, preview strip, image shown in user bubble. Login required for images.
+- Backend assistant_routes.py: ChatIn.image_base64; _prepare_image (PIL validate JPG/PNG/WEBP, ≤6MB, downscale, in-memory only — never stored). Safety classifier (same gpt-5.5 via LlmChat.send_message, JSON safe/category) BEFORE answering. Unsafe → 422 + assistant_abuse record (no image), activity log action assistant_unsafe_image, push to all admins (link /admin/activity-logs); 3 strikes/24h → users.assistant_blocked_until (+24h) → 403 on images (text still works). Limits: 10 images/hour/user. IMAGE_RULES added to system prompt (mask sensitive numbers, refuse internal panels).
+- Verified: 401 without login, 400 bad image, 200 safe screenshot answered correctly (balance read), 403 when blocked, text works while blocked. Playbook saved at /app/image_testing.md.
