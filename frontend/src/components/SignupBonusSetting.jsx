@@ -28,7 +28,7 @@ export function SignupBonusSetting() {
   };
 
   const backfill = async () => {
-    if (!window.confirm(`Give ₹${saved} Signup Bonus to ALL existing verified customers who never received it?\n\n• Customers without an approved lead → ₹${saved} LOCKED in their Bonus Wallet (not withdrawable)\n• Customers who already have an approved lead → ₹${saved} CREDITED to Main Wallet\n• Duplicate accounts are skipped. Runs only once per customer.`)) return;
+    if (!window.confirm(`Give ₹${saved} Signup Bonus to ALL existing verified customers who never received it?\n\n• Each eligible customer → ₹${saved} LOCKED in their Bonus Wallet (released via Scratch Cards on approved leads)\n• Duplicate accounts are skipped. Runs only once per customer.`)) return;
     setBusy(true);
     try {
       const { data } = await api.post("/admin/signup-bonus/backfill");
@@ -45,7 +45,7 @@ export function SignupBonusSetting() {
           <div className="rounded-xl bg-violet-500 p-2.5 text-white"><Sparkles className="h-5 w-5" /></div>
           <div>
             <div className="font-display font-bold text-slate-900">New Customer Signup Bonus</div>
-            <div className="text-xs text-slate-600">Every new customer (with or without referral link) sees this amount LOCKED in their Bonus Wallet right after signup. It moves to the Main Wallet automatically when their first lead is approved. Only once per person — duplicate accounts (same mobile / email / PAN) are not eligible.</div>
+            <div className="text-xs text-slate-600">Every new customer (with or without referral link) sees this amount LOCKED in their Bonus Wallet right after signup. It is released to the Main Wallet step by step through Scratch Cards on approved leads (see Scratch Card & Extra Bonus below). Only once per person — duplicate accounts (same mobile / email / PAN) are not eligible. Changing the amount never affects customers who already signed up.</div>
             <div className="mt-1 text-xs font-bold text-violet-800" data-testid="signup-bonus-current">Currently: {enabled && saved > 0 ? `ON · ₹${saved} per new customer` : "OFF"}</div>
           </div>
         </div>

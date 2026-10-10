@@ -622,3 +622,12 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Exports: /api/admin/leads/export csv+xlsx have "User Unique ID" column (2nd). Shown in Admin Leads table/detail, customer My Leads; admin lead search matches token.
 - Tested: iteration_40.json (backend+frontend PASS).
 - Trailing-char rule: if affiliate URL ends with `_` `-` `=` `/` `:` (e.g. HDFC Sky `..._398888_`), ID is appended directly at the end (no new param). Verified via live lead POST (ON -> ..._398888_RT-XXXX, OFF -> plain).
+
+## Update (Oct 2026) — Signup Bonus Locked Wallet → Scratch Cards + Extra % Bonus
+- Backend module /app/backend/rewards.py (router mounted in server.py as rewards_api). Settings in settings.app: extra_bonus_percent (5), scratch_enabled (true), scratch_mode fixed|range, scratch_amount (20), scratch_min/max.
+- Signup Bonus now stays LOCKED (type=bonus,status=locked txn). Old "unlock all on first approved lead" REMOVED. Locked remaining = locked total − sum(scratch_cards status=scratched). compute_wallet returns bonus_total/bonus_released/bonus_locked.
+- On lead → approved (admin PATCH /admin/leads/{id}): if partner has locked remaining > 0 and not duplicate: credit extra % of campaign.payout_amount (source lead_extra_bonus, XB-), issue scratch card (collection scratch_cards, unique active per lead, amount capped by remaining − outstanding cards). Idempotent on re-approval.
+- Customer scratches (POST /scratch-cards/{id}/scratch, atomic issued→scratched): credit source scratch_reward (SC-) to main; locked decreases.
+- Lead leaves approved: issued card → cancelled; scratched card → reversed + debit scratch_reward_reversal; extra bonus net → debit lead_extra_bonus_reversal. If main balance insufficient → pending_adjustments (open) auto-recovered on next credit (lead fund / scratch / extra) ; admin can Waive. Activity log action lead_rewards_reversed.
+- Frontend: ScratchCards.jsx (customer dashboard, canvas scratch), BonusWalletCard shows remaining/released, RewardsSetting.jsx on Admin Dashboard (settings + Users/Cards/Bonus txns/Adjustments tabs).
+- Verified by /app/backend/tests/sim_rewards_flow.py (approve→extra+card→scratch→reject reversal→re-approve→pending) + UI screenshots.

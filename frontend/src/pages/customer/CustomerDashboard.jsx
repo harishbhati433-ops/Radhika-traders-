@@ -11,6 +11,7 @@ import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
 import { toast } from "sonner";
 import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert } from "lucide-react";
+import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
 
 function Stat({ icon: Icon, label, value, tone = "slate" }) {
@@ -48,6 +49,8 @@ export default function CustomerDashboard() {
       )}
 
       <OfferBanners />
+
+      <ScratchCards onScratched={() => api.get("/wallet").then(({ data }) => setWallet(data))} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat icon={Wallet} label="Available Balance" value={`₹${wallet?.balance ?? "…"}`} tone="emerald" />

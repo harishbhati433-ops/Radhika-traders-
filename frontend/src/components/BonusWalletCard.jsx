@@ -8,13 +8,14 @@ export function BonusWalletCard({ wallet, compact }) {
   const st = sb?.status || "pending";
   const amt = sb?.amount ?? wallet?.bonus_locked ?? 0;
   const cfg = {
-    locked: { Icon: Lock, tone: "border-violet-200 bg-violet-50 text-violet-900", sub: "text-violet-700", label: "Signup Bonus · Locked", note: "Not withdrawable yet — moves to your Main Wallet automatically when your first lead is approved." },
+    locked: { Icon: Lock, tone: "border-violet-200 bg-violet-50 text-violet-900", sub: "text-violet-700", label: "Signup Bonus · Locked", note: `₹${sb?.released ?? 0} of ₹${sb?.total ?? amt} released so far. Every approved lead gives you a Scratch Card that moves bonus money to your Main Wallet.` },
+    released: { Icon: CheckCircle2, tone: "border-emerald-200 bg-emerald-50 text-emerald-900", sub: "text-emerald-700", label: "Signup Bonus · Fully released", note: `All ₹${sb?.total ?? amt} moved to your Main Wallet via Scratch Cards.` },
     credited: { Icon: CheckCircle2, tone: "border-emerald-200 bg-emerald-50 text-emerald-900", sub: "text-emerald-700", label: "Signup Bonus · Credited", note: `Added to your Main Wallet${sb?.credited_at ? ` on ${dt(sb.credited_at)}` : ""} — first lead approved.` },
-    pending: { Icon: Gift, tone: "border-violet-200 bg-violet-50 text-violet-900", sub: "text-violet-700", label: "Signup Bonus", note: "Get your first lead approved and this bonus is credited to your Main Wallet." },
+    pending: { Icon: Gift, tone: "border-violet-200 bg-violet-50 text-violet-900", sub: "text-violet-700", label: "Signup Bonus", note: "Get leads approved — each one unlocks a Scratch Card that releases this bonus to your Main Wallet." },
     not_eligible: { Icon: XCircle, tone: "border-slate-200 bg-slate-50 text-slate-700", sub: "text-slate-500", label: "Signup Bonus · Not eligible", note: "Duplicate account detected — signup bonus is given only once per person." },
     off: { Icon: Gift, tone: "border-slate-200 bg-slate-50 text-slate-700", sub: "text-slate-500", label: "Signup Bonus", note: "No signup bonus is running right now." },
   }[st];
-  const shown = st === "credited" || st === "locked" ? amt : st === "pending" ? amt : 0;
+  const shown = st === "locked" ? (sb?.remaining ?? wallet?.bonus_locked ?? amt) : st === "credited" || st === "released" || st === "pending" ? amt : 0;
   const body = (
     <>
       <div className="flex items-center gap-2 text-sm font-bold"><cfg.Icon className="h-4 w-4" /> Bonus Wallet</div>

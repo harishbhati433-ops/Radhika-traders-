@@ -48,6 +48,7 @@ from login_alerts import record_admin_login, notify_admin_login_locked
 import contact_settings
 import push_service
 import assistant_routes
+import rewards
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -1474,9 +1475,16 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
     if body.reject_reason is not None:
         upd["reject_reason"] = body.reject_reason
     await db.leads.update_one({"_id": l["_id"]}, {"$set": upd})
+    rewards_info = {}
     if l.get("partner_id") and body.status == "approved":
-        if await unlock_signup_bonus(l["partner_id"], l) == "none":
-            await grant_signup_bonus(l["partner_id"], l)
+        rewards_info = await rewards_api.on_lead_approved({**l, **upd})
+    elif l.get("partner_id") and body.status and body.status != "approved" and l.get("status") == "approved":
+        rewards_info = await rewards_api.on_lead_unapproved(l, admin.get("username") or admin["email"])
+        if rewards_info.get("cancelled") or rewards_info.get("reversed") or rewards_info.get("extra_reversed"):
+            await log_activity(admin, "lead_rewards_reversed", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
+                               client_id=l.get("partner_id", ""), client_name=l.get("partner_name", ""), status=body.status,
+                               amount=float(rewards_info.get("reversed", 0) + rewards_info.get("extra_reversed", 0)),
+                               detail=f"Scratch cards cancelled {rewards_info.get('cancelled', 0)} · reward reversed ₹{rewards_info.get('reversed', 0):g} · extra bonus reversed ₹{rewards_info.get('extra_reversed', 0):g}" + (f" · ₹{rewards_info['pending']:g} pending adjustment" if rewards_info.get("pending") else ""))
     if l.get("partner_id") and (body.status or body.account_status):
         label = (body.account_status or body.status).replace("_", " ")
         await push_service.notify_one({"user_id": l["partner_id"], "title": f"Lead {l['lead_id']} {label}",
@@ -1485,7 +1493,7 @@ async def admin_update_lead(lid: str, body: LeadStatusIn, request: Request, admi
     await log_activity(admin, "lead_status_updated", request, entity_type="lead", entity_id=l["lead_id"], entity_label=l.get("customer_name", ""),
                        campaign_id=l.get("campaign_id", ""), campaign_name=l.get("campaign_name", ""), client_id=l.get("partner_id", ""), client_name=l.get("partner_name", ""),
                        status=body.account_status or body.status or "", detail=body.reject_reason or "")
-    return lead_out(await db.leads.find_one({"_id": l["_id"]}))
+    return {**lead_out(await db.leads.find_one({"_id": l["_id"]})), "rewards": rewards_info}
 
 
 @api.post("/admin/leads/{lid}/fund")
@@ -1508,6 +1516,7 @@ async def admin_fund_lead(lid: str, body: LeadFundIn, request: Request, admin: d
                                       "source": "lead_fund", "created_by": admin["email"], "created_at": now_iso()})
     entry = {"amount": amount, "note": body.note.strip(), "ref_id": ref_id, "at": now_iso(), "by": admin["email"]}
     await db.leads.update_one({"_id": l["_id"]}, {"$push": {"fund_history": entry}, "$inc": {"fund_total": amount}, "$set": {"updated_at": now_iso()}})
+    await rewards_api.apply_pending_adjustments(l["partner_id"])
     await push_service.notify_one({"user_id": l["partner_id"], "title": f"₹{amount:g} credited for lead {l['lead_id']}",
                                        "body": f"{l.get('campaign_name', '')} · added to your wallet by Radhika Traders.", "link": "/app/wallet",
                                        "type": "wallet", "read": False, "created_at": now_iso()})
@@ -1889,24 +1898,22 @@ async def admin_signup_bonus_backfill(request: Request, admin: dict = Depends(re
             continue
         if r != "locked":
             continue
-        lead = await db.leads.find_one({"partner_id": uid, "status": "approved"}, sort=[("created_at", 1)])
-        if lead:
-            res = await unlock_signup_bonus(uid, lead)
-            out["credited" if res == "credited" else "duplicate"] += 1
-        else:
-            out["locked"] += 1
+        out["locked"] += 1
     await log_activity(admin, "signup_bonus_backfill", request, entity_type="settings", status="done", amount=float(s["signup_bonus"]),
                        detail=f"Locked {out['locked']} · Credited {out['credited']} · Duplicate {out['duplicate']} · Already had {out['already_had']}")
     return out
 
 
 async def compute_wallet(user_id: str) -> dict:
-    txns, wds = await asyncio.gather(
+    txns, wds, cards = await asyncio.gather(
         db.transactions.find({"user_id": user_id}, {"amount": 1, "type": 1, "status": 1}).to_list(5000),
-        db.withdrawals.find({"user_id": user_id}, {"amount": 1, "status": 1}).to_list(5000))
+        db.withdrawals.find({"user_id": user_id}, {"amount": 1, "status": 1}).to_list(5000),
+        db.scratch_cards.find({"user_id": user_id, "status": "scratched"}, {"amount": 1}).to_list(5000))
     total_credited = sum(t["amount"] for t in txns if t["type"] == "credit")
     total_debited = sum(t["amount"] for t in txns if t["type"] == "debit")
-    bonus_locked = sum(t["amount"] for t in txns if t["type"] == "bonus" and t.get("status") == "locked")
+    bonus_total = sum(t["amount"] for t in txns if t["type"] == "bonus" and t.get("status") == "locked")
+    bonus_released = sum(c["amount"] for c in cards)
+    bonus_locked = max(0.0, bonus_total - bonus_released)
     total_withdrawn = sum(w["amount"] for w in wds if w["status"] == "paid")
     pending_withdrawal = sum(w["amount"] for w in wds if w["status"] in ("pending", "approved"))
     # Paid withdrawals are already recorded as debit transactions, so they are
@@ -1919,6 +1926,8 @@ async def compute_wallet(user_id: str) -> dict:
         "total_withdrawn": round(total_withdrawn, 2),
         "pending_withdrawal": round(pending_withdrawal, 2),
         "bonus_locked": round(bonus_locked, 2),
+        "bonus_total": round(bonus_total, 2),
+        "bonus_released": round(bonus_released, 2),
     }
 
 
@@ -1927,7 +1936,7 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     w = await compute_wallet(user["id"])
     sb = await db.transactions.find_one({"user_id": user["id"], "$or": [{"signup_bonus_for": user["id"]}, {"ref_id": {"$regex": "^SB-"}}, {"type": "bonus"}]}, sort=[("created_at", -1)])
     if sb and sb.get("status") == "locked":
-        st = "locked"
+        st = "locked" if w["bonus_locked"] > 0 else "released"
     elif sb and sb.get("status") == "completed":
         st = "credited"
     elif sb and sb.get("status") == "cancelled":
@@ -1944,7 +1953,8 @@ async def get_wallet(user: dict = Depends(get_current_user)):
         st = "not_eligible" if lock == "duplicate" else "pending" if promised > 0 else "off"
         promised = 0 if lock == "duplicate" else promised
     amt = float(sb["amount"]) if sb else promised
-    w["signup_bonus"] = {"status": st, "amount": round(float(amt or 0), 2), "ref_id": (sb or {}).get("ref_id", ""), "credited_at": (sb or {}).get("unlocked_at", "")}
+    w["signup_bonus"] = {"status": st, "amount": round(float(amt or 0), 2), "ref_id": (sb or {}).get("ref_id", ""), "credited_at": (sb or {}).get("unlocked_at", ""),
+                         "total": w["bonus_total"], "released": w["bonus_released"], "remaining": w["bonus_locked"]}
     return w
 
 
@@ -3360,6 +3370,8 @@ api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet))
+rewards_api = rewards.build(db, get_settings, compute_wallet, push_service, log_activity, require_perm, require_admin, get_current_user, _signup_dup, lock_signup_bonus)
+api.include_router(rewards_api)
 app.include_router(api)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
@@ -3438,6 +3450,9 @@ async def startup():
         async for l in db.leads.find({"$or": [{"token": {"$exists": False}}, {"token": ""}]}, {"_id": 1}):
             await db.leads.update_one({"_id": l["_id"]}, {"$set": {"token": new_lead_token()}})
         await db.leads.create_index("token", unique=True, partialFilterExpression={"token": {"$type": "string"}})
+        await db.scratch_cards.create_index("lead_id", unique=True, partialFilterExpression={"active": True})
+        await db.scratch_cards.create_index([("user_id", 1), ("status", 1)])
+        await db.pending_adjustments.create_index([("user_id", 1), ("status", 1)])
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin

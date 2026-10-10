@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { ReferralBonusSetting } from "../../components/ReferralBonusSetting";
 import { MinWithdrawalSetting } from "../../components/MinWithdrawalSetting";
 import { SignupBonusSetting } from "../../components/SignupBonusSetting";
+import { RewardsSetting } from "../../components/RewardsSetting";
 import { WithdrawalToggleSetting } from "../../components/WithdrawalToggleSetting";
 import { ReferralLimitSetting } from "../../components/ReferralLimitSetting";
 import { AttendanceSummary } from "../../components/attendance/AttendanceSummary";
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
 
           <AttendanceSummary compact />
 
-          <div className="mt-6 space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><ReferralBonusSetting /></div>
+          <div className="mt-6 space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><RewardsSetting /><ReferralBonusSetting /></div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-slate-500"><ArrowDownToLine className="h-4 w-4" /> Total Withdrawals</div><div className="mt-1 font-mono text-2xl font-bold">{d.withdrawals_total}</div></div>
