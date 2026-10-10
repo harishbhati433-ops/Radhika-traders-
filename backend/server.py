@@ -372,6 +372,27 @@ class CampaignIn(BaseModel):
     banner_tagline: str = ""
     affiliate_links: List[AffiliateLink] = []
     lead_fields: List[dict] = []
+    token_passing: bool = False
+    token_param: str = "user_id"
+
+
+TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def new_lead_token() -> str:
+    import secrets
+    return "RT-" + "".join(secrets.choice(TOKEN_ALPHABET) for _ in range(8))
+
+
+def _redirect_with_token(c: dict, slug: str, token: str) -> str:
+    url = _primary_link(c) or f"/campaign/{slug}"
+    if not c.get("token_passing") or not token:
+        return url
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    param = re.sub(r"[^A-Za-z0-9_\-\.]", "", c.get("token_param") or "") or "user_id"
+    parts = urlsplit(url)
+    q = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != param] + [(param, token)]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
 
 
 class SliderSettingsIn(BaseModel):
@@ -1270,9 +1291,9 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
     submit_key = f"{c['_id']}:{hashlib.sha1(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:16]}:{int(datetime.now(timezone.utc).timestamp() // 5)}"
     existing = await db.leads.find_one({"submit_key": submit_key})
     if existing:
-        return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
+        return {"lead_id": existing["lead_id"], "token": existing.get("token", ""), "id": str(existing["_id"]), "redirect_url": _redirect_with_token(c, slug, existing.get("token", "")), "duplicate": existing.get("status") == "duplicate"}
     original, matched = await find_duplicate_lead(str(c["_id"]), keys)
-    doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
+    doc = {"lead_id": f"LD-{uuid.uuid4().hex[:8].upper()}", "token": new_lead_token(), "campaign_id": str(c["_id"]), "campaign_name": c["offer_name"], "slug": slug,
            "campaign_link": _primary_link(c) or "", "ref_code": ref, "partner_id": str(partner["_id"]) if partner else None,
            "partner_name": partner.get("name") if partner else "", "data": data, "customer_name": data.get("name", ""),
            "mobile": data.get("mobile", ""), "email": data.get("email", ""), "status": "pending", "account_status": "pending",
@@ -1284,12 +1305,16 @@ async def create_lead(slug: str, body: LeadIn, request: Request):
         res = await db.leads.insert_one(doc)
     except DuplicateKeyError:
         existing = await db.leads.find_one({"submit_key": submit_key})
-        return {"lead_id": existing["lead_id"], "id": str(existing["_id"]), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": existing.get("status") == "duplicate"}
+        if not existing:
+            doc["token"] = new_lead_token()
+            res = await db.leads.insert_one(doc)
+        else:
+            return {"lead_id": existing["lead_id"], "token": existing.get("token", ""), "id": str(existing["_id"]), "redirect_url": _redirect_with_token(c, slug, existing.get("token", "")), "duplicate": existing.get("status") == "duplicate"}
     if partner:
         await push_service.notify_one({"user_id": str(partner["_id"]), "title": f"New lead on {c['offer_name']}" + (" (duplicate)" if original is not None else ""),
                                            "body": f"{data.get('name') or 'A customer'} submitted details via your link." + (f" Marked duplicate of {original['lead_id']}." if original is not None else ""), "link": "/app/my-leads",
                                            "type": "lead", "read": False, "created_at": now_iso()})
-    return {"lead_id": doc["lead_id"], "id": str(res.inserted_id), "redirect_url": _primary_link(c) or f"/campaign/{slug}", "duplicate": original is not None}
+    return {"lead_id": doc["lead_id"], "token": doc["token"], "id": str(res.inserted_id), "redirect_url": _redirect_with_token(c, slug, doc["token"]), "duplicate": original is not None}
 
 
 @api.get("/my-leads")
@@ -1370,7 +1395,7 @@ def _lead_query(campaign_id, status, account_status, ref, search, date_from, dat
         q["created_at"] = {**({"$gte": date_from} if date_from else {}), **({"$lte": date_to + "T23:59:59"} if date_to else {})}
     if search:
         rx = {"$regex": re.escape(search), "$options": "i"}
-        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
+        q["$and"] = [{"$or": [{"customer_name": rx}, {"mobile": rx}, {"email": rx}, {"lead_id": rx}, {"token": rx}, {"campaign_name": rx}, {"partner_name": rx}, {"ref_code": rx}, {"data.pan": rx}]}]
     return q
 
 
@@ -1389,7 +1414,7 @@ async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = 
     labels = {k: v for k, v in LEAD_FIELDS} if isinstance(LEAD_FIELDS, list) and LEAD_FIELDS and isinstance(LEAD_FIELDS[0], tuple) else {}
     rows = []
     for l in items:
-        row = {"Lead ID": l.get("lead_id", ""), "Date": (l.get("created_at") or "")[:10], "Time": (l.get("created_at") or "")[11:19],
+        row = {"Lead ID": l.get("lead_id", ""), "User Unique ID": l.get("token", ""), "Date": (l.get("created_at") or "")[:10], "Time": (l.get("created_at") or "")[11:19],
                "Campaign": l.get("campaign_name", ""), "Lead Status": l.get("status", ""), "Account Status": l.get("account_status", ""),
                "Duplicate Of": l.get("duplicate_of", ""), "Duplicate Reason": l.get("duplicate_reason", ""),
                "Referred By (Partner)": l.get("partner_name", ""), "Ref Code": l.get("ref_code", "")}
@@ -1398,7 +1423,7 @@ async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = 
         row["Reject Reason"] = l.get("reject_reason", "")
         row["Last Updated"] = (l.get("updated_at") or "")[:19].replace("T", " ")
         rows.append(row)
-    cols = list(rows[0].keys()) if rows else ["Lead ID", "Date", "Campaign", "Lead Status", "Account Status"]
+    cols = list(rows[0].keys()) if rows else ["Lead ID", "User Unique ID", "Date", "Campaign", "Lead Status", "Account Status"]
     tag = f"{date_from or 'all'}_to_{date_to or 'all'}"
     fname = f"radhika_leads_{tag}"
     if format == "csv":
@@ -3403,6 +3428,9 @@ async def startup():
             await db.leads.create_index([("campaign_id", 1), (f"dup_keys.{k}", 1)])
         async for l in db.leads.find({"dup_keys": {"$exists": False}}, {"data": 1}):
             await db.leads.update_one({"_id": l["_id"]}, {"$set": {"dup_keys": lead_dup_keys(l.get("data") or {})}})
+        async for l in db.leads.find({"$or": [{"token": {"$exists": False}}, {"token": ""}]}, {"_id": 1}):
+            await db.leads.update_one({"_id": l["_id"]}, {"$set": {"token": new_lead_token()}})
+        await db.leads.create_index("token", unique=True, partialFilterExpression={"token": {"$type": "string"}})
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin

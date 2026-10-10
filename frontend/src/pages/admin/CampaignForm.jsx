@@ -14,7 +14,7 @@ const EMPTY = {
   description: "", requirements: "", important_notes: "", min_requirement: "", max_payout: "",
   special_bonus: "", payment_timeline: "", validity: "", important_conditions: "",
   start_date: "", end_date: "", budget: "", report_frequency: "", payment_terms: "",
-  logo_url: "", banner_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [],
+  logo_url: "", banner_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [], token_passing: false, token_param: "user_id",
 };
 const LEAD_FIELDS = [["name", "Full Name"], ["mobile", "Mobile Number"], ["email", "Gmail / Email ID"], ["pan", "PAN Number"], ["dob", "Date of Birth"], ["aadhaar", "Aadhaar Number"], ["bank_account", "Bank Account Number"], ["ifsc", "IFSC Code"], ["upi", "UPI ID"], ["address", "Address"]];
 const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
@@ -153,6 +153,30 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className={`rounded-2xl border p-4 transition-colors ${f.token_passing ? "border-amber-300 bg-amber-50/60" : "border-slate-200 bg-slate-50"}`} data-testid="cf-token-passing-card">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-slate-900">User Unique ID Passing</div>
+                <div className="text-xs text-slate-500">ON होने पर हर lead की User Unique ID (RT-XXXXXXXX) form submit के बाद offer URL में pass होगी। OFF पर URL में कुछ नहीं जुड़ेगा।</div>
+              </div>
+              <button type="button" role="switch" aria-checked={!!f.token_passing} data-testid="cf-token-passing"
+                onClick={() => setF({ ...f, token_passing: !f.token_passing })}
+                className={`relative inline-flex h-7 w-[4.25rem] shrink-0 items-center rounded-full text-[10px] font-extrabold transition-colors ${f.token_passing ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-700"}`}>
+                <span className={`absolute ${f.token_passing ? "left-2.5" : "right-2.5"}`}>{f.token_passing ? "ON" : "OFF"}</span>
+                <span className={`absolute h-5 w-5 rounded-full bg-white shadow transition-transform ${f.token_passing ? "translate-x-[2.75rem]" : "translate-x-1"}`} />
+              </button>
+            </div>
+            {f.token_passing && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr] sm:items-center">
+                <div>
+                  <Label className="text-xs">URL parameter name</Label>
+                  <Input data-testid="cf-token-param" value={f.token_param || ""} onChange={set("token_param")} placeholder="user_id" className="mt-1 h-9 font-mono text-sm" />
+                </div>
+                <div className="text-xs text-slate-500 break-all">Example: <span className="font-mono text-slate-800">{(f.affiliate_links.find((l) => l.is_primary && l.url) || f.affiliate_links.find((l) => l.url) || {}).url || "https://broker.com/open"}{((f.affiliate_links.find((l) => l.url) || {}).url || "").includes("?") ? "&" : "?"}{(f.token_param || "").replace(/[^A-Za-z0-9_\-.]/g, "") || "user_id"}=RT-A7K92PK4</span></div>
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
