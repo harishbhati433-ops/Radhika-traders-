@@ -165,7 +165,7 @@ export function DashboardLayout({ nav, children, title }) {
         {/* Content */}
         <main className="rt-enter min-w-0 flex-1" key={loc.pathname}>
           <div className="mb-6 flex items-start justify-between gap-4">
-            {title && <h1 className="font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
+            {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             <div className="flex items-center gap-2">
               <span className="hidden lg:block"><ThemeToggle /></span>
               <PushStatusButton />

@@ -7,6 +7,7 @@ import api, { formatApiErrorDetail } from "../../lib/api";
 import { PasswordInput } from "../../components/PasswordInput";
 import { AppLockSettings } from "../../components/applock/AppLockSettings";
 import { toast } from "sonner";
+import { timeGreeting, greetingEmoji, capitalizeName } from "../../lib/greeting";
 import { Eye, Pencil, KeyRound, History, CalendarCheck, ShieldCheck } from "lucide-react";
 
 function ChangePassword() {
@@ -36,13 +37,14 @@ function ChangePassword() {
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
+  const greeting = timeGreeting();
   const [acts, setActs] = useState([]);
   useEffect(() => { api.get("/employee/my-activity").then(({ data }) => setActs(data)).catch(() => {}); }, []);
   const perms = user?.permissions || {};
   const tiles = adminNav.filter((n) => n.perm && perms[n.perm] && perms[n.perm] !== "none");
 
   return (
-    <DashboardLayout nav={adminNav} title={`Hello, ${user?.name?.split(" ")[0] || "Team"}`}>
+    <DashboardLayout nav={adminNav} title={`${greeting}, ${capitalizeName(user?.name?.split(" ")[0] || "Team")}\u00A0${greetingEmoji(greeting)}`}>
       <div className="mb-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white" data-testid="emp-welcome">
         <div className="text-xs uppercase tracking-wider text-amber-300">Employee workspace · {user?.employee_code || user?.username}</div>
         <div className="mt-1 text-sm text-slate-200">You can access only the modules assigned by the Super Admin. Every action you take is recorded in the activity log.</div>

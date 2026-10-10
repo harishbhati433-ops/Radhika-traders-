@@ -10,6 +10,7 @@ import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
 import { toast } from "sonner";
+import { timeGreeting, greetingEmoji, capitalizeName } from "../../lib/greeting";
 import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert } from "lucide-react";
 import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
@@ -27,6 +28,7 @@ function Stat({ icon: Icon, label, value, tone = "slate" }) {
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
+  const greeting = timeGreeting();
   const [wallet, setWallet] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
 
@@ -40,7 +42,7 @@ export default function CustomerDashboard() {
   const kycDone = user?.kyc?.status === "pending" || user?.kyc?.status === "verified";
 
   return (
-    <DashboardLayout nav={customerNav} title={`Hi ${user?.name?.split(" ")[0] || ""} 👋`}>
+    <DashboardLayout nav={customerNav} title={`${greeting}, ${capitalizeName(user?.name?.split(" ")[0] || "")}\u00A0${greetingEmoji(greeting)}`}>
       <WelcomeModal />
       {!kycDone && (
         <Link to="/app/profile" data-testid="kyc-alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm font-medium text-amber-800 hover:bg-amber-100">

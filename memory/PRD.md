@@ -637,3 +637,6 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - GET /api/share/poster/{slug} returns uploaded poster if set, else auto-generated (fallback per user choice). GET /api/share/refer-poster returns uploaded invite poster (404 if none).
 - ShareButtons.jsx: when posterUrl provided → "With Poster | Normal Link" toggle; poster mode shares poster file + message via navigator.share (mobile), desktop fallback = download poster + copy message + open WhatsApp/Telegram. Used in CampaignDetail (detail-share-*) and ReferEarnCard (refer-share-*). Link preview (OG) intentionally NOT changed (user choice).
 - Verified: upload → settings/campaign → poster endpoints return identical bytes; UI toggle + Share Kit shows uploaded poster. Test posters cleared afterwards.
+
+## Update (Oct 2026) — Time-based greeting
+- lib/greeting.js: timeGreeting() (IST: Morning 5-12, Afternoon 12-17, Evening 17-21, else Night) + emoji + capitalizeName. Used in CustomerDashboard & EmployeeDashboard header title (e.g. 'Good Afternoon, Harish ☀️'). Header h1 now text-xl on mobile.
