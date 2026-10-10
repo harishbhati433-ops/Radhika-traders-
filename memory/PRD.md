@@ -657,3 +657,8 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Company-paid extra bonus is now OPTIONAL: extra_bonus_enabled default False (admin toggle rw-extra-toggle). No separate 5% credit unless turned ON.
 - Total Earnings (customer wallet, admin customers list, admin wallets, admin dashboard KPI) now exclude reversal/adjustment debits (any debit txn with a `source`: scratch_reward_reversal, lead_extra_bonus_reversal, ADJ recoveries, admin_adjust deduct). Withdrawal-paid debits (no source) do not reduce earnings.
 - Verified by tests/sim_rewards_pct.py (approve → ₹25 card for ₹500 payout, no extra; scratch; reject → earnings/locked restored; extra ON path; admin customers earnings match).
+
+## Update (Oct 2026) — Less scrolling: collapsible sections
+- components/Collapsible.jsx (remembers open/closed per id in localStorage, Show/Hide chevron).
+- Admin Dashboard: "Settings & Bonus Controls" (7 panels) collapsed by default; "Website Visitors (Live)" collapsible (default open). RewardsSetting records table hidden until "Show records"/tab click; max-h-80 scroll with sticky header.
+- Customer Dashboard: Refer & Earn card collapsed by default (Show to expand); Scratch Cards section auto-expands when new cards exist, otherwise Show/Hide toggle.

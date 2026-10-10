@@ -11,7 +11,8 @@ import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
 import { toast } from "sonner";
 import { timeGreeting, greetingEmoji, capitalizeName } from "../../lib/greeting";
-import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert } from "lucide-react";
+import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert, Users } from "lucide-react";
+import { Collapsible } from "../../components/Collapsible";
 import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
 
@@ -52,9 +53,9 @@ export default function CustomerDashboard() {
 
       <OfferBanners />
 
-      <ScratchCards onScratched={() => api.get("/wallet").then(({ data }) => setWallet(data))} />
+      <ScratchCards onScratched={() => api.get("/wallet").then(({ data }) => setWallet(data))} collapsible />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat icon={Wallet} label="Available Balance" value={`₹${wallet?.balance ?? "…"}`} tone="emerald" />
         <BonusWalletCard wallet={wallet} compact />
         <Stat icon={TrendingUp} label="Total Earnings" value={`₹${wallet?.total_earnings ?? "…"}`} tone="red" />
@@ -75,7 +76,7 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      <div className="mt-6"><ReferEarnCard code={user?.referral_code} /></div>
+      <div className="mt-6"><Collapsible id="cust-refer" icon={Users} title="Refer & Earn" subtitle="Invite friends with your link — poster, QR code & share buttons" badge="Earn" testId="refer-collapsible"><ReferEarnCard code={user?.referral_code} /></Collapsible></div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">

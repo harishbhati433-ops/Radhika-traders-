@@ -14,7 +14,8 @@ import { RewardsSetting } from "../../components/RewardsSetting";
 import { WithdrawalToggleSetting } from "../../components/WithdrawalToggleSetting";
 import { ReferralLimitSetting } from "../../components/ReferralLimitSetting";
 import { AttendanceSummary } from "../../components/attendance/AttendanceSummary";
-import { Megaphone, Radio, PauseCircle, XCircle, Users, Wallet, TrendingUp, ArrowDownToLine, Clock, CheckCircle, IndianRupee } from "lucide-react";
+import { Megaphone, Radio, PauseCircle, XCircle, Users, Wallet, TrendingUp, ArrowDownToLine, Clock, CheckCircle, IndianRupee, Settings2, Eye } from "lucide-react";
+import { Collapsible } from "../../components/Collapsible";
 
 function KPI({ icon: Icon, label, value, tone }) {
   const tones = { emerald: "from-emerald-500 to-emerald-700", red: "from-red-600 to-red-900", amber: "from-amber-500 to-amber-700", slate: "from-slate-700 to-slate-900", sky: "from-sky-500 to-sky-700" };
@@ -71,9 +72,13 @@ export default function AdminDashboard() {
           </div>
 
           <AttendanceSummary compact />
-          <div className="mt-6"><VisitorStats /></div>
+          <div className="mt-6"><Collapsible id="admin-visitors" icon={Eye} title="Website Visitors (Live)" subtitle="Daily unique visitors, page views, online now, traffic chart & date filter" defaultOpen testId="admin-visitors-collapsible"><VisitorStats /></Collapsible></div>
 
-          <div className="mt-6 space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><RewardsSetting /><ReferralBonusSetting /><ReferPosterSetting /></div>
+          <div className="mt-6 space-y-3">
+            <Collapsible id="admin-settings" icon={Settings2} title="Settings & Bonus Controls" subtitle="Withdrawals · Minimum withdrawal · Refer & Earn limits · Signup Bonus · Scratch Card & Extra Bonus · Refer poster" badge="7 panels" testId="admin-settings-collapsible">
+              <div className="space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><RewardsSetting /><ReferralBonusSetting /><ReferPosterSetting /></div>
+            </Collapsible>
+          </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-slate-500"><ArrowDownToLine className="h-4 w-4" /> Total Withdrawals</div><div className="mt-1 font-mono text-2xl font-bold">{d.withdrawals_total}</div></div>

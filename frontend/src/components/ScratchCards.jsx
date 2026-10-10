@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { toast } from "sonner";
-import { Gift, Sparkles, Lock } from "lucide-react";
+import { Gift, Sparkles, Lock, ChevronDown } from "lucide-react";
 
 function ScratchCard({ card, onDone }) {
   const ref = useRef(null);
@@ -64,24 +64,32 @@ function ScratchCard({ card, onDone }) {
   );
 }
 
-export function ScratchCards({ onScratched }) {
+export function ScratchCards({ onScratched, collapsible = false }) {
   const [data, setData] = useState(null);
+  const [open, setOpen] = useState(() => localStorage.getItem("rt_collapse_cust-scratch") !== "0");
   const load = () => api.get("/scratch-cards").then(({ data }) => setData(data)).catch(() => {});
   useEffect(() => { load(); }, []);
   if (!data) return null;
   const issued = data.cards.filter((c) => c.status === "issued");
   const done = data.cards.filter((c) => c.status === "scratched").slice(0, 6);
   if (!issued.length && !done.length) return null;
+  const toggle = () => { const v = !open; setOpen(v); localStorage.setItem("rt_collapse_cust-scratch", v ? "1" : "0"); };
+  const showBody = !collapsible || open || issued.length > 0;
   return (
     <div className="mt-6 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5" data-testid="scratch-cards-section">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2"><div className="rounded-xl bg-amber-400 p-2 text-slate-900"><Gift className="h-5 w-5" /></div>
-          <div><div className="font-display font-bold text-slate-900">Scratch Cards</div><div className="text-xs text-slate-600">Har approved lead par ek card — scratch karo aur Signup Bonus Main Wallet me unlock karo.</div></div></div>
-        <div className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800" data-testid="scratch-bonus-remaining"><Lock className="h-3 w-3" /> Locked left: ₹{data.bonus.remaining} / ₹{data.bonus.total}</div>
+          <div><div className="font-display font-bold text-slate-900">Scratch Cards{issued.length > 0 && <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white" data-testid="scratch-new-count">{issued.length} new</span>}</div><div className="text-xs text-slate-600">Har approved lead par ek card — scratch karo aur Signup Bonus Main Wallet me unlock karo.</div></div></div>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800" data-testid="scratch-bonus-remaining"><Lock className="h-3 w-3" /> Locked left: ₹{data.bonus.remaining} / ₹{data.bonus.total}</div>
+          {collapsible && issued.length === 0 && <button type="button" onClick={toggle} data-testid="scratch-toggle" className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700">{open ? "Hide" : "Show"} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} /></button>}
+        </div>
       </div>
-      {issued.length > 0 && <div className="mt-4 flex gap-3 overflow-x-auto pb-2 rt-scroll">{issued.map((c) => <ScratchCard key={c.id} card={c} onDone={(r) => { load(); onScratched?.(r); }} />)}</div>}
-      {issued.length === 0 && <div className="mt-3 text-xs text-slate-500" data-testid="scratch-none-pending">Abhi koi naya card nahi — agli approved lead par milega.</div>}
-      {done.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{done.map((c) => <span key={c.id} data-testid={`scratch-done-${c.id}`} className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">₹{c.amount} · {c.lead_ref}</span>)}</div>}
+      {showBody && <>
+        {issued.length > 0 && <div className="mt-4 flex gap-3 overflow-x-auto pb-2 rt-scroll">{issued.map((c) => <ScratchCard key={c.id} card={c} onDone={(r) => { load(); onScratched?.(r); }} />)}</div>}
+        {issued.length === 0 && <div className="mt-3 text-xs text-slate-500" data-testid="scratch-none-pending">Abhi koi naya card nahi — agli approved lead par milega.</div>}
+        {done.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{done.map((c) => <span key={c.id} data-testid={`scratch-done-${c.id}`} className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">₹{c.amount} · {c.lead_ref}</span>)}</div>}
+      </>}
     </div>
   );
 }

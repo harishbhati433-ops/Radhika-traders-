@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { formatApiErrorDetail } from "../lib/api";
 import { toast } from "sonner";
-import { Gift, Percent, Loader2, Save, Power, Users, Ticket, AlertTriangle } from "lucide-react";
+import { Gift, Percent, Loader2, Save, Power, Users, Ticket, AlertTriangle, ChevronDown } from "lucide-react";
 
 const dt = (iso) => iso ? new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 const STATUS = { issued: "bg-amber-100 text-amber-800", scratched: "bg-emerald-100 text-emerald-800", cancelled: "bg-slate-200 text-slate-600", reversed: "bg-rose-100 text-rose-700" };
@@ -11,6 +11,7 @@ export function RewardsSetting() {
   const [f, setF] = useState({});
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("users");
+  const [showRecords, setShowRecords] = useState(false);
 
   const load = () => api.get("/admin/rewards").then(({ data }) => { setD(data); setF(data.settings); }).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -68,11 +69,14 @@ export function RewardsSetting() {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1">{tabs.map(([k, l]) => <button key={k} type="button" onClick={() => setTab(k)} data-testid={`rw-tab-${k}`} className={`rounded-full px-3 py-1.5 text-xs font-bold ${tab === k ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>{l}</button>)}</div>
-      <div className="mt-3 overflow-x-auto rounded-xl border border-amber-200 bg-white rt-scroll" data-testid={`rw-table-${tab}`}>
+      <div className="mt-4 flex flex-wrap items-center gap-1">
+        {tabs.map(([k, l]) => <button key={k} type="button" onClick={() => { setTab(k); setShowRecords(true); }} data-testid={`rw-tab-${k}`} className={`rounded-full px-3 py-1.5 text-xs font-bold ${tab === k && showRecords ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>{l}</button>)}
+        <button type="button" onClick={() => setShowRecords((v) => !v)} data-testid="rw-records-toggle" className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">{showRecords ? "Hide records" : "Show records"} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showRecords ? "rotate-180" : ""}`} /></button>
+      </div>
+      {showRecords && <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-amber-200 bg-white rt-scroll" data-testid={`rw-table-${tab}`}>
         <table className="w-full text-left text-xs">
           {tab === "users" && <>
-            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2"><Users className="inline h-3 w-3" /> Customer</th><th className="p-2 text-right">Signup Bonus</th><th className="p-2 text-right">Released</th><th className="p-2 text-right">Locked left</th><th className="p-2 text-right">Extra bonus</th><th className="p-2">Cards</th><th className="p-2 text-right">Main Wallet</th><th className="p-2">Status</th></tr></thead>
+            <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="p-2"><Users className="inline h-3 w-3" /> Customer</th><th className="p-2 text-right">Signup Bonus</th><th className="p-2 text-right">Released</th><th className="p-2 text-right">Locked left</th><th className="p-2 text-right">Extra bonus</th><th className="p-2">Cards</th><th className="p-2 text-right">Main Wallet</th><th className="p-2">Status</th></tr></thead>
             <tbody>{d.users.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-400">No customers with a Signup Bonus yet.</td></tr>}
               {d.users.map((u) => <tr key={u.user_id} className="border-t border-slate-100" data-testid={`rw-user-${u.user_id}`}><td className="p-2"><div className="font-semibold text-slate-900">{u.name}</div><div className="font-mono text-slate-500">{u.customer_id} · {u.mobile}</div></td><td className="p-2 text-right font-mono">₹{u.total}</td><td className="p-2 text-right font-mono text-emerald-700">₹{u.released}</td><td className="p-2 text-right font-mono font-bold text-violet-700">₹{u.remaining}</td><td className="p-2 text-right font-mono">₹{u.extra_bonus_total}</td><td className="p-2">{u.cards_scratched} scratched · {u.cards_pending} pending</td><td className="p-2 text-right font-mono">₹{u.main_balance}</td><td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${u.status === "active" ? "bg-violet-100 text-violet-800" : "bg-emerald-100 text-emerald-800"}`}>{u.status === "active" ? "Bonus active" : "Fully released"}</span></td></tr>)}
             </tbody></>}
@@ -92,7 +96,7 @@ export function RewardsSetting() {
               {d.adjustments.map((a) => <tr key={a.id} className="border-t border-slate-100" data-testid={`rw-adj-${a.id}`}><td className="p-2 font-semibold">{a.user_name}</td><td className="p-2 font-mono">{a.lead_ref}</td><td className="p-2">{a.description}</td><td className="p-2 text-right font-mono">₹{a.amount}</td><td className="p-2 text-right font-mono font-bold text-rose-700">₹{a.remaining}</td><td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${a.status === "open" ? "bg-rose-100 text-rose-700" : "bg-slate-200 text-slate-600"}`}>{a.status}</span></td><td className="whitespace-nowrap p-2 text-slate-500">{dt(a.created_at)}</td><td className="p-2">{a.status === "open" && <button type="button" onClick={() => waive(a)} data-testid={`rw-adj-waive-${a.id}`} className="rounded-full border border-slate-300 px-2 py-1 text-[10px] font-bold text-slate-700">Waive</button>}</td></tr>)}
             </tbody></>}
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
