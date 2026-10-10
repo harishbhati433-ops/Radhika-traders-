@@ -15,6 +15,14 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: visitor-report
+    description: "Emails the admin an anonymous daily website-visitor count report every night at 12:00 AM IST (covers the day just ended)"
+    cron: "0 0 * * *"
+    timezone: "Asia/Kolkata"
+    endpoint: "{{BASE_URL}}/api/cron/visitor-report"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
   - name: email-retry
     description: "Every 5 min: re-send emails that failed because the email provider was down or rate-limited (5 → 10 → 15 → 30 → 60 → 120 min schedule)"
     cron: "*/5 * * * *"

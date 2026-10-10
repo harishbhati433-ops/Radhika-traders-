@@ -7,6 +7,7 @@ import { prefetchRoute } from "../../lib/prefetch";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ReferralBonusSetting } from "../../components/ReferralBonusSetting";
 import { ReferPosterSetting } from "../../components/ReferPosterSetting";
+import { VisitorStats } from "../../components/VisitorStats";
 import { MinWithdrawalSetting } from "../../components/MinWithdrawalSetting";
 import { SignupBonusSetting } from "../../components/SignupBonusSetting";
 import { RewardsSetting } from "../../components/RewardsSetting";
@@ -70,6 +71,7 @@ export default function AdminDashboard() {
           </div>
 
           <AttendanceSummary compact />
+          <div className="mt-6"><VisitorStats /></div>
 
           <div className="mt-6 space-y-4"><WithdrawalToggleSetting /><MinWithdrawalSetting /><ReferralLimitSetting /><SignupBonusSetting /><RewardsSetting /><ReferralBonusSetting /><ReferPosterSetting /></div>
 

@@ -49,6 +49,7 @@ import contact_settings
 import push_service
 import assistant_routes
 import rewards
+import visits
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -3404,6 +3405,15 @@ api.include_router(build_password_reset_router(db, get_current_user, _log_securi
 api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet, push_service, log_activity))
 rewards_api = rewards.build(db, get_settings, compute_wallet, push_service, log_activity, require_perm, require_admin, get_current_user, _signup_dup, lock_signup_bonus)
 api.include_router(rewards_api)
+
+
+async def _admin_emails() -> list:
+    admins = await db.users.find({"role": "admin"}, {"email": 1}).to_list(10)
+    return sorted({a["email"].lower() for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower(), contact_settings.CONTACT["owner_email"].lower()} - {""})
+
+
+visits_api = visits.build(db, require_admin, email_service.send_email, email_service._wrap, _admin_emails)
+api.include_router(visits_api)
 app.include_router(api)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
@@ -3485,6 +3495,7 @@ async def startup():
         await db.scratch_cards.create_index("lead_id", unique=True, partialFilterExpression={"active": True})
         await db.scratch_cards.create_index([("user_id", 1), ("status", 1)])
         await db.pending_adjustments.create_index([("user_id", 1), ("status", 1)])
+        await visits_api.ensure_indexes()
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     # Seed admin
