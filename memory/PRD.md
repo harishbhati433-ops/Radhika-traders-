@@ -668,3 +668,10 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Settings: extra_bonus_enabled (default OFF), extra_bonus_mode fixed|percent, extra_bonus_amount (₹10 default), extra_bonus_percent. When ON, each approved lead issues a separate EXTRA card; scratching credits lead_extra_bonus (XB-) to Main Wallet without touching locked balance. OFF → only bonus card.
 - Reversal: extra card scratched → card marked reversed, money reversed once via lead_extra_bonus net (fixed double-reversal bug). Verified by tests/sim_rewards_extra_card.py.
 - UI: RewardsSetting extra block has ON/OFF + mode + amount; cards table shows Type; customer card shows pink EXTRA badge.
+
+## Update (Oct 2026) — Poster cache bug + Assistant button + T&C line
+- BUG FIXED: Admin poster remove/change not reflecting on customer panel. Root cause: `/api/share/refer-poster` and `/api/share/poster/{slug}` sent `Cache-Control: private, max-age=3600` → browser served 1-hour-old image. Now `no-store` (server.py). Verified via curl: set → 200, remove → 404 instantly.
+- Assistant floating button: compact 48px round icon (no text label), stacked above WhatsApp float, label shown as hover tooltip on desktop (AssistantWidget.jsx).
+- "_*T&C apply_" line appended to all share messages: Refer & Earn invite (ReferEarnCard.jsx), campaign apply message (CampaignDetail.jsx), ShareKit captions Hindi/English/Short (ShareKit.jsx).
+- Production redeploy triggered (dual scratch cards build). Fixes above need another redeploy.
+- Note: live site Scratch Card setting may still be "Fixed ₹0" — admin must switch to "% of campaign payout = 5" after deploy.

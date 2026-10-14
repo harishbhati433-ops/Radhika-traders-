@@ -24,9 +24,9 @@ export function captionsFor(c, link, name, wa = DEFAULT_CONTACT.whatsapp_number)
   const brand = c.company ? ` (*${c.company}*)` : "";
   const phone = fmtWa(wa);
   return [
-    ["Hindi", `🙏 नमस्ते!\n\n✨ *${c.offer_name}*${brand} में आज ही अपना account खोलें।${benefit}\n✅ बिलकुल free · 100% online\n\n👉 मेरे link से apply करें:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}`],
-    ["English", `🙏 Hello!\n\n✨ Open your *${c.offer_name}*${brand} account today.${benefit}\n✅ Free · 100% online\n\n👉 Apply using my link:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}`],
-    ["Short", `✨ *${c.offer_name}* 🔥${benefit}\n👉 Apply here: ${link}\n🏆 ${who}`],
+    ["Hindi", `🙏 नमस्ते!\n\n✨ *${c.offer_name}*${brand} में आज ही अपना account खोलें।${benefit}\n✅ बिलकुल free · 100% online\n\n👉 मेरे link से apply करें:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}\n\n_*T&C apply_`],
+    ["English", `🙏 Hello!\n\n✨ Open your *${c.offer_name}*${brand} account today.${benefit}\n✅ Free · 100% online\n\n👉 Apply using my link:\n${link}\n\n🏆 ${who}\n📞 WhatsApp: ${phone}\n\n_*T&C apply_`],
+    ["Short", `✨ *${c.offer_name}* 🔥${benefit}\n👉 Apply here: ${link}\n🏆 ${who}\n_*T&C apply_`],
   ];
 }
 

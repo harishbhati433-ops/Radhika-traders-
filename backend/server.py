@@ -3004,7 +3004,7 @@ async def share_refer_poster(user: dict = Depends(get_current_user)):
     if not up:
         raise HTTPException(status_code=404, detail="No Refer & Earn poster uploaded")
     data, ct, ext = up
-    return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="refer-earn-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, max-age=3600"})
+    return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="refer-earn-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "no-store"})
 
 
 @api.get("/share/poster/{slug}")
@@ -3015,13 +3015,13 @@ async def share_poster(slug: str, request: Request, user: dict = Depends(get_cur
     up = await _uploaded_poster(c.get("poster_url", ""))
     if up:
         data, ct, ext = up
-        return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="{slug}-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, max-age=3600"})
+        return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="{slug}-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "no-store"})
     origin = _share_origin(request)
     link = (f"{origin}/join/{slug}?ref={user.get('referral_code')}" if any(f.get("enabled") for f in c.get("lead_fields", [])) else f"{origin}/api/go/{slug}?ref={user.get('referral_code')}") if user.get("referral_code") else f"{origin}/campaign/{slug}"
     logo = await _logo_bytes(c.get("logo_url", ""))
     png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo, user.get("mobile", "") if user.get("role") == "customer" else "")
     fname = f"{slug}-{user.get('referral_code', 'share')}.png"
-    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "private, max-age=3600"})
+    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "no-store"})
 
 
 # ----------------------------- Reports (admin -> publishers) -----------------------------

@@ -128,9 +128,10 @@ export function AssistantWidget({ enabled = true }) {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} data-testid="assistant-open" aria-label="Radhika Voice Assistant"
-          className="fixed bottom-[4.75rem] right-4 z-[60] inline-flex h-11 items-center gap-2 rounded-full bg-slate-950 pl-3 pr-4 text-xs font-bold text-white shadow-lg ring-2 ring-amber-400/70 transition-transform hover:scale-105">
-          <Sparkles className="h-4 w-4 text-amber-400" /> Radhika Voice Assistant
+        <button onClick={() => setOpen(true)} data-testid="assistant-open" aria-label="Radhika Voice Assistant" title="Radhika Voice Assistant"
+          className="group fixed bottom-[4.75rem] right-4 z-[60] flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-white shadow-lg ring-2 ring-amber-400/70 transition-transform hover:scale-105 sm:bottom-[5.25rem] sm:right-5 sm:h-12 sm:w-12">
+          <Sparkles className="h-5 w-5 text-amber-400" />
+          <span className="pointer-events-none absolute right-full mr-2 hidden whitespace-nowrap rounded-full bg-slate-950 px-3 py-1.5 text-xs font-bold opacity-0 shadow-lg transition-opacity group-hover:opacity-100 sm:block">Radhika Voice Assistant</span>
         </button>
       )}
       {open && (
