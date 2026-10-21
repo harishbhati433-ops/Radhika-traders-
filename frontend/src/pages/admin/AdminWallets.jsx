@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api from "../../lib/api";
@@ -12,9 +13,10 @@ const inr = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractio
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }) : "—");
 
 export default function AdminWallets() {
+  const [params] = useSearchParams();
   const [data, setData] = useState(null);
-  const [show, setShow] = useState("holding");
-  const [q, setQ] = useState("");
+  const [show, setShow] = useState(params.get("q") ? "all" : "holding");
+  const [q, setQ] = useState(params.get("q") || "");
   const [sort, setSort] = useState("total");
   const [stmt, setStmt] = useState(null);
   const [dp, setDp] = useState(false);

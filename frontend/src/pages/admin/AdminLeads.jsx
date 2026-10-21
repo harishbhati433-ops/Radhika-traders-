@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -24,7 +25,8 @@ export default function AdminLeads() {
   const [list, setList] = useState([]);
   const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
   const [campaigns, setCampaigns] = useState([]);
-  const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: "", date_from: "", date_to: "", preset: "" });
+  const [params] = useSearchParams();
+  const [flt, setFlt] = useState({ campaign_id: "", status: "", account_status: "", ref: "", search: params.get("search") || "", date_from: "", date_to: "", preset: "" });
   const [view, setView] = useState(null);
   const [fundOpen, setFundOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api from "../../lib/api";
@@ -11,8 +12,9 @@ const TONE = { pending: "bg-amber-50 text-amber-700", approved: "bg-emerald-50 t
 const A_LABEL = { pending: "Not Started", account_opened: "Account Open", trade_done: "Trade Done", rejected: "Account Rejected" };
 
 export default function MyLeads() {
+  const [params] = useSearchParams();
   const [leads, setLeads] = useState([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(params.get("q") || "");
   const [status, setStatus] = useState("");
   const [camp, setCamp] = useState("");
   useEffect(() => { api.get("/my-leads").then(({ data }) => setLeads(data)); }, []);

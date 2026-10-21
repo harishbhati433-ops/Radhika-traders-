@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api from "../../lib/api";
@@ -6,6 +7,8 @@ import { Wallet as WalletIcon, ArrowUpRight, ArrowDownRight, Lock } from "lucide
 import { BonusWalletCard } from "../../components/BonusWalletCard";
 
 export default function Wallet() {
+  const [params] = useSearchParams();
+  const highlight = params.get("highlight");
   const [wallet, setWallet] = useState(null);
   const [txns, setTxns] = useState([]);
 
@@ -13,6 +16,7 @@ export default function Wallet() {
     api.get("/wallet").then(({ data }) => setWallet(data));
     api.get("/wallet/transactions").then(({ data }) => setTxns(data));
   }, []);
+  useEffect(() => { if (highlight && txns.length) document.querySelector(`[data-testid="txn-${highlight}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [highlight, txns]);
 
   const cards = [
     ["Available Balance", wallet?.balance, "text-emerald-600"],
@@ -49,7 +53,7 @@ export default function Wallet() {
         ) : (
           <div className="divide-y divide-slate-100">
             {txns.map((t) => (
-              <div key={t.id} className="flex items-center gap-3 p-4" data-testid={`txn-${t.id}`}>
+              <div key={t.id} className={`flex items-center gap-3 p-4 ${highlight === t.id ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : ""}`} data-testid={`txn-${t.id}`}>
                 <div className={`rounded-full p-2 ${t.type === "credit" ? "bg-emerald-50 text-emerald-600" : t.type === "bonus" ? "bg-violet-50 text-violet-600" : "bg-rose-50 text-rose-600"}`}>
                   {t.type === "bonus" ? <Lock className="h-4 w-4" /> : t.type === "credit" ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                 </div>

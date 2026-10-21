@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -15,7 +16,8 @@ export default function AdminReports() {
   const [customers, setCustomers] = useState([]);
   const [f, setF] = useState({ title: "", note: "", audience: "all", user_ids: [], send_email: true });
   const [file, setFile] = useState(null);
-  const [q, setQ] = useState("");
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(params.get("q") || "");
   const [busy, setBusy] = useState(false);
 
   const load = () => api.get("/admin/reports").then(({ data }) => setList(data));

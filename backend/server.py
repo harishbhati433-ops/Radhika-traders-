@@ -34,8 +34,9 @@ import email_service
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, campaign_live_html, campaign_status_html, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
-from rbac import make_require_perm, make_log_activity
+from rbac import make_require_perm, make_log_activity, has_perm
 from employee_routes import build_router as build_employee_router
+from search_routes import build_search_router
 from employee_kyc_routes import build_router as build_employee_kyc_router
 from attendance_routes import build_router as build_attendance_router
 from leave_routes import build_router as build_leave_router
@@ -3412,6 +3413,7 @@ api.include_router(build_attendance_router(db, require_admin, _emp_router.requir
 api.include_router(build_leave_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
+api.include_router(build_search_router(db, get_current_user, has_perm))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet, push_service, log_activity))
 rewards_api = rewards.build(db, get_settings, compute_wallet, push_service, log_activity, require_perm, require_admin, get_current_user, _signup_dup, lock_signup_bonus)
@@ -3478,7 +3480,8 @@ async def startup():
                           ("clicks", "campaign_id"), ("banners", "order"), ("wallet_adjustments", "user_id"), ("attendance", "date"), ("attendance", "status"), ("salary_audit", "employee_id"), ("salary_audit", "month"),
                           ("login_history", "user_id"), ("security_logs", "user_id"), ("files", "storage_path"),
                           ("activity_logs", "actor_id"), ("activity_logs", "action"), ("activity_logs", "created_at"), ("activity_logs", "campaign_id"), ("activity_logs", "actor_role"),
-                          ("attendance_reminders", "date"), ("cron_runs", "run_id")):
+                          ("attendance_reminders", "date"), ("cron_runs", "run_id"),
+                          ("users", "name"), ("leads", "lead_id"), ("leads", "mobile"), ("leads", "customer_name"), ("transactions", "ref_id"), ("withdrawals", "user_mobile"), ("campaigns", "offer_name")):
             await db[coll].create_index(key)
         await db.users.create_index("username", unique=True, partialFilterExpression={"username": {"$type": "string"}})
         await db.leads.create_index("submit_key", unique=True, partialFilterExpression={"submit_key": {"$type": "string"}})

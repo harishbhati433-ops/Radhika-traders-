@@ -4,6 +4,7 @@ import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { Menu, X, LogOut, Download, ChevronDown, Mic } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { GlobalSearch } from "./GlobalSearch";
 import { PushPrompt } from "./PushPrompt";
 import { PushStatusButton } from "./PushStatusButton";
 import { triggerInstall, isStandalone } from "./InstallPrompt";
@@ -142,6 +143,7 @@ export function DashboardLayout({ nav, children, title }) {
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <Link to="/"><Logo size="sm" /></Link>
         <div className="flex items-center gap-2">
+          <GlobalSearch compact />
           <ThemeToggle compact />
           <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" aria-label="Open menu" className="rounded-lg p-2 text-slate-700">
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -167,6 +169,7 @@ export function DashboardLayout({ nav, children, title }) {
           <div className="mb-6 flex items-start justify-between gap-4">
             {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
             <div className="flex items-center gap-2">
+              <GlobalSearch />
               <span className="hidden lg:block"><ThemeToggle /></span>
               <PushStatusButton />
               {user && user.role !== "admin" && user.role !== "employee" && (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -66,10 +67,13 @@ function EmployeeDialog({ emp, onClose, onSaved }) {
 }
 
 export default function AdminEmployees() {
+  const [params] = useSearchParams();
+  const highlight = params.get("highlight");
   const [list, setList] = useState([]);
   const [dlg, setDlg] = useState(null);
   const load = () => api.get("/admin/employees").then(({ data }) => setList(data));
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (highlight && list.length) document.querySelector(`[data-testid="emp-row-${highlight}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [highlight, list]);
 
   const toggle = async (e) => {
     const status = e.account_status === "active" ? "disabled" : "active";
@@ -96,7 +100,7 @@ export default function AdminEmployees() {
       ) : (
         <div className="grid gap-3">
           {list.map((e) => (
-            <div key={e.id} data-testid={`emp-row-${e.id}`} className={`rounded-2xl border bg-white p-4 ${e.account_status === "active" ? "border-slate-200" : "border-rose-200 bg-rose-50/40"}`}>
+            <div key={e.id} data-testid={`emp-row-${e.id}`} className={`rounded-2xl border bg-white p-4 ${highlight === e.id ? "border-amber-400 ring-2 ring-amber-300 shadow-lg" : e.account_status === "active" ? "border-slate-200" : "border-rose-200 bg-rose-50/40"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">

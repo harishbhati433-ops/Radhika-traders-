@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { customerNav } from "./nav";
 import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
@@ -21,6 +21,8 @@ const STATUS = {
 
 export default function Withdrawals() {
   const { user } = useAuth();
+  const [params] = useSearchParams();
+  const highlight = params.get("highlight");
   const [wallet, setWallet] = useState(null);
   const [list, setList] = useState([]);
   const [amount, setAmount] = useState("");
@@ -113,7 +115,7 @@ export default function Withdrawals() {
           ) : (
             <div className="space-y-3">
               {list.map((w) => (
-                <div key={w.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-3" data-testid={`withdraw-${w.id}`}>
+                <div key={w.id} className={`flex items-center justify-between rounded-xl border p-3 ${highlight === w.id ? "border-amber-400 bg-amber-50 ring-2 ring-amber-300" : "border-slate-100"}`} data-testid={`withdraw-${w.id}`}>
                   <div>
                     <div className="font-mono font-bold text-slate-900">₹{w.amount}</div>
                     <div className="text-xs text-slate-400">{w.method} · {w.details} · {(w.created_at || "").slice(0, 10)}</div>

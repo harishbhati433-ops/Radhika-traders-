@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api, { formatApiErrorDetail } from "../../lib/api";
@@ -16,8 +17,9 @@ import { CustomerEditDialog } from "../../components/CustomerEditDialog";
 import { UserAvatar } from "../../components/AvatarUpload";
 
 export default function AdminCustomers() {
+  const [params] = useSearchParams();
   const [customers, setCustomers] = useState([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(params.get("q") || "");
   const [showDeleted, setShowDeleted] = useState(false);
   const [active, setActive] = useState(null);
   const [adjust, setAdjust] = useState(null);
