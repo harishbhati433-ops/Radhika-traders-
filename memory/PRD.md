@@ -689,3 +689,7 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - `lib/i18n.js`: tiny dictionary-based i18n (`useT()`, `useLang()`, `setLang()`), key = English string, Devanagari values, fallback = English. Persisted in localStorage `rt-lang`, broadcast via `rt:lang` event.
 - `components/LangToggle.jsx` (data-testid lang-toggle / lang-toggle-mobile) shown ONLY for customers in DashboardLayout header + mobile top bar.
 - Translated: sidebar nav, greeting, Dashboard (stats, referral card, Refer & Earn collapsible, campaigns heading), Wallet, Bonus Wallet card, Withdrawals, My Leads, Statements, search placeholder/empty text. Admin-entered content (campaign names, notes, notifications) stays as written. Not yet translated: Profile & KYC, Campaigns list page, Reports, Welcome Letter, ReferEarnCard inner text, ScratchCards.
+
+## In-panel Back Arrow (Oct 2026) — all 3 panels
+- `lib/navStack.js`: own in-app history stack in sessionStorage (`rt-nav-stack`); each page recorded once (redirects/replace collapse), so Back goes EXACTLY one page; falls back to panel home (/admin, /employee, /app/dashboard).
+- `DashboardLayout`: ArrowLeft button (data-testid page-back-btn) left of the page title on every inner page; hidden on each panel's dashboard home. Verified: my-leads → withdrawals → wallet → dashboard (one step each); fresh tab → dashboard.

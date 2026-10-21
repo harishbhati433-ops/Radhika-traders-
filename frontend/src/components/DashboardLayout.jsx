@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
-import { Menu, X, LogOut, Download, ChevronDown, Mic } from "lucide-react";
+import { Menu, X, LogOut, Download, ChevronDown, Mic, ArrowLeft } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalSearch } from "./GlobalSearch";
 import { PushPrompt } from "./PushPrompt";
@@ -17,6 +17,7 @@ import { AttendanceNudge } from "./AttendanceNudge";
 import { prefetchRoute } from "../lib/prefetch";
 import { useT } from "../lib/i18n";
 import { LangToggle } from "./LangToggle";
+import { trackPage, popPrevious, homeFor } from "../lib/navStack";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -72,6 +73,10 @@ export function DashboardLayout({ nav, children, title }) {
   const [openGroup, setOpenGroup] = useState(activeGroup);
   useEffect(() => { setOpenGroup(activeGroup); setOpen(false); }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
+  const here = loc.pathname + loc.search;
+  useEffect(() => { trackPage(here); }, [here]);
+  const isHome = loc.pathname === homeFor(user?.role);
+  const goBack = () => navigate(popPrevious(here, user?.role));
 
   const doLogout = () => { logout(); navigate(isEmp ? "/employee/login" : user?.role === "admin" ? "/admin/login" : "/app/login", { replace: true }); };
 
@@ -172,7 +177,15 @@ export function DashboardLayout({ nav, children, title }) {
         {/* Content */}
         <main className="rt-enter min-w-0 flex-1" key={loc.pathname}>
           <div className="mb-6 flex items-start justify-between gap-4">
-            {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{t(title)}</h1>}
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              {!isHome && (
+                <button type="button" onClick={goBack} data-testid="page-back-btn" aria-label="Go back" title="Back"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-100 active:scale-95 sm:h-10 sm:w-10">
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              )}
+              {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{t(title)}</h1>}
+            </div>
             <div className="flex items-center gap-2">
               <GlobalSearch />
               {isCust && <span className="hidden lg:block"><LangToggle /></span>}
