@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Search, X, Loader2, Megaphone, ClipboardList, Wallet, Banknote, FileText, Users, UserCog, Clock, ArrowRight, CornerDownLeft, AlertTriangle } from "lucide-react";
+import { Search, X, Loader2, Megaphone, ClipboardList, Wallet, Banknote, FileText, Users, UserCog, Clock, ArrowRight, CornerDownLeft, AlertTriangle, Mic, MicOff } from "lucide-react";
 
 const ICON = { campaigns: Megaphone, leads: ClipboardList, transactions: Wallet, withdrawals: Banknote, reports: FileText, customers: Users, employees: UserCog };
 const TONE = { emerald: "bg-emerald-50 text-emerald-700 border-emerald-200", amber: "bg-amber-50 text-amber-700 border-amber-200", rose: "bg-rose-50 text-rose-700 border-rose-200", sky: "bg-sky-50 text-sky-700 border-sky-200", violet: "bg-violet-50 text-violet-700 border-violet-200", slate: "bg-slate-100 text-slate-600 border-slate-200" };
@@ -47,11 +47,27 @@ export function GlobalSearch({ compact = false }) {
   const [active, setActive] = useState(0);
   const [more, setMore] = useState({});
   const [recent, setRecent] = useState([]);
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const reqRef = useRef(0);
 
-  const close = useCallback(() => { setOpen(false); setQ(""); setData(null); setError(""); setMore({}); }, []);
+  const close = useCallback(() => { recRef.current?.stop(); recRef.current = null; setListening(false); setOpen(false); setQ(""); setData(null); setError(""); setMore({}); }, []);
+  const toggleMic = () => {
+    if (!SR) { setError("Voice search is not supported in this browser"); return; }
+    if (listening) { recRef.current?.stop(); recRef.current = null; setListening(false); return; }
+    const rec = new SR(); rec.lang = "hi-IN"; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      const t = Array.from(e.results).map((r) => r[0].transcript).join(" ").trim();
+      const spoken = /\d/.test(t) && !/[a-zA-Z\u0900-\u097F]/.test(t.replace(/\s/g, "")) ? t.replace(/\s+/g, "") : t.replace(/[।.]+$/, "");
+      setQ(spoken);
+    };
+    rec.onerror = (e) => { setListening(false); recRef.current = null; if (e.error !== "aborted" && e.error !== "no-speech") setError(e.error === "not-allowed" ? "Microphone permission denied" : "Could not hear you — try again"); };
+    rec.onend = () => { setListening(false); recRef.current = null; inputRef.current?.focus(); };
+    recRef.current = rec; setError(""); rec.start(); setListening(true);
+  };
   const openBox = useCallback(() => { setRecent(readRecent(user?.role)); setOpen(true); setTimeout(() => inputRef.current?.focus(), 30); }, [user?.role]);
 
   useEffect(() => {
@@ -114,11 +130,17 @@ export function GlobalSearch({ compact = false }) {
               <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown} data-testid="global-search-input" placeholder={HINTS[user?.role] || "Search…"} autoComplete="off"
                 className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
               {q && <button type="button" onClick={() => { setQ(""); inputRef.current?.focus(); }} data-testid="gs-clear" aria-label="Clear search" className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>}
+              <button type="button" onClick={toggleMic} data-testid="gs-mic" aria-label={listening ? "Stop listening" : "Search by voice"} title="Search by voice"
+                className={`relative rounded-full p-2 transition-colors ${listening ? "bg-red-600 text-white" : "bg-slate-950 text-amber-400 hover:scale-105"}`}>
+                {listening && <span className="absolute inset-0 animate-ping rounded-full bg-red-400/60" />}
+                {listening ? <MicOff className="relative h-4 w-4" /> : <Mic className="relative h-4 w-4" />}
+              </button>
               <button type="button" onClick={close} data-testid="gs-close" className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-50">Esc</button>
             </div>
             <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 rt-scroll">
               {term.length < 2 && (
                 <div className="p-3" data-testid="gs-idle">
+                  {listening && <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" data-testid="gs-listening"><Mic className="h-4 w-4 animate-pulse" /> सुन रहा हूँ… बोलिए (Listening…)</div>}
                   {recent.length > 0 && (
                     <>
                       <div className="mb-1.5 flex items-center justify-between px-1 text-[11px] font-bold uppercase tracking-wider text-slate-400"><span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Recent searches</span>
@@ -126,7 +148,7 @@ export function GlobalSearch({ compact = false }) {
                       <div className="flex flex-wrap gap-1.5">{recent.map((r) => <button key={r} type="button" onClick={() => setQ(r)} data-testid="gs-recent-chip" className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-red-300 hover:bg-red-50">{r}</button>)}</div>
                     </>
                   )}
-                  <p className={`text-center text-xs text-slate-400 ${recent.length ? "mt-5" : "mt-2"}`}>Type at least 2 characters · ↑ ↓ to move · <CornerDownLeft className="inline h-3 w-3" /> to open</p>
+                  <p className={`text-center text-xs text-slate-400 ${recent.length ? "mt-5" : "mt-2"}`}>Type at least 2 characters or tap <Mic className="inline h-3 w-3" /> to speak · ↑ ↓ to move · <CornerDownLeft className="inline h-3 w-3" /> to open</p>
                 </div>
               )}
               {error && <div className="m-2 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700" data-testid="gs-error"><AlertTriangle className="h-4 w-4 shrink-0" /> {String(error)}</div>}

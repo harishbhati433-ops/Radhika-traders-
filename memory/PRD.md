@@ -682,3 +682,4 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Deep links: /admin/customers?q=, /admin/leads?search=, /admin/wallets?q= (show=all), /admin/withdrawals?highlight=, /admin/employees?highlight=, /admin/campaigns?edit=, /admin/reports?highlight=, /app/my-leads?q=, /app/wallet?highlight=, /app/withdrawals?highlight=, /campaign/:slug.
 - Fix: PortalSync in App.js now lets employees (employee gate) open /admin/* pages (previously 404 for sidebar links too).
 - Test credentials: App Lock PINs — customer 2468, admin & employee 2580.
+- Voice search (Oct 2026): mic button (data-testid gs-mic) inside the global search box — Web Speech API (hi-IN), interim results fill the input live, spoken digits joined (e.g. "99999 99999" → 9999999999), listening banner gs-listening, graceful errors (unsupported browser / mic denied). Verified via fake SpeechRecognition in Playwright.
