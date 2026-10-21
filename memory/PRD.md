@@ -675,3 +675,10 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - "_*T&C apply_" line appended to all share messages: Refer & Earn invite (ReferEarnCard.jsx), campaign apply message (CampaignDetail.jsx), ShareKit captions Hindi/English/Short (ShareKit.jsx).
 - Production redeploy triggered (dual scratch cards build). Fixes above need another redeploy.
 - Note: live site Scratch Card setting may still be "Fixed ₹0" — admin must switch to "% of campaign payout = 5" after deploy.
+
+## Global Search (Oct 2026) — DONE, tested iteration_42 + backend pytest tests/test_global_search.py (15/15)
+- Backend `search_routes.py`: GET /api/search?q=&group=&skip=&limit= — role-scoped server-side. Customer: own campaigns/leads/transactions/withdrawals/reports only. Admin: customers, employees, campaigns, leads, withdrawals, transactions, reports. Employee: same as admin but each group gated by has_perm(module) (clients/campaigns/leads/withdrawals/payments/reports); employees group admin-only. Numeric q also matches amount/payout. No PII (password/otp/bank/kyc) in projections. Indexes added: users.name, leads.lead_id/mobile/customer_name, transactions.ref_id, withdrawals.user_mobile, campaigns.offer_name.
+- Frontend `components/GlobalSearch.jsx` (portal overlay, Ctrl/⌘+K, 300ms debounce, min 2 chars, loading/empty/error, clear, recent searches in localStorage, arrow/Enter nav, "Show all N" per group). Mounted in DashboardLayout header (desktop lg+) and mobile top bar (compact).
+- Deep links: /admin/customers?q=, /admin/leads?search=, /admin/wallets?q= (show=all), /admin/withdrawals?highlight=, /admin/employees?highlight=, /admin/campaigns?edit=, /admin/reports?highlight=, /app/my-leads?q=, /app/wallet?highlight=, /app/withdrawals?highlight=, /campaign/:slug.
+- Fix: PortalSync in App.js now lets employees (employee gate) open /admin/* pages (previously 404 for sidebar links too).
+- Test credentials: App Lock PINs — customer 2468, admin & employee 2580.

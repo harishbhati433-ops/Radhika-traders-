@@ -1,0 +1,39 @@
+{
+  "summary": "Global Search (iteration 42). Backend: new pytest suite /app/backend/tests/test_global_search.py — 15/15 pass (401 anon, 1-char empty, 81-char 422, admin groups/shape/no PII, numeric 500 match, rahul->employees link, group paging + skip, employee gating incl. forced group= param for employees/campaigns/transactions/reports returns [], customer sip/bonus/100 isolation cross-checked against /api/my-leads, /api/wallet/transactions, /api/withdrawals, customer harish/forced customers group -> nothing). Frontend: customer flow (autofocus, spinner, groups, clear->idle, empty state, Esc, Ctrl+K, ArrowDown+Enter, lead deep link prefill my-leads-search, campaign -> /campaign/<slug>, bonus txn -> /app/wallet?highlight with amber ring on txn-<id>, withdrawal -> /app/withdrawals?highlight amber ring, recent chips + clear) all PASS. Admin flow (test groups+totals, Show all transactions loads 47 & hides button, customer/lead/withdrawal/employee/transaction/campaign click-throughs with prefills/highlights) all PASS. Employee: groups only customers/leads/withdrawals, footer text OK, q=500 no campaigns/transactions — PASS, BUT clicking any result 404s unless admin gate was opened (see issue). Mobile 390x844: overlay panel full-screen 390x844, input usable, gs-close works. Regression pages load (admin customers/leads/wallets[default 'Only customers with money due']/reports/employees; customer wallet/withdrawals/my-leads).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/search (staff reports group)", "issue": "Report link /admin/reports?q=<title> — AdminReports uses ?q only to prefill the publisher recipient filter (report-recipient-search, visible only for 'Selected publishers'), not to find the sent report. Clicking a Sent Reports result filters publishers by report title -> empty list. Could not UI-verify (no reports in DB)."},
+    {"endpoint": "GET /api/search", "issue": "count_documents run for every group on every keystroke with unanchored case-insensitive regex across many unindexed fields — fine now, will be slow at scale. want_total param is unused."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GlobalSearch result links for Employee (and pre-existing sidebar)", "issue": "Employee who only opened the employee gate (/rt-team-9k4e, localStorage rt_gate_employee=1) gets the HiddenPage 404 when clicking any search result (/admin/leads?search=..., /admin/customers?q=..., /admin/withdrawals?highlight=...). Root cause: PortalSync in App.js shows HiddenPage when portalFromPath(path)==='admin' && !hasGate('admin'). Employee sidebar links (/admin/leads etc.) have the SAME 404 (pre-existing). Works once /rt-control-hb27 was visited. Fix: in PortalSync allow admin paths if hasGate('admin') || hasGate('employee') (or grantGate('admin') on successful employee login).", "selector": "[data-testid^='gs-result-leads-'], [data-testid='side-leads-reports'], [data-testid='hidden-page']", "priority": "HIGH"},
+      {"component": "GlobalSearch (mounted twice in DashboardLayout)", "issue": "Two instances (compact in mobile top bar + desktop in title row) both register the window keydown listener, so Ctrl+K opens TWO overlays (count=2 in DOM). On desktop the mobile one is inside lg:hidden so invisible, but on tablets/mobile with keyboard both are visible & stacked. Fix: only listen for Ctrl+K in one instance (e.g. if (!compact)) or render one instance.", "selector": "[data-testid='global-search-overlay']", "priority": "MEDIUM"},
+      {"component": "Console", "issue": "React warning 'Encountered two children with the same key 9' on /app/dashboard and /admin (pre-existing, not from GlobalSearch — likely PIN pad/list keys).", "selector": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile dashboard (390px)", "issues": ["Two search icons visible at once: global-search-btn-mobile in top bar AND global-search-btn in page title row (desktop instance not hidden below lg). Hide the title-row one with 'hidden lg:inline-flex'.", "Floating AI (sparkle) and WhatsApp FABs render on top of the full-screen search panel (z-index above z-[90]) and overlap results on mobile."]},
+      {"screen": "Admin Customers (employee view-only)", "issues": ["Pre-existing: view-only employee still sees Credit/Adjust/Edit/Pause/Disable/Delete buttons on /admin/customers."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_global_search.py", "/app/test_reports/pytest/pytest_global_search.xml"],
+  "action_items": [
+    "HIGH: Fix PortalSync gate so employees (rt_gate_employee) can open /admin/* pages — currently search results and sidebar links 404 for employees who only used /rt-team-9k4e",
+    "MEDIUM: Prevent duplicate GlobalSearch overlays on Ctrl+K (only one instance should bind the shortcut)",
+    "LOW: Hide desktop search button below lg breakpoint (duplicate icon on mobile); raise overlay z-index above floating FABs",
+    "LOW: Make /admin/reports?q= actually filter/highlight the sent report (or change report link)",
+    "LOW: 'Show all N' loads max 50 — if total > 50 the button stays and re-fetches the same 50 (no skip paging in UI)"
+  ],
+  "critical_code_review_comments": [
+    "GlobalSearch.loadMore always requests limit=50 skip=0; for totals >50 users can never see the rest",
+    "search_routes.group(): want_total param unused; count_documents on every group per request",
+    "Backend permission gating is correct: has_perm used per module, employees group admin-only, customer queries scoped by partner_id/user_id, forced ?group= respects gating",
+    "No sensitive fields leaked: projections restrict fields; verified no password_hash/otp/bank/pan/kyc keys"
+  ],
+  "updated_files": ["/app/backend/tests/test_global_search.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "~90% (employee click-through 404 without admin gate; duplicate overlay)"},
+  "seed_data_creation": "None. Recent-search localStorage keys cleared during tests.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_global_search.py (needs REACT_APP_BACKEND_URL env). Employee UI test: open ONLY /rt-team-9k4e then /employee/login, search 'test', click a lead result -> expect /admin/leads?search=... not hidden-page. With two GlobalSearch instances use ':visible' selectors (e.g. [data-testid='global-search-input']:visible). PINs: customer 2468, admin/employee 2580."
+}

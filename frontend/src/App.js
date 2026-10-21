@@ -111,7 +111,7 @@ function PortalSync({ children }) {
     const m = document.getElementById("rt-manifest");
     if (m) m.href = portal === "admin" ? "/manifest-admin.json" : portal === "employee" ? "/manifest-employee.json" : "/manifest.json";
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (portal !== "customer" && !hasGate(portal) && !isStandalone()) return <HiddenPage />;
+  if (portal !== "customer" && !hasGate(portal) && !(portal === "admin" && hasGate("employee")) && !isStandalone()) return <HiddenPage />;
   return children;
 }
 

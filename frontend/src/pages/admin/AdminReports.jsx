@@ -17,7 +17,8 @@ export default function AdminReports() {
   const [f, setF] = useState({ title: "", note: "", audience: "all", user_ids: [], send_email: true });
   const [file, setFile] = useState(null);
   const [params] = useSearchParams();
-  const [q, setQ] = useState(params.get("q") || "");
+  const highlight = params.get("highlight");
+  const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = () => api.get("/admin/reports").then(({ data }) => setList(data));
@@ -81,7 +82,7 @@ export default function AdminReports() {
       <div className="space-y-2" data-testid="report-list">
         {list.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500" data-testid="report-empty">No reports sent yet.</div>}
         {list.map((r) => (
-          <div key={r.id} data-testid={`report-row-${r.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+          <div key={r.id} data-testid={`report-row-${r.id}`} className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4 ${highlight === r.id ? "border-amber-400 ring-2 ring-amber-300 shadow-lg" : "border-slate-200"}`}>
             <div className="min-w-0">
               <div className="font-semibold text-slate-900">{r.title}</div>
               <div className="text-xs text-slate-500">{r.file_name} · {fmtSize(r.size)} · {(r.created_at || "").slice(0, 10)}</div>

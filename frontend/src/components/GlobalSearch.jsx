@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -54,13 +55,14 @@ export function GlobalSearch({ compact = false }) {
   const openBox = useCallback(() => { setRecent(readRecent(user?.role)); setOpen(true); setTimeout(() => inputRef.current?.focus(), 30); }, [user?.role]);
 
   useEffect(() => {
+    if (compact) return;
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); open ? close() : openBox(); }
       else if (e.key === "Escape" && open) close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close, openBox]);
+  }, [open, close, openBox, compact]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,12 +102,12 @@ export function GlobalSearch({ compact = false }) {
   return (
     <>
       <button type="button" onClick={openBox} data-testid={compact ? "global-search-btn-mobile" : "global-search-btn"} aria-label="Search" title="Search (Ctrl+K)"
-        className={compact ? "rounded-lg p-2 text-slate-700" : "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-2.5 text-slate-700 hover:bg-slate-50 lg:pr-3"}>
+        className={compact ? "rounded-lg p-2 text-slate-700" : "hidden items-center gap-2 rounded-full border border-slate-200 bg-white p-2.5 text-slate-700 hover:bg-slate-50 lg:inline-flex lg:pr-3"}>
         <Search className="h-5 w-5" />
         {!compact && <span className="hidden text-xs font-semibold text-slate-400 lg:inline">Search <kbd className="ml-1 rounded border border-slate-200 bg-slate-50 px-1 font-sans text-[10px]">Ctrl K</kbd></span>}
       </button>
-      {open && (
-        <div className="fixed inset-0 z-[90] flex items-start justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:p-4 sm:pt-[8vh]" data-testid="global-search-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      {open && createPortal(
+        <div className="fixed inset-0 z-[95] flex items-start justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:p-4 sm:pt-[8vh]" data-testid="global-search-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
           <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-[min(680px,100%)] sm:rounded-3xl sm:border sm:border-slate-200" data-testid="global-search-panel">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
               {loading ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-red-600" data-testid="gs-loading" /> : <Search className="h-5 w-5 shrink-0 text-slate-400" />}
@@ -153,7 +155,8 @@ export function GlobalSearch({ compact = false }) {
               <span>{flat.length > 0 ? `${flat.length} shown` : ""}</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
