@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { Lock, Gift, CheckCircle2, XCircle } from "lucide-react";
+import { useT } from "../lib/i18n";
 
 const dt = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
 
 export function BonusWalletCard({ wallet, compact }) {
+  const t = useT();
   const sb = wallet?.signup_bonus;
   const st = sb?.status || "pending";
   const amt = sb?.amount ?? wallet?.bonus_locked ?? 0;
@@ -18,10 +20,10 @@ export function BonusWalletCard({ wallet, compact }) {
   const shown = st === "locked" ? (sb?.remaining ?? wallet?.bonus_locked ?? amt) : st === "credited" || st === "released" || st === "pending" ? amt : 0;
   const body = (
     <>
-      <div className="flex items-center gap-2 text-sm font-bold"><cfg.Icon className="h-4 w-4" /> Bonus Wallet</div>
+      <div className="flex items-center gap-2 text-sm font-bold"><cfg.Icon className="h-4 w-4" /> {t("Bonus Wallet")}</div>
       <div className={`mt-2 font-mono font-bold ${compact ? "text-2xl" : "text-3xl"}`} data-testid="wallet-bonus-locked">₹{wallet ? shown : "…"}</div>
-      <div className={`mt-1 text-xs font-semibold ${cfg.sub}`} data-testid="bonus-wallet-status">{cfg.label}</div>
-      <div className={`mt-0.5 text-xs ${cfg.sub}`}>{cfg.note}</div>
+      <div className={`mt-1 text-xs font-semibold ${cfg.sub}`} data-testid="bonus-wallet-status">{t(cfg.label)}</div>
+      <div className={`mt-0.5 text-xs ${cfg.sub}`}>{t(cfg.note)}</div>
     </>
   );
   const cls = `rounded-2xl border p-5 ${cfg.tone}`;

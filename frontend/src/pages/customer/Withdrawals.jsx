@@ -11,6 +11,7 @@ import { Loader2, Receipt, PauseCircle } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
 import { useLivePoll } from "../../lib/useLivePoll";
 import { useWithdrawalCelebration, celebrate } from "../../components/Celebration";
+import { useT } from "../../lib/i18n";
 
 const STATUS = {
   pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -21,6 +22,7 @@ const STATUS = {
 
 export default function Withdrawals() {
   const { user } = useAuth();
+  const t = useT();
   const [params] = useSearchParams();
   const highlight = params.get("highlight");
   const [wallet, setWallet] = useState(null);
@@ -65,53 +67,53 @@ export default function Withdrawals() {
     <DashboardLayout nav={customerNav} title="Withdrawals">
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="font-display text-lg font-bold text-slate-900">Request Withdrawal</h2>
-          <p className="mt-1 text-sm text-slate-500">Available: <span className="font-mono font-bold text-emerald-600">₹{wallet?.balance ?? "…"}</span> · Min <span data-testid="withdraw-min">₹{minWd}</span></p>
+          <h2 className="font-display text-lg font-bold text-slate-900">{t("Request Withdrawal")}</h2>
+          <p className="mt-1 text-sm text-slate-500">{t("Available:")} <span className="font-mono font-bold text-emerald-600">₹{wallet?.balance ?? "…"}</span> · {t("Min")} <span data-testid="withdraw-min">₹{minWd}</span></p>
 
           {!wdOpen.enabled ? (
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" data-testid="withdraw-paused-notice">
               <PauseCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
-              <div><div className="font-bold">Withdrawals closed right now</div><div className="mt-0.5 text-xs">{wdOpen.message}</div></div>
+              <div><div className="font-bold">{t("Withdrawals closed right now")}</div><div className="mt-0.5 text-xs">{wdOpen.message}</div></div>
             </div>
           ) : !kycDone ? (
             <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-800" data-testid="withdraw-kyc-warning">
-              {kycState === "pending" ? "Your KYC is under review by Radhika Traders. Withdrawals will be enabled once verified."
+              {kycState === "pending" ? t("Your KYC is under review by Radhika Traders. Withdrawals will be enabled once verified.")
                 : kycState === "rejected" ? <>Your KYC was rejected. Please <Link to="/app/profile" className="font-bold underline">re-submit your KYC</Link>.</>
                 : kycState === "deactivated" ? "Your KYC has been deactivated. Please contact support."
                 : <>Complete your <Link to="/app/profile" className="font-bold underline">KYC</Link> to enable withdrawals.</>}
             </div>
           ) : (
             <form onSubmit={submit} className="mt-4 space-y-4">
-              <div><Label>Amount (₹)</Label><Input data-testid="withdraw-amount" type="number" min={minWd} required value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1.5" /></div>
+              <div><Label>{t("Amount (₹)")}</Label><Input data-testid="withdraw-amount" type="number" min={minWd} required value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1.5" /></div>
               <div>
-                <Label>Payment Method</Label>
+                <Label>{t("Payment Method")}</Label>
                 <select data-testid="withdraw-method" value={method} onChange={(e) => setMethod(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                  <option>UPI</option><option>Bank Transfer</option>
+                  <option value="UPI">UPI</option><option value="Bank Transfer">{t("Bank Transfer")}</option>
                 </select>
               </div>
               <div>
-                <Label>{method === "UPI" ? "UPI ID" : "Bank Account Number"}</Label>
+                <Label>{method === "UPI" ? t("UPI ID") : t("Bank Account Number")}</Label>
                 <Input data-testid="withdraw-details" required value={details} onChange={(e) => setDetails(e.target.value)} className="mt-1.5" placeholder={method === "UPI" ? "yourname@upi" : "Account number"} />
                 {method === "Bank Transfer" && bank.ifsc && <p className="mt-1 text-xs text-slate-500">Holder: <b>{bank.account_holder}</b> · IFSC: <b>{bank.ifsc}</b> (from your KYC)</p>}
                 {method === "UPI" && !bank.upi && <p className="mt-1 text-xs text-amber-700">Tip: add your UPI ID in <Link to="/app/profile" className="underline">Profile & KYC</Link> to auto-fill next time.</p>}
               </div>
               <div>
-                <Label>Transaction Password (PIN)</Label>
+                <Label>{t("Transaction Password (PIN)")}</Label>
                 <PasswordInput data-testid="withdraw-txn-pin" inputMode="numeric" required maxLength={6} value={txnPin} onChange={(e) => setTxnPin(e.target.value.replace(/\D/g, ""))} className="mt-1.5 font-mono tracking-widest" placeholder="••••" />
                 <p className="mt-1 text-xs text-slate-500">Not set yet? Create it in <Link to="/app/profile" className="font-bold underline">Profile → Security</Link>.</p>
               </div>
-              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Payment is transferred manually by Radhika Traders to the UPI ID / bank account above, usually within 24–48 hours. You will see the status here.</p>
+              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{t("Payment is transferred manually by Radhika Traders to the UPI ID / bank account above, usually within 24–48 hours. You will see the status here.")}</p>
               <button type="submit" data-testid="withdraw-submit" disabled={loading} className="rt-gradient-btn flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold disabled:opacity-60">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />} Submit Request
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />} {t("Submit Request")}
               </button>
             </form>
           )}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 font-display text-lg font-bold text-slate-900">Your Requests</h2>
+          <h2 className="mb-4 font-display text-lg font-bold text-slate-900">{t("Your Requests")}</h2>
           {list.length === 0 ? (
-            <p className="text-sm text-slate-500" data-testid="withdraw-none">No withdrawal requests yet.</p>
+            <p className="text-sm text-slate-500" data-testid="withdraw-none">{t("No withdrawal requests yet.")}</p>
           ) : (
             <div className="space-y-3">
               {list.map((w) => (
@@ -119,15 +121,15 @@ export default function Withdrawals() {
                   <div>
                     <div className="font-mono font-bold text-slate-900">₹{w.amount}</div>
                     <div className="text-xs text-slate-400">{w.method} · {w.details} · {(w.created_at || "").slice(0, 10)}</div>
-                    {w.admin_note && <div className="text-xs text-slate-500">Note: {w.admin_note}</div>}
+                    {w.admin_note && <div className="text-xs text-slate-500">{t("Note:")} {w.admin_note}</div>}
                     {w.status === "paid" && (w.proof_url || w.utr) && (
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-emerald-700" data-testid={`withdraw-proof-${w.id}`}>
                         <Receipt className="h-3.5 w-3.5" /> {w.utr && <span>UTR: <b>{w.utr}</b></span>}
-                        {w.proof_url && <a href={fileUrl(w.proof_url)} target="_blank" rel="noreferrer" className="font-semibold underline">View payment proof</a>}
+                        {w.proof_url && <a href={fileUrl(w.proof_url)} target="_blank" rel="noreferrer" className="font-semibold underline">{t("View payment proof")}</a>}
                       </div>
                     )}
                   </div>
-                  <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>
+                  <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{t(w.status)}</span>
                 </div>
               ))}
             </div>

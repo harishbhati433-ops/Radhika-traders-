@@ -15,20 +15,23 @@ import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAle
 import { Collapsible } from "../../components/Collapsible";
 import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
+import { useT } from "../../lib/i18n";
 
 function Stat({ icon: Icon, label, value, tone = "slate" }) {
+  const t = useT();
   const tones = { emerald: "bg-emerald-50 text-emerald-700", red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", slate: "bg-slate-100 text-slate-700" };
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className={`mb-3 inline-flex rounded-xl p-2.5 ${tones[tone]}`}><Icon className="h-5 w-5" /></div>
       <div className="font-mono text-2xl font-bold text-slate-900">{value}</div>
-      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-xs font-medium text-slate-500">{t(label)}</div>
     </div>
   );
 }
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
+  const t = useT();
   const greeting = timeGreeting();
   const [wallet, setWallet] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -39,15 +42,15 @@ export default function CustomerDashboard() {
   }, []);
 
   const refLink = `${window.location.origin}/campaigns?ref=${user?.referral_code}`;
-  const copy = () => { navigator.clipboard.writeText(user?.referral_code || ""); toast.success("Referral code copied!"); };
+  const copy = () => { navigator.clipboard.writeText(user?.referral_code || ""); toast.success(t("Referral code copied!")); };
   const kycDone = user?.kyc?.status === "pending" || user?.kyc?.status === "verified";
 
   return (
-    <DashboardLayout nav={customerNav} title={`${greeting}, ${capitalizeName(user?.name?.split(" ")[0] || "")}\u00A0${greetingEmoji(greeting)}`}>
+    <DashboardLayout nav={customerNav} title={`${t(greeting)}, ${capitalizeName(user?.name?.split(" ")[0] || "")}\u00A0${greetingEmoji(greeting)}`}>
       <WelcomeModal />
       {!kycDone && (
         <Link to="/app/profile" data-testid="kyc-alert" className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm font-medium text-amber-800 hover:bg-amber-100">
-          <ShieldAlert className="h-5 w-5 shrink-0" /> Complete your KYC to enable withdrawals. <ArrowRight className="ml-auto h-4 w-4" />
+          <ShieldAlert className="h-5 w-5 shrink-0" /> {t("Complete your KYC to enable withdrawals.")} <ArrowRight className="ml-auto h-4 w-4" />
         </Link>
       )}
 
@@ -66,23 +69,23 @@ export default function CustomerDashboard() {
       <div className="mt-6 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-[#0B0F17] p-6 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-amber-400">Your Referral Code</div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-amber-400">{t("Your Referral Code")}</div>
             <div className="mt-1 font-mono text-2xl font-bold" data-testid="dashboard-referral-code">{user?.referral_code}</div>
-            <div className="mt-1 text-xs text-slate-400">Share campaigns with your code to earn.</div>
+            <div className="mt-1 text-xs text-slate-400">{t("Share campaigns with your code to earn.")}</div>
           </div>
           <button onClick={copy} data-testid="dashboard-copy-code" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20">
-            <Copy className="h-4 w-4" /> Copy Code
+            <Copy className="h-4 w-4" /> {t("Copy Code")}
           </button>
         </div>
       </div>
 
-      <div className="mt-6"><Collapsible id="cust-refer" icon={Users} title="Refer & Earn" subtitle="Invite friends with your link — poster, QR code & share buttons" badge="Earn" testId="refer-collapsible"><ReferEarnCard code={user?.referral_code} /></Collapsible></div>
+      <div className="mt-6"><Collapsible id="cust-refer" icon={Users} title={t("Refer & Earn")} subtitle={t("Invite friends with your link — poster, QR code & share buttons")} badge={t("Earn")} testId="refer-collapsible"><ReferEarnCard code={user?.referral_code} /></Collapsible></div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-bold text-slate-900">Available Campaigns</h2>
-            <Link to="/app/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">View all <ArrowRight className="h-4 w-4" /></Link>
+            <h2 className="font-display text-lg font-bold text-slate-900">{t("Available Campaigns")}</h2>
+            <Link to="/app/my-campaigns" className="inline-flex items-center gap-1 text-sm font-semibold text-red-700">{t("View all")} <ArrowRight className="h-4 w-4" /></Link>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {campaigns.map((c) => (

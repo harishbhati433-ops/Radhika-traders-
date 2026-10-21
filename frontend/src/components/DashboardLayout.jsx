@@ -15,6 +15,8 @@ import { Eye, LayoutDashboard, Sun, Moon } from "lucide-react";
 import { SidebarAvatarButton } from "./AvatarUpload";
 import { AttendanceNudge } from "./AttendanceNudge";
 import { prefetchRoute } from "../lib/prefetch";
+import { useT } from "../lib/i18n";
+import { LangToggle } from "./LangToggle";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -57,6 +59,8 @@ function InstallButton() {
 
 export function DashboardLayout({ nav, children, title }) {
   const { user, logout } = useAuth();
+  const t = useT();
+  const isCust = user?.role === "customer";
   const loc = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -85,7 +89,7 @@ export function DashboardLayout({ nav, children, title }) {
     return (
       <Link to={n.to} data-testid={`side-${n.label.toLowerCase().replace(/[\s/]+/g, "-")}`} onClick={() => setOpen(false)} onPointerDown={() => prefetchRoute(n.to)} onMouseEnter={() => prefetchRoute(n.to)}
         className={`flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-semibold transition-colors ${nested ? "pl-9 pr-3" : "px-3"} ${active ? "bg-red-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>
-        <Icon style={{ width: 16, height: 16 }} className="shrink-0" /> <span className="truncate">{n.label}</span>
+        <Icon style={{ width: 16, height: 16 }} className="shrink-0" /> <span className="truncate">{t(n.label)}</span>
       </Link>
     );
   };
@@ -122,7 +126,7 @@ export function DashboardLayout({ nav, children, title }) {
       <div className="mb-3 flex items-center gap-3 rounded-xl bg-gradient-to-br from-red-600 to-red-900 p-3 text-white">
         <SidebarAvatarButton />
         <div className="min-w-0">
-          <div className="text-[11px] text-red-100">{isEmp ? "Employee" : "Signed in as"}</div>
+          <div className="text-[11px] text-red-100">{isEmp ? "Employee" : t("Signed in as")}</div>
           <div className="truncate text-sm font-display font-bold">{user?.name}</div>
           <div className="truncate text-[11px] text-red-200">{isEmp ? `@${user?.username}` : user?.email}</div>
         </div>
@@ -130,7 +134,7 @@ export function DashboardLayout({ nav, children, title }) {
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]">{sideLinks}</div>
       <div className="mt-2 border-t border-slate-100 pt-2">
         <button onClick={doLogout} data-testid="dash-logout" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50">
-          <LogOut style={{ width: 16, height: 16 }} /> Logout
+          <LogOut style={{ width: 16, height: 16 }} /> {t("Logout")}
         </button>
         <InstallButton />
       </div>
@@ -144,6 +148,7 @@ export function DashboardLayout({ nav, children, title }) {
         <Link to="/"><Logo size="sm" /></Link>
         <div className="flex items-center gap-2">
           <GlobalSearch compact />
+          {isCust && <LangToggle compact />}
           <ThemeToggle compact />
           <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" aria-label="Open menu" className="rounded-lg p-2 text-slate-700">
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -167,9 +172,10 @@ export function DashboardLayout({ nav, children, title }) {
         {/* Content */}
         <main className="rt-enter min-w-0 flex-1" key={loc.pathname}>
           <div className="mb-6 flex items-start justify-between gap-4">
-            {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>}
+            {title && <h1 className="font-display text-xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{t(title)}</h1>}
             <div className="flex items-center gap-2">
               <GlobalSearch />
+              {isCust && <span className="hidden lg:block"><LangToggle /></span>}
               <span className="hidden lg:block"><ThemeToggle /></span>
               <PushStatusButton />
               {user && user.role !== "admin" && user.role !== "employee" && (

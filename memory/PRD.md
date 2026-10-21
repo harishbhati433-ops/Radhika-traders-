@@ -683,3 +683,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Fix: PortalSync in App.js now lets employees (employee gate) open /admin/* pages (previously 404 for sidebar links too).
 - Test credentials: App Lock PINs — customer 2468, admin & employee 2580.
 - Voice search (Oct 2026): mic button (data-testid gs-mic) inside the global search box — Web Speech API (hi-IN), interim results fill the input live, spoken digits joined (e.g. "99999 99999" → 9999999999), listening banner gs-listening, graceful errors (unsupported browser / mic denied). Verified via fake SpeechRecognition in Playwright.
+
+## Customer panel Hindi/English toggle + voice-search language fix (Oct 2026)
+- Fix: voice search now listens in English (`en-IN`) by default; switches to `hi-IN` when customer picks Hindi.
+- `lib/i18n.js`: tiny dictionary-based i18n (`useT()`, `useLang()`, `setLang()`), key = English string, Devanagari values, fallback = English. Persisted in localStorage `rt-lang`, broadcast via `rt:lang` event.
+- `components/LangToggle.jsx` (data-testid lang-toggle / lang-toggle-mobile) shown ONLY for customers in DashboardLayout header + mobile top bar.
+- Translated: sidebar nav, greeting, Dashboard (stats, referral card, Refer & Earn collapsible, campaigns heading), Wallet, Bonus Wallet card, Withdrawals, My Leads, Statements, search placeholder/empty text. Admin-entered content (campaign names, notes, notifications) stays as written. Not yet translated: Profile & KYC, Campaigns list page, Reports, Welcome Letter, ReferEarnCard inner text, ScratchCards.

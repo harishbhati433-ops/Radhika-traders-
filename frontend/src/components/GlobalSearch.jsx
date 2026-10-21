@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useT } from "../lib/i18n";
 import { Search, X, Loader2, Megaphone, ClipboardList, Wallet, Banknote, FileText, Users, UserCog, Clock, ArrowRight, CornerDownLeft, AlertTriangle, Mic, MicOff } from "lucide-react";
 
 const ICON = { campaigns: Megaphone, leads: ClipboardList, transactions: Wallet, withdrawals: Banknote, reports: FileText, customers: Users, employees: UserCog };
@@ -38,6 +39,7 @@ function ResultRow({ item, q, active, onPick, idx }) {
 
 export function GlobalSearch({ compact = false }) {
   const { user } = useAuth();
+  const t = useT();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -58,7 +60,7 @@ export function GlobalSearch({ compact = false }) {
   const toggleMic = () => {
     if (!SR) { setError("Voice search is not supported in this browser"); return; }
     if (listening) { recRef.current?.stop(); recRef.current = null; setListening(false); return; }
-    const rec = new SR(); rec.lang = "hi-IN"; rec.interimResults = true; rec.maxAlternatives = 1;
+    const rec = new SR(); rec.lang = localStorage.getItem("rt-lang") === "hi" ? "hi-IN" : "en-IN"; rec.interimResults = true; rec.maxAlternatives = 1;
     rec.onresult = (e) => {
       const t = Array.from(e.results).map((r) => r[0].transcript).join(" ").trim();
       const spoken = /\d/.test(t) && !/[a-zA-Z\u0900-\u097F]/.test(t.replace(/\s/g, "")) ? t.replace(/\s+/g, "") : t.replace(/[।.]+$/, "");
@@ -127,7 +129,7 @@ export function GlobalSearch({ compact = false }) {
           <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-[min(680px,100%)] sm:rounded-3xl sm:border sm:border-slate-200" data-testid="global-search-panel">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
               {loading ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-red-600" data-testid="gs-loading" /> : <Search className="h-5 w-5 shrink-0 text-slate-400" />}
-              <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown} data-testid="global-search-input" placeholder={HINTS[user?.role] || "Search…"} autoComplete="off"
+              <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown} data-testid="global-search-input" placeholder={t(HINTS[user?.role] || "Search…")} autoComplete="off"
                 className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
               {q && <button type="button" onClick={() => { setQ(""); inputRef.current?.focus(); }} data-testid="gs-clear" aria-label="Clear search" className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>}
               <button type="button" onClick={toggleMic} data-testid="gs-mic" aria-label={listening ? "Stop listening" : "Search by voice"} title="Search by voice"
@@ -155,8 +157,8 @@ export function GlobalSearch({ compact = false }) {
               {showEmpty && (
                 <div className="px-4 py-10 text-center" data-testid="gs-empty">
                   <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400"><Search className="h-5 w-5" /></div>
-                  <div className="text-sm font-bold text-slate-800">No results found for “{term}”</div>
-                  <div className="mt-1 text-xs text-slate-500">Try a name, mobile number, ID or amount.</div>
+                  <div className="text-sm font-bold text-slate-800">{t("No results found for")} “{term}”</div>
+                  <div className="mt-1 text-xs text-slate-500">{t("Try a name, mobile number, ID or amount.")}</div>
                 </div>
               )}
               {groups.map((g) => {
@@ -173,7 +175,7 @@ export function GlobalSearch({ compact = false }) {
               })}
             </div>
             <div className="hidden items-center justify-between border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400 sm:flex">
-              <span>{user?.role === "customer" ? "Searching only your own records" : user?.role === "employee" ? "Results limited to your permitted modules" : "Searching all admin records"}</span>
+              <span>{user?.role === "customer" ? t("Searching only your own records") : user?.role === "employee" ? "Results limited to your permitted modules" : "Searching all admin records"}</span>
               <span>{flat.length > 0 ? `${flat.length} shown` : ""}</span>
             </div>
           </div>

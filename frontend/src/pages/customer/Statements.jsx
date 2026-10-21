@@ -6,6 +6,7 @@ import { API } from "../../lib/api";
 import { toast } from "sonner";
 import { FileText, FileSpreadsheet, FileDown, Loader2 } from "lucide-react";
 import { StatementRangePicker, useStatementRange } from "../../components/StatementRangePicker";
+import { useT } from "../../lib/i18n";
 
 const formats = [
   { key: "pdf", label: "PDF Statement", desc: "Formatted wallet statement", icon: FileText, tone: "bg-rose-50 text-rose-600" },
@@ -14,6 +15,7 @@ const formats = [
 ];
 
 export default function Statements() {
+  const t = useT();
   const [busy, setBusy] = useState("");
   const r = useStatementRange();
 
@@ -40,7 +42,7 @@ export default function Statements() {
 
   return (
     <DashboardLayout nav={customerNav} title="Statements & Reports">
-      <p className="mb-4 text-sm text-slate-500">Choose a period, then download your wallet & transaction statement in your preferred format.</p>
+      <p className="mb-4 text-sm text-slate-500">{t("Choose a period, then download your wallet & transaction statement in your preferred format.")}</p>
       <div className="mb-6"><StatementRangePicker r={r} /></div>
       <div className="grid gap-5 sm:grid-cols-3">
         {formats.map((f) => (
@@ -49,8 +51,8 @@ export default function Statements() {
             <div className={`mb-4 inline-flex rounded-xl p-3 ${f.tone}`}>
               {busy === f.key ? <Loader2 className="h-6 w-6 animate-spin" /> : <f.icon className="h-6 w-6" />}
             </div>
-            <div className="font-display font-bold text-slate-900">{f.label}</div>
-            <div className="mt-1 text-xs text-slate-500">{f.desc}</div>
+            <div className="font-display font-bold text-slate-900">{t(f.label)}</div>
+            <div className="mt-1 text-xs text-slate-500">{t(f.desc)}</div>
           </button>
         ))}
       </div>
