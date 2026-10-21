@@ -138,6 +138,7 @@ export function DashboardLayout({ nav, children, title }) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]">{sideLinks}</div>
       <div className="mt-2 border-t border-slate-100 pt-2">
+        {isCust && <div className="mb-1 flex items-center justify-between px-3 py-1.5 lg:hidden"><span className="text-[13px] font-semibold text-slate-600">Language / भाषा</span><LangToggle /></div>}
         <button onClick={doLogout} data-testid="dash-logout" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50">
           <LogOut style={{ width: 16, height: 16 }} /> {t("Logout")}
         </button>
@@ -149,11 +150,10 @@ export function DashboardLayout({ nav, children, title }) {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Top bar (mobile) */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
-        <Link to="/"><Logo size="sm" /></Link>
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-4 lg:hidden">
+        <Link to="/" className="min-w-0 shrink"><Logo size="sm" /></Link>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <GlobalSearch compact />
-          {isCust && <LangToggle compact />}
           <ThemeToggle compact />
           <button onClick={() => setOpen(!open)} data-testid="dash-mobile-toggle" aria-label="Open menu" className="rounded-lg p-2 text-slate-700">
             {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
