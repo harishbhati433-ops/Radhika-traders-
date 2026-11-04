@@ -15,6 +15,7 @@ import { AccountStatusControl, ACCOUNT_TONE } from "../../components/AccountStat
 import { WalletAdjustDialog } from "../../components/WalletAdjustDialog";
 import { CustomerEditDialog } from "../../components/CustomerEditDialog";
 import { UserAvatar } from "../../components/AvatarUpload";
+import { CustomerExportDialog } from "../../components/CustomerExportDialog";
 
 export default function AdminCustomers() {
   const [params] = useSearchParams();
@@ -61,6 +62,7 @@ export default function AdminCustomers() {
           <Input data-testid="customer-search" placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} data-testid="customer-show-deleted" /> Show deleted</label>
+        <div className="ml-auto"><CustomerExportDialog includeDeleted={showDeleted} /></div>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white rt-scroll">

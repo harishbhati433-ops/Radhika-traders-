@@ -2685,6 +2685,13 @@ async def list_customers(include_deleted: bool = False, search: Optional[str] = 
         users = await db.users.find(q).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
     else:
         users = await db.users.find(q).sort("created_at", -1).to_list(5000)
+    out = await _customers_with_wallet(users)
+    if paged:
+        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
+    return out
+
+
+async def _customers_with_wallet(users: list) -> list:
     ids = [str(u["_id"]) for u in users]
     agg = {i: {"credit": 0.0, "debit": 0.0, "adjust": 0.0, "paid": 0.0, "pending": 0.0} for i in ids}
     txn_rows = await db.transactions.aggregate([
@@ -2721,9 +2728,82 @@ async def list_customers(include_deleted: bool = False, search: Optional[str] = 
             "pending_withdrawal": round(a["pending"], 2),
         }
         out.append(pu)
-    if paged:
-        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
     return out
+
+
+def _export_bounds(period: str, month: Optional[str], year: Optional[int], date_from: Optional[str], date_to: Optional[str]):
+    today = datetime.now(IST).date()
+    if period == "today":
+        s, e = today, today
+    elif period == "yesterday":
+        s = e = today - timedelta(days=1)
+    elif period == "month":
+        try:
+            y, m = (int(x) for x in (month or "").split("-"))
+            s = datetime(y, m, 1).date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Select a month")
+        e = (datetime(y + (m == 12), (m % 12) + 1, 1) - timedelta(days=1)).date()
+    elif period == "year":
+        if not year:
+            raise HTTPException(status_code=400, detail="Select a year")
+        s, e = datetime(year, 1, 1).date(), datetime(year, 12, 31).date()
+    elif period == "custom":
+        try:
+            s, e = datetime.fromisoformat(date_from or "").date(), datetime.fromisoformat(date_to or "").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Select both From and To dates")
+        if s > e:
+            raise HTTPException(status_code=400, detail="From date must be before To date")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid period")
+    start = datetime.combine(s, datetime.min.time(), tzinfo=IST)
+    end = datetime.combine(e + timedelta(days=1), datetime.min.time(), tzinfo=IST)
+    return start, end, f"{s.isoformat()}_to_{e.isoformat()}" if s != e else s.isoformat()
+
+
+@api.get("/admin/customers/export")
+async def export_customers(request: Request, period: str = "today", format: str = "excel", month: Optional[str] = None, year: Optional[int] = None,
+                           date_from: Optional[str] = None, date_to: Optional[str] = None, include_deleted: bool = False,
+                           admin: dict = Depends(require_perm("clients", "view"))):
+    start, end, label = _export_bounds(period, month, year, date_from, date_to)
+    q = {"role": "customer", "email_verified": True, "created_at": {"$gte": start.astimezone(timezone.utc).isoformat(), "$lt": end.astimezone(timezone.utc).isoformat()}}
+    if not include_deleted:
+        q["account_status"] = {"$ne": "deleted"}
+    users = await db.users.find(q).sort("created_at", 1).to_list(20000)
+    items = await _customers_with_wallet(users)
+    cols = ["Sr No", "Name", "Mobile", "Email", "Referral Code", "Referred By", "Registered On (IST)", "KYC Status", "Account Status", "Wallet Balance", "Total Earnings", "Total Withdrawn", "Pending Withdrawal", "Customer ID"]
+    rows = []
+    for i, (u, pu) in enumerate(zip(users, items), 1):
+        try:
+            reg = datetime.fromisoformat(u.get("created_at", "")).astimezone(IST).strftime("%d-%m-%Y %I:%M %p")
+        except ValueError:
+            reg = u.get("created_at", "")
+        rows.append({"Sr No": i, "Name": pu.get("name", ""), "Mobile": pu.get("mobile", ""), "Email": pu.get("email", ""), "Referral Code": pu.get("referral_code", ""),
+                     "Referred By": u.get("referred_by_code") or "", "Registered On (IST)": reg, "KYC Status": ((pu.get("kyc") or {}).get("status") or "not_submitted").replace("_", " ").title(),
+                     "Account Status": (pu.get("account_status") or "active").title(), "Wallet Balance": pu["wallet"]["balance"], "Total Earnings": pu["wallet"]["total_earnings"],
+                     "Total Withdrawn": pu["wallet"]["total_withdrawn"], "Pending Withdrawal": pu["wallet"]["pending_withdrawal"], "Customer ID": pu.get("id", "")})
+    await log_activity(admin, "customers_export", request, entity_type="customer", status="exported", detail=f"{period} {label} · {len(rows)} rows · {format}")
+    fname = f"customers_{period}_{label}"
+    hdrs = {"X-Row-Count": str(len(rows)), "Access-Control-Expose-Headers": "X-Row-Count, Content-Disposition"}
+    if format == "csv":
+        import csv
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+        return Response(content="\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.csv"})
+    import pandas as pd
+    buf = io.BytesIO()
+    df = pd.DataFrame(rows, columns=cols)
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Customers")
+        ws = writer.sheets["Customers"]
+        for i, c in enumerate(cols, 1):
+            width = max([len(str(c))] + [len(str(r.get(c, ""))) for r in rows[:500]]) + 2
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = min(max(width, 10), 40)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.xlsx"})
 
 
 class AccountStatusIn(BaseModel):

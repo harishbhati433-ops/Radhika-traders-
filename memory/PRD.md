@@ -701,3 +701,8 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - USER ACTION: top up Emergent credits / enable auto top-up (Profile → Manage plan → Universal Key → Add Balance).
 - Code: `email_service.otp_unavailable()` → clean 503 JSON (+Retry-After) with a credits-specific message when last failure is 402; used in server.py (signup, resend-otp, login email-change OTP), password_reset.py, app_lock_routes.py. 503 passes through Cloudflare (502 does not).
 - Universal Key AI features: Voice Assistant chat, Vision image Q&A, NSFW safety check (all GPT-5.5 in assistant_routes.py); object storage auth also uses the key.
+
+## Customer Data Date-wise Export (Nov 2026) — Admin → Customers
+- Backend `GET /api/admin/customers/export?period=today|yesterday|month|year|custom&month=YYYY-MM&year=YYYY&date_from&date_to&format=excel|csv&include_deleted` (perm clients:view). IST day bounds → UTC ISO compare on users.created_at. Columns: Sr No, Name, Mobile, Email, Referral Code, Referred By, Registered On (IST), KYC Status, Account Status, Wallet Balance, Total Earnings, Total Withdrawn, Pending Withdrawal, Customer ID. No PAN/bank/password. Header X-Row-Count; activity log `customers_export`. Extracted `_customers_with_wallet(users)` helper (shared with list_customers).
+- Frontend `components/CustomerExportDialog.jsx` ("Download Data" button, data-testids customers-export-btn, export-period-*, export-month, export-year, export-from/to, export-excel-btn, export-csv-btn). Honors "Show deleted" checkbox.
+- Verified via curl (all 5 periods, both formats, empty periods → 0 rows file) and Playwright downloads.
