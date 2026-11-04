@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
+from email_service import otp_unavailable
 from pydantic import BaseModel, Field, field_validator
 from webauthn import generate_authentication_options, generate_registration_options, verify_authentication_response, verify_registration_response
 from webauthn.helpers import options_to_json_dict
@@ -162,7 +163,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         sent = await send_otp_email(email, u.get("name") or "", code, "app_lock")
         if not sent:
             await db.app_lock_otps.delete_many({"user_id": user["id"]})
-            raise HTTPException(status_code=502, detail="Could not send the OTP email right now. Please try again.")
+            raise otp_unavailable()
         return {"ok": True, "email_masked": _mask(email), "message": f"OTP sent to {_mask(email)}"}
 
     @r.post("/reset")

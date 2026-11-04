@@ -695,3 +695,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - `DashboardLayout`: ArrowLeft button (data-testid page-back-btn) left of the page title on every inner page; hidden on each panel's dashboard home. Verified: my-leads → withdrawals → wallet → dashboard (one step each); fresh tab → dashboard.
 - Mobile header fix (Oct 2026): brand name forced to one line (Logo whitespace-nowrap), top bar now only Search / Dark mode / Menu (same as Admin); customer Language toggle moved into the mobile drawer ("Language / भाषा" row above Logout). Desktop header unchanged (toggle still next to Dark mode).
 - LangToggle redesigned (Oct 2026) as a segmented pill "EN | हिंदी" — both options always visible, active one red (data-testid lang-en / lang-hi).
+
+## Production 520 on signup (Oct 2026) — RCA + hardening
+- RCA (deployer debug): OTP emails failing with HTTP 402 "Insufficient credits" on Emergent email integration → register/resend/forgot/reset returned 502 → Cloudflare shows red 520 banner. Pods healthy (0 restarts, no OOM, tier_0 250m/512Mi x2). No tier upgrade needed for this; the "85% usage" email is a separate advisory.
+- USER ACTION: top up Emergent credits / enable auto top-up (Profile → Manage plan → Universal Key → Add Balance).
+- Code: `email_service.otp_unavailable()` → clean 503 JSON (+Retry-After) with a credits-specific message when last failure is 402; used in server.py (signup, resend-otp, login email-change OTP), password_reset.py, app_lock_routes.py. 503 passes through Cloudflare (502 does not).
+- Universal Key AI features: Voice Assistant chat, Vision image Q&A, NSFW safety check (all GPT-5.5 in assistant_routes.py); object storage auth also uses the key.

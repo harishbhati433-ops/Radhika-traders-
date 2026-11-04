@@ -6,6 +6,7 @@ import time
 import ipaddress
 import logging
 import httpx
+from fastapi import HTTPException
 from datetime import datetime, timezone, timedelta
 from html import escape
 import office_timing as ot
@@ -183,6 +184,16 @@ DAILY_SOFT_CAP = 400      # total sends/day before bulk is deferred to tomorrow 
 
 def last_failure() -> str:
     return _last_failure
+
+
+def otp_unavailable() -> HTTPException:
+    """Clean 503 (Cloudflare passes it through; 502 gets replaced by the red 520 banner)."""
+    why = _last_failure or ""
+    if "402" in why or "credit" in why.lower():
+        msg = "OTP email service is temporarily paused (provider credits exhausted). Our team has been alerted — please try again a little later."
+    else:
+        msg = "We could not send the OTP email right now. Please check the address and try again in a minute."
+    return HTTPException(status_code=503, detail=msg, headers={"Retry-After": "120"})
 
 
 def is_permanent_failure() -> bool:

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 from auth_utils import hash_password, generate_otp, create_access_token
-from email_service import send_otp_email, send_password_changed_email
+from email_service import send_otp_email, send_password_changed_email, otp_unavailable
 
 OTP_TTL_MIN = 5
 OTP_MAX_WRONG = 5
@@ -87,7 +87,7 @@ def build_router(db, get_current_user, log_security, public_user) -> APIRouter:
         sent = await send_otp_email(email, user.get("name", ""), code, "reset")
         if not sent:
             await db.pwd_reset_otps.delete_many({"email": email})
-            raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email right now. Please try again in a minute.")
+            raise otp_unavailable()
         await log_security(str(user["_id"]), "password_reset_otp_sent", request, f"role={user.get('role')}")
         return {"expires_in": OTP_TTL_MIN * 60, "resend_in": RESEND_COOLDOWN_SEC}
 

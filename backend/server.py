@@ -545,7 +545,7 @@ async def register(body: RegisterIn, request: Request):
         if not existing:
             await db.users.delete_one({"email": email, "email_verified": False})
         await db.otp_codes.delete_many({"email": email, "purpose": "signup"})
-        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please check the address is correct and try again in a minute.")
+        raise email_service.otp_unavailable()
     return {"message": "OTP sent to your email", "email": email}
 
 
@@ -755,7 +755,7 @@ async def resend_otp(body: ResendOtpIn):
     sent = await send_otp_email(email, user.get("name", ""), code, body.purpose)
     logger.info(f"[OTP {body.purpose}] {email} -> {code} (sent={bool(sent)})")
     if not sent:
-        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please try again in a minute.")
+        raise email_service.otp_unavailable()
     return {"message": "OTP resent"}
 
 
@@ -853,7 +853,7 @@ async def login_resend_email_otp(body: LoginIn):
     if not user or not await asyncio.to_thread(verify_password, body.password, user.get("password_hash", "")) or not user.get("pending_email_verification"):
         raise HTTPException(status_code=400, detail="Invalid request.")
     if not await _send_email_change_otp(user):
-        raise HTTPException(status_code=502, detail="We could not deliver the OTP to this email address. Please try again in a minute.")
+        raise email_service.otp_unavailable()
     return {"message": "OTP sent"}
 
 
