@@ -34,6 +34,7 @@ import email_service
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, campaign_live_html, campaign_status_html, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
 from storage_service import init_storage, put_object, get_object, APP_NAME
 from share_kit import qr_png, poster_png
+from xlsx_util import xlsx_bytes
 from rbac import make_require_perm, make_log_activity, has_perm
 from employee_routes import build_router as build_employee_router
 from search_routes import build_search_router
@@ -1450,16 +1451,7 @@ async def admin_leads_export(format: str = "xlsx", campaign_id: Optional[str] = 
         w.writerows(rows)
         return Response(content=buf.getvalue(), media_type="text/csv",
                         headers={"Content-Disposition": f"attachment; filename={fname}.csv"})
-    import pandas as pd
-    buf = io.BytesIO()
-    df = pd.DataFrame(rows, columns=cols)
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Leads")
-        ws = writer.sheets["Leads"]
-        for i, c in enumerate(cols, 1):
-            width = max([len(str(c))] + [len(str(r.get(c, ""))) for r in rows[:500]]) + 2
-            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = min(max(width, 10), 45)
-    buf.seek(0)
+    buf = xlsx_bytes(rows, cols, "Leads")
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f"attachment; filename={fname}.xlsx"})
 
@@ -2793,16 +2785,7 @@ async def export_customers(request: Request, period: str = "today", format: str 
         w.writeheader()
         w.writerows(rows)
         return Response(content="\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.csv"})
-    import pandas as pd
-    buf = io.BytesIO()
-    df = pd.DataFrame(rows, columns=cols)
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Customers")
-        ws = writer.sheets["Customers"]
-        for i, c in enumerate(cols, 1):
-            width = max([len(str(c))] + [len(str(r.get(c, ""))) for r in rows[:500]]) + 2
-            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = min(max(width, 10), 40)
-    buf.seek(0)
+    buf = xlsx_bytes(rows, cols, "Customers", max_width=40)
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.xlsx"})
 
 
@@ -3079,13 +3062,22 @@ async def _uploaded_poster(url: str):
 
 
 @api.get("/share/refer-poster")
-async def share_refer_poster(user: dict = Depends(get_current_user)):
+async def share_refer_poster(request: Request, user: dict = Depends(get_current_user)):
     s = await get_settings()
-    up = await _uploaded_poster(s.get("refer_poster_url", ""))
+    url = s.get("refer_poster_url", "")
+    if not url:
+        raise HTTPException(status_code=404, detail="No Refer & Earn poster uploaded")
+    etag = f'W/"{hashlib.md5(url.encode()).hexdigest()}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "private, no-cache"})
+    up = await _uploaded_poster(url)
     if not up:
         raise HTTPException(status_code=404, detail="No Refer & Earn poster uploaded")
     data, ct, ext = up
-    return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="refer-earn-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "no-store"})
+    return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="refer-earn-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, no-cache", "ETag": etag})
+
+
+_POSTER_CACHE: dict = {}  # etag -> png bytes (generated posters only; small LRU, ~100 KB each)
 
 
 @api.get("/share/poster/{slug}")
@@ -3093,16 +3085,26 @@ async def share_poster(slug: str, request: Request, user: dict = Depends(get_cur
     c = await db.campaigns.find_one({"slug": slug, "is_deleted": False})
     if not c:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    origin = _share_origin(request)
+    link = (f"{origin}/join/{slug}?ref={user.get('referral_code')}" if any(f.get("enabled") for f in c.get("lead_fields", [])) else f"{origin}/api/go/{slug}?ref={user.get('referral_code')}") if user.get("referral_code") else f"{origin}/campaign/{slug}"
+    mobile = user.get("mobile", "") if user.get("role") == "customer" else ""
+    sig = "|".join(str(x) for x in (c.get("poster_url", ""), c.get("updated_at", ""), c.get("offer_name"), c.get("company"), c.get("customer_benefit"), c.get("benefits"), c.get("description"), c.get("logo_url"), link, user.get("name", ""), mobile))
+    etag = f'W/"{hashlib.md5(sig.encode()).hexdigest()}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "private, no-cache"})
     up = await _uploaded_poster(c.get("poster_url", ""))
     if up:
         data, ct, ext = up
-        return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="{slug}-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "no-store"})
-    origin = _share_origin(request)
-    link = (f"{origin}/join/{slug}?ref={user.get('referral_code')}" if any(f.get("enabled") for f in c.get("lead_fields", [])) else f"{origin}/api/go/{slug}?ref={user.get('referral_code')}") if user.get("referral_code") else f"{origin}/campaign/{slug}"
-    logo = await _logo_bytes(c.get("logo_url", ""))
-    png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo, user.get("mobile", "") if user.get("role") == "customer" else "")
+        return Response(content=data, media_type=ct, headers={"Content-Disposition": f'inline; filename="{slug}-{user.get("referral_code", "share")}.{ext}"', "Cache-Control": "private, no-cache", "ETag": etag})
+    png = _POSTER_CACHE.get(etag)
+    if png is None:
+        logo = await _logo_bytes(c.get("logo_url", ""))
+        png = await asyncio.to_thread(poster_png, c, link, user.get("name", ""), logo, mobile)
+        if len(_POSTER_CACHE) >= 40:
+            _POSTER_CACHE.pop(next(iter(_POSTER_CACHE)))
+        _POSTER_CACHE[etag] = png
     fname = f"{slug}-{user.get('referral_code', 'share')}.png"
-    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "no-store"})
+    return Response(content=png, media_type="image/png", headers={"Content-Disposition": f'inline; filename="{fname}"', "Cache-Control": "private, no-cache", "ETag": etag})
 
 
 # ----------------------------- Reports (admin -> publishers) -----------------------------
@@ -3311,12 +3313,7 @@ async def _statement_file(user: dict, format: str, preset: Optional[str] = "all"
         return Response(content=buf.getvalue(), media_type="text/csv",
                         headers={"Content-Disposition": f"attachment; filename={fname}.csv"})
     if format == "excel":
-        import pandas as pd
-        buf = io.BytesIO()
-        df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Date", "Description", "Type", "Amount", "Reference", "Status"])
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Statement")
-        buf.seek(0)
+        buf = xlsx_bytes(rows, ["Date", "Description", "Type", "Amount", "Reference", "Status"], "Statement")
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                  headers={"Content-Disposition": f"attachment; filename={fname}.xlsx"})
     if format == "pdf":
@@ -3549,6 +3546,20 @@ async def startup():
             await db.users.update_many({"role": "customer", "welcome.signup_bonus": {"$exists": False}}, {"$set": {"welcome.signup_bonus": float(s["signup_bonus"])}})
     except Exception as e:
         logger.warning(f"signup bonus freeze migration skipped: {e}")
+    # Indexes + one-time backfills run once per SCHEMA_VERSION (idempotent; marker in db.meta) instead of on every boot/restart.
+    meta = await db.meta.find_one({"_id": "schema"})
+    if meta and meta.get("version") == SCHEMA_VERSION:
+        logger.info("startup: schema up to date, skipping index/migration pass")
+    else:
+        await _ensure_schema()
+        await db.meta.update_one({"_id": "schema"}, {"$set": {"version": SCHEMA_VERSION, "applied_at": now_iso()}}, upsert=True)
+    await _seed_admin()
+
+
+SCHEMA_VERSION = 20261104
+
+
+async def _ensure_schema():
     try:
         await db.users.create_index("email", unique=True)
         await db.otp_codes.create_index("email")
@@ -3597,7 +3608,9 @@ async def startup():
         await visits_api.ensure_indexes()
     except Exception as e:
         logger.warning(f"Index creation: {e}")
-    # Seed admin
+
+
+async def _seed_admin():
     admin_email = os.environ["ADMIN_EMAIL"].lower()
     admin_password = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": admin_email})

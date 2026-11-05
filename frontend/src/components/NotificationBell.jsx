@@ -14,7 +14,7 @@ export function NotificationBell() {
   const nav = useNavigate();
 
   const load = () => api.get("/notifications").then(({ data }) => setData(data)).catch(() => {});
-  useEffect(() => { load(); const t = setInterval(() => document.visibilityState === "visible" && load(), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { load(); const t = setInterval(() => document.visibilityState === "visible" && load(), 60000); return () => clearInterval(t); }, []);
   useEffect(() => { warmAudio(); syncSound(); return onPushMessage(() => load()); }, []);
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };

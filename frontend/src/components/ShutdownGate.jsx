@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import api from "../lib/api";
 import { MaintenancePage } from "../pages/MaintenancePage";
 
-const POLL_MS = 45000;
+const POLL_MS = 120000;
 
 export function ShutdownGate({ children }) {
   const [state, setState] = useState(null);

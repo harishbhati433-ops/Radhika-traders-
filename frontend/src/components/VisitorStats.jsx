@@ -37,7 +37,7 @@ export function VisitorStats() {
   const [range, setRange] = useState({ start: "", end: "" });
   const [sending, setSending] = useState(false);
 
-  useLivePoll(() => { api.get("/admin/visits/summary", { params: range }).then(({ data }) => setD(data)).catch(() => {}); }, [range], 30000);
+  useLivePoll(() => { api.get("/admin/visits/summary", { params: range }).then(({ data }) => setD(data)).catch(() => {}); }, [range], 60000);
 
   const sendNow = async () => {
     setSending(true);

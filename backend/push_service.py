@@ -5,7 +5,6 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from pywebpush import webpush, WebPushException
 from pymongo.errors import DuplicateKeyError
 
 logger = logging.getLogger("push")
@@ -46,6 +45,7 @@ async def admin_ids() -> list[str]:
 
 def _deliver(sub: dict, payload: str) -> tuple:
     """Runs in a worker thread. Returns (status, detail): 'ok' | 'gone' (subscription dead) | 'error'."""
+    from pywebpush import webpush, WebPushException  # lazy: ~40 MB, only needed when a push is actually sent
     try:
         webpush(subscription_info=sub, data=payload, vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_SUBJECT}, ttl=86400, timeout=10)
         return "ok", ""

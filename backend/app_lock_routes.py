@@ -9,9 +9,16 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
 from email_service import otp_unavailable
 from pydantic import BaseModel, Field, field_validator
-from webauthn import generate_authentication_options, generate_registration_options, verify_authentication_response, verify_registration_response
-from webauthn.helpers import options_to_json_dict
-from webauthn.helpers.structs import AttestationConveyancePreference, AuthenticatorAttachment, AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor, ResidentKeyRequirement, UserVerificationRequirement
+
+
+def _wa():
+    """Lazy-load python-webauthn (~28 MB) only when biometric endpoints are hit."""
+    import webauthn
+    from webauthn.helpers import options_to_json_dict
+    from webauthn.helpers import structs
+    webauthn.options_to_json_dict = options_to_json_dict
+    webauthn.structs = structs
+    return webauthn
 
 MAX_FAILS = 5
 LOCK_MINUTES = 30
@@ -215,12 +222,13 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
             await db.users.update_one({"_id": u["_id"]}, {"$set": {"webauthn_user_id": handle}})
         await db.webauthn_challenges.delete_many({"user_id": user["id"], "expires_at": {"$lt": _now()}})
         existing = await db.webauthn_credentials.find({"user_id": user["id"], "rp_id": rp_id}).to_list(20)
-        opts = generate_registration_options(
+        wa = _wa(); S = wa.structs
+        opts = wa.generate_registration_options(
             rp_id=rp_id, rp_name="Radhika Traders", user_id=_b64d(handle), user_name=u.get("email") or u.get("username") or user["id"], user_display_name=u.get("name") or "Partner",
-            authenticator_selection=AuthenticatorSelectionCriteria(authenticator_attachment=AuthenticatorAttachment.PLATFORM, user_verification=UserVerificationRequirement.REQUIRED, resident_key=ResidentKeyRequirement.PREFERRED),
-            exclude_credentials=[PublicKeyCredentialDescriptor(id=_b64d(c["credential_id"])) for c in existing], attestation=AttestationConveyancePreference.NONE, timeout=60000)
+            authenticator_selection=S.AuthenticatorSelectionCriteria(authenticator_attachment=S.AuthenticatorAttachment.PLATFORM, user_verification=S.UserVerificationRequirement.REQUIRED, resident_key=S.ResidentKeyRequirement.PREFERRED),
+            exclude_credentials=[S.PublicKeyCredentialDescriptor(id=_b64d(c["credential_id"])) for c in existing], attestation=S.AttestationConveyancePreference.NONE, timeout=60000)
         await db.webauthn_challenges.insert_one({"user_id": user["id"], "ceremony": "register", "challenge": _b64e(opts.challenge), "origin": origin, "rp_id": rp_id, "expires_at": _now() + timedelta(minutes=5)})
-        return options_to_json_dict(opts)
+        return wa.options_to_json_dict(opts)
 
     @r.post("/biometric/register/finish")
     async def bio_register_finish(cred: CredentialIn, request: Request, user: dict = Depends(get_current_user)):
@@ -229,7 +237,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         if not ch:
             raise HTTPException(status_code=400, detail="Registration expired. Please try again.")
         try:
-            res = verify_registration_response(credential=cred.model_dump(exclude_none=True), expected_challenge=_b64d(ch["challenge"]), expected_rp_id=rp_id, expected_origin=origin, require_user_verification=True)
+            res = _wa().verify_registration_response(credential=cred.model_dump(exclude_none=True), expected_challenge=_b64d(ch["challenge"]), expected_rp_id=rp_id, expected_origin=origin, require_user_verification=True)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not verify this device: {str(e)[:120]}")
         cid = _b64e(res.credential_id)
@@ -246,10 +254,11 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         rows = await db.webauthn_credentials.find({"user_id": user["id"], "rp_id": rp_id}).to_list(20)
         if not rows:
             raise HTTPException(status_code=404, detail="Fingerprint is not set up on this device. Use your PIN.")
-        opts = generate_authentication_options(rp_id=rp_id, allow_credentials=[PublicKeyCredentialDescriptor(id=_b64d(c["credential_id"]), transports=None) for c in rows],
-                                               user_verification=UserVerificationRequirement.REQUIRED, timeout=60000)
+        wa = _wa(); S = wa.structs
+        opts = wa.generate_authentication_options(rp_id=rp_id, allow_credentials=[S.PublicKeyCredentialDescriptor(id=_b64d(c["credential_id"]), transports=None) for c in rows],
+                                                  user_verification=S.UserVerificationRequirement.REQUIRED, timeout=60000)
         await db.webauthn_challenges.insert_one({"user_id": user["id"], "ceremony": "unlock", "challenge": _b64e(opts.challenge), "origin": origin, "rp_id": rp_id, "expires_at": _now() + timedelta(minutes=5)})
-        return options_to_json_dict(opts)
+        return wa.options_to_json_dict(opts)
 
     @r.post("/biometric/unlock/finish")
     async def bio_unlock_finish(cred: CredentialIn, request: Request, user: dict = Depends(get_current_user)):
@@ -261,8 +270,8 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         if not ch:
             raise HTTPException(status_code=400, detail="Unlock request expired. Please try again.")
         try:
-            res = verify_authentication_response(credential=cred.model_dump(exclude_none=True), expected_challenge=_b64d(ch["challenge"]), expected_rp_id=rp_id, expected_origin=origin,
-                                                 credential_public_key=_b64d(row["public_key"]), credential_current_sign_count=int(row.get("sign_count", 0)), require_user_verification=True)
+            res = _wa().verify_authentication_response(credential=cred.model_dump(exclude_none=True), expected_challenge=_b64d(ch["challenge"]), expected_rp_id=rp_id, expected_origin=origin,
+                                                       credential_public_key=_b64d(row["public_key"]), credential_current_sign_count=int(row.get("sign_count", 0)), require_user_verification=True)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Fingerprint verification failed: {str(e)[:120]}")
         await db.webauthn_credentials.update_one({"_id": row["_id"]}, {"$set": {"sign_count": res.new_sign_count, "last_used_at": _iso()}})

@@ -40,7 +40,7 @@ export default function Withdrawals() {
     api.get("/withdrawals").then(({ data }) => setList(data));
     api.get("/settings/public").then(({ data }) => { setMinWd(data.min_withdrawal); setWdOpen({ enabled: data.withdrawals_open, message: data.withdrawals_open ? "" : (data.withdrawals_enabled ? data.withdrawals_closed_reason : data.withdrawals_paused_message) }); }).catch(() => {});
   };
-  useLivePoll(load, [], 15000);
+  useLivePoll(load, [], 60000);
   useWithdrawalCelebration(list, user?.id);
 
   const kycDone = user?.kyc?.status === "verified";

@@ -13,8 +13,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from bson import ObjectId
-from PIL import Image
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
 
 import contact_settings
 
@@ -76,6 +74,7 @@ def _prepare_image(b64: str) -> str:
     if len(raw) > IMAGE_MAX_BYTES:
         raise HTTPException(status_code=400, detail="Image is too large (max 6 MB)")
     try:
+        from PIL import Image  # lazy
         im = Image.open(io.BytesIO(raw))
         im.load()
         if im.format not in ("JPEG", "PNG", "WEBP", "GIF", "BMP", "MPO"):
@@ -94,6 +93,7 @@ def build_router(db, get_current_user, compute_wallet, push_service=None, log_ac
     r = APIRouter(prefix="/assistant")
 
     async def image_is_safe(api_key: str, b64: str) -> tuple[bool, str]:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
         llm = LlmChat(api_key=api_key, session_id=f"safety-{int(datetime.now().timestamp() * 1000)}", system_message=SAFETY_PROMPT).with_model(*MODEL)
         try:
             res = await llm.send_message(UserMessage(text="Classify this image.", file_contents=[ImageContent(image_base64=b64)]))
@@ -240,6 +240,7 @@ def build_router(db, get_current_user, compute_wallet, push_service=None, log_ac
         msg = body.message.strip() or "Is image ko dekh kar batao — yeh kya hai aur mujhe kya karna chahiye?"
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "")[:60]
         await db.assistant_messages.insert_one({"session_id": sid, "role": "user", "content": ("📷 " if image_b64 else "") + msg, "has_image": bool(image_b64), "ip": ip, "user_id": me["id"] if me else None, "created_at": _now()})
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent  # lazy: loaded on first chat only
         llm = LlmChat(api_key=api_key, session_id=f"{sid}-{int(datetime.now().timestamp())}", system_message=system).with_model(*MODEL)
         user_msg = UserMessage(text=msg, file_contents=[ImageContent(image_base64=image_b64)]) if image_b64 else UserMessage(text=msg)
 

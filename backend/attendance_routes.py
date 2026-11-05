@@ -13,7 +13,7 @@ import push_service
 from pydantic import BaseModel
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
-import pandas as pd
+from xlsx_util import xlsx_bytes
 
 import contact_settings
 import email_service
@@ -285,10 +285,16 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                                           "at": now_utc().isoformat(), **(extra or {})})
 
     def export(rows: list, cols: list, title: str, fmt: str, fname: str):
-        df = pd.DataFrame([{c[1]: row.get(c[0], "") for c in cols} for row in rows]) if rows else pd.DataFrame(columns=[c[1] for c in cols])
+        hdr = [c[1] for c in cols]
+        data = [{c[1]: row.get(c[0], "") for c in cols} for row in rows]
         buf = io.BytesIO()
         if fmt == "csv":
-            buf.write(df.to_csv(index=False).encode("utf-8-sig"))
+            import csv
+            s = io.StringIO()
+            w = csv.DictWriter(s, fieldnames=hdr)
+            w.writeheader()
+            w.writerows(data)
+            buf.write(s.getvalue().encode("utf-8-sig"))
             media, ext = "text/csv", "csv"
         elif fmt == "pdf":
             from reportlab.lib.pagesizes import A4, landscape
@@ -304,8 +310,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
             doc.build([Paragraph("<b>Radhika Traders</b> — " + title, st["Title"]), Paragraph(f"Generated {now_utc().astimezone(IST).strftime('%d %b %Y, %I:%M %p IST')}", st["Normal"]), Spacer(1, 10), t])
             media, ext = "application/pdf", "pdf"
         else:
-            with pd.ExcelWriter(buf, engine="openpyxl") as w:
-                df.to_excel(w, index=False, sheet_name=title[:30])
+            buf = xlsx_bytes(data, hdr, title[:30])
             media, ext = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"
         buf.seek(0)
         return StreamingResponse(buf, media_type=media, headers={"Content-Disposition": f'attachment; filename="{fname}.{ext}"'})

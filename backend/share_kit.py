@@ -1,8 +1,7 @@
 import io
 from pathlib import Path
+from functools import lru_cache
 
-import qrcode
-from PIL import Image, ImageDraw, ImageFont
 from contact_settings import wa_number
 
 ASSETS = Path(__file__).parent / "assets"
@@ -10,24 +9,35 @@ W = H = 1080
 DARK, RED, GOLD, WHITE, MUTED = (11, 15, 23), (153, 27, 27), (245, 158, 11), (255, 255, 255), (148, 163, 184)
 
 
-def _font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
+def _pil():
+    """Lazy-load Pillow (+ qrcode) only when an image is actually generated."""
+    import qrcode
+    from PIL import Image, ImageDraw, ImageFont
+    return qrcode, Image, ImageDraw, ImageFont
+
+
+@lru_cache(maxsize=16)
+def _font(size: int, bold: bool = True):
+    ImageFont = _pil()[3]
     return ImageFont.truetype(str(ASSETS / ("LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf")), size)
 
 
-def qr_image(url: str, size: int = 600) -> Image.Image:
+def qr_image(url: str, size: int = 600):
+    qrcode, Image, _, _ = _pil()
     q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
     q.add_data(url)
     q.make(fit=True)
     return q.make_image(fill_color="black", back_color="white").convert("RGB").resize((size, size), Image.NEAREST)
 
 
+@lru_cache(maxsize=128)
 def qr_png(url: str, size: int = 600) -> bytes:
     buf = io.BytesIO()
     qr_image(url, size).save(buf, "PNG")
     return buf.getvalue()
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int, max_lines: int) -> list[str]:
+def _wrap(draw, text: str, font, max_w: int, max_lines: int) -> list[str]:
     words, lines, cur = (text or "").split(), [], ""
     for w in words:
         t = f"{cur} {w}".strip()
@@ -46,7 +56,8 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, ma
     return lines
 
 
-def _rounded(img: Image.Image, radius: int) -> Image.Image:
+def _rounded(img, radius: int):
+    _, Image, ImageDraw, _ = _pil()
     mask = Image.new("L", img.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, *img.size), radius=radius, fill=255)
     out = img.convert("RGBA")
@@ -55,6 +66,7 @@ def _rounded(img: Image.Image, radius: int) -> Image.Image:
 
 
 def poster_png(c: dict, link: str, partner_name: str, logo_bytes: bytes | None, partner_mobile: str = "") -> bytes:
+    _, Image, ImageDraw, _ = _pil()
     img = Image.new("RGB", (W, H), DARK)
     d = ImageDraw.Draw(img)
     d.rectangle((0, 0, W, 150), fill=RED)
