@@ -16,6 +16,9 @@ import { Collapsible } from "../../components/Collapsible";
 import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
 import { useT } from "../../lib/i18n";
+import { useFestival } from "../../lib/festival";
+import { FestivalDashHero, FestivalCampaigns } from "../../components/FestivalTheme";
+import { fileUrl } from "../../lib/api";
 
 function Stat({ icon: Icon, label, value, tone = "slate" }) {
   const t = useT();
@@ -33,6 +36,8 @@ export default function CustomerDashboard() {
   const { user } = useAuth();
   const t = useT();
   const greeting = timeGreeting();
+  const fest = useFestival();
+  const firstName = capitalizeName(user?.name?.split(" ")[0] || "");
   const [wallet, setWallet] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
 
@@ -53,6 +58,8 @@ export default function CustomerDashboard() {
           <ShieldAlert className="h-5 w-5 shrink-0" /> {t("Complete your KYC to enable withdrawals.")} <ArrowRight className="ml-auto h-4 w-4" />
         </Link>
       )}
+
+      {fest && <FestivalDashHero fest={fest} name={firstName} />}
 
       <OfferBanners />
 
@@ -80,6 +87,8 @@ export default function CustomerDashboard() {
       </div>
 
       <div className="mt-6"><Collapsible id="cust-refer" icon={Users} title={t("Refer & Earn")} subtitle={t("Invite friends with your link — poster, QR code & share buttons")} badge={t("Earn")} testId="refer-collapsible"><ReferEarnCard code={user?.referral_code} /></Collapsible></div>
+
+      {fest && campaigns.length > 0 && <div className="mt-6"><FestivalCampaigns fest={fest} campaigns={campaigns} fileUrl={fileUrl} /></div>}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">

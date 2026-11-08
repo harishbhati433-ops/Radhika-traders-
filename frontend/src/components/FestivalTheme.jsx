@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "./Logo";
 import { palette } from "../lib/festival";
+import { FestivalMotif } from "./FestivalMotif";
 import "../styles/festival.css";
 
 const LIGHTS = Array.from({ length: 18 }, (_, i) => ({ left: `${(i * 53) % 100}%`, top: `${20 + ((i * 37) % 70)}%`, delay: `${(i * 0.7) % 9}s`, dx: `${((i % 5) - 2) * 14}px`, dur: `${7 + (i % 4) * 1.5}s` }));
@@ -19,7 +20,7 @@ export function Diya({ fest, compact }) {
       </button>
       {lit ? (
         <div className="fest-wish max-w-xs text-center" data-testid="festival-wish">
-          <div className="font-display text-lg font-extrabold" style={{ color: "var(--fest-accent2)" }}>{fest.emoji} {fest.name === "Diwali" ? "शुभ दीपावली!" : fest.name}</div>
+          <div className="font-display text-lg font-extrabold" style={{ color: "var(--fest-accent2)" }}>{fest.emoji} {fest.wish || fest.name}!</div>
           <p className="mt-1 text-sm leading-snug opacity-90">{fest.greeting}</p>
           <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider opacity-70">— Radhika Traders</p>
         </div>
@@ -54,9 +55,57 @@ export function FestivalHero({ fest }) {
           </div>
           <div className="mt-8 inline-flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-2 shadow-lg"><Logo size="sm" /></div>
         </div>
-        <div className="flex justify-center lg:col-span-2"><Diya fest={fest} /></div>
+        <div className="flex justify-center lg:col-span-2"><FestivalMotif fest={fest} /></div>
       </div>
     </section>
+  );
+}
+
+const DASH_LIGHTS = LIGHTS.slice(0, 10);
+
+export function FestivalDashHero({ fest, name }) {
+  return (
+    <section className="fest-dash-hero fest-grain mb-6" style={festVars(fest)} data-testid="festival-dash-hero" data-festival={fest.key}>
+      <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
+      <div className="fest-lights" aria-hidden="true">{DASH_LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
+      <span className="fest-corner" aria-hidden="true" /><span className="fest-corner br" aria-hidden="true" />
+      <div className="relative grid items-center gap-4 px-5 pb-5 pt-7 sm:grid-cols-5 sm:px-8 sm:pb-7 sm:pt-9">
+        <div className="sm:col-span-3">
+          <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-dash-badge"><span>{fest.emoji}</span> {fest.name} Special</div>
+          <h2 className="fest-wish-title mt-3 font-display text-3xl font-extrabold leading-tight sm:text-4xl" data-testid="festival-dash-wish">{fest.wish || fest.name}{name ? `, ${name}` : ""}!</h2>
+          <div className="fest-rule mt-3" />
+          <p className="mt-3 max-w-md text-sm leading-relaxed opacity-90 sm:text-base" data-testid="festival-dash-greeting">{fest.greeting}</p>
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider opacity-70">— Radhika Traders · {fest.tagline}</p>
+        </div>
+        <div className="flex justify-center sm:col-span-2"><FestivalMotif fest={fest} compact /></div>
+      </div>
+    </section>
+  );
+}
+
+export function FestivalCampaigns({ fest, campaigns, fileUrl }) {
+  return (
+    <div style={festVars(fest)} data-testid="festival-campaigns">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-lg font-bold" style={{ color: "var(--fest-accent2)" }} data-testid="festival-campaigns-title">{fest.emoji} {fest.name} Special Campaigns</h2>
+        <Link to="/app/my-campaigns" data-testid="festival-campaigns-view-all" className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: "var(--fest-accent2)" }}>View All <ArrowRight className="h-4 w-4" /></Link>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        {campaigns.map((c) => (
+          <Link key={c.id} to={`/campaign/${c.slug}`} data-testid={`festival-campaign-${c.slug}`} className="fest-camp-card flex flex-col rounded-2xl p-3.5 text-white">
+            <div className="flex items-center gap-2.5">
+              {c.logo_url ? <img src={fileUrl(c.logo_url)} alt="" className="h-10 w-10 shrink-0 rounded-xl bg-white object-contain p-1" loading="lazy" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white font-display text-lg font-extrabold text-red-700">{(c.company || c.offer_name || "R").charAt(0)}</span>}
+              <div className="min-w-0"><div className="line-clamp-2 font-display text-sm font-bold leading-tight">{c.offer_name}</div><div className="truncate text-[11px] opacity-70">{c.company}</div></div>
+            </div>
+            <div className="mt-2 line-clamp-1 text-xs opacity-80">{c.category}{c.campaign_type ? ` · ${c.campaign_type}` : ""}</div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="fest-payout inline-flex rounded-full px-3 py-1.5 font-mono text-sm font-extrabold">Payout: ₹{c.payout_amount}</span>
+              <span className="fest-live inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"><Sparkles className="h-2.5 w-2.5" /> Live</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
 
