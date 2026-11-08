@@ -69,15 +69,15 @@ export function FestivalDashHero({ fest, name }) {
       <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
       <div className="fest-lights" aria-hidden="true">{DASH_LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
       <span className="fest-corner" aria-hidden="true" /><span className="fest-corner br" aria-hidden="true" />
-      <div className="relative grid items-center gap-4 px-5 pb-5 pt-7 sm:grid-cols-5 sm:px-8 sm:pb-7 sm:pt-9">
-        <div className="sm:col-span-3">
+      <div className="relative grid grid-cols-5 items-center gap-2 px-4 pb-4 pt-7 sm:gap-4 sm:px-8 sm:pb-7 sm:pt-9">
+        <div className="col-span-3">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-dash-badge"><span>{fest.emoji}</span> {fest.name} Special</div>
-          <h2 className="fest-wish-title mt-3 font-display text-3xl font-extrabold leading-tight sm:text-4xl" data-testid="festival-dash-wish">{fest.wish || fest.name}{name ? `, ${name}` : ""}!</h2>
+          <h2 className="fest-wish-title mt-3 font-display text-2xl font-extrabold leading-tight sm:text-4xl" data-testid="festival-dash-wish">{fest.wish || fest.name}{name ? `, ${name}` : ""}!</h2>
           <div className="fest-rule mt-3" />
-          <p className="mt-3 max-w-md text-sm leading-relaxed opacity-90 sm:text-base" data-testid="festival-dash-greeting">{fest.greeting}</p>
-          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider opacity-70">— Radhika Traders · {fest.tagline}</p>
+          <p className="mt-3 max-w-md text-xs leading-relaxed opacity-90 sm:text-base" data-testid="festival-dash-greeting">{fest.greeting}</p>
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider opacity-70 sm:text-[11px]">— Radhika Traders · {fest.tagline}</p>
         </div>
-        <div className="flex justify-center sm:col-span-2"><FestivalMotif fest={fest} compact /></div>
+        <div className="col-span-2 flex origin-center scale-[.62] justify-center sm:scale-100"><FestivalMotif fest={fest} compact /></div>
       </div>
     </section>
   );

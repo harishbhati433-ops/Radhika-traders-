@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only test of the Festival Theme System (homepage + customer dashboard + /admin/festivals). The core flows all work. Homepage is Diwali with a diya you can tap, which shows 'शुभ दीपावली'. The customer dashboard shows the Diwali hero ('शुभ दीपावली, Test!'), the greeting and 'Diwali Special Campaigns' with 1 card (/campaign/axis-mutual-fund-sip, 'Payout: ₹500'). Force Holi in admin, then a normal reload, gives a Holi homepage (no diya, festival-motif-holi, bulbs in green/blue/pink) and a Holi dashboard in a new customer context ('हैप्पी होली, Test!', 'Holi Special Campaigns'). Un-forcing returns to Diwali. Independence→flag, Sankranti→kite and Christmas→tree all show correctly and were all un-forced. Preview renders inside the card, the Switch flips instantly and the headline saves on blur ('Saved' toast, persisted, then restored). Mobile 390px has no horizontal overflow and the campaign name is not clipped. Admin and employee panels have no fest-dash class. Final state was checked through the API: every festival has force_active=false, enabled=true and preview=false, and /api/festival/active = diwali. A few contrast problems remain under fest-dash.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BonusWalletCard (dashboard + /app/wallet) under fest-dash", "issue": "'Bonus Wallet' header and the ₹ amount use text-emerald-900 (rgb 6,78,59). fest-dash turns bg-emerald-50 dark, so the contrast is 1.62:1 and hard to read. festival.css does not override text-emerald-900 (or text-violet-900 for locked/pending states, though bg-violet-50 is not overridden either and stays light).", "selector": "[data-testid=bonus-wallet-card]", "priority": "MEDIUM"},
+      {"component": "Refer & Earn collapsible 'Earn' pill on /app/dashboard", "issue": "Uses bg-amber-100 (not overridden, stays light yellow) while text-amber-600/700 is overridden to --fest-accent2 (#fde68a). The result is light yellow on light yellow at 1.12:1, so the text is invisible.", "selector": "span.bg-amber-100 (Refer & Earn header)", "priority": "MEDIUM"},
+      {"component": "/app/my-leads status badges under fest-dash", "issue": "The 'Rejected'/'Account Rejected' badges (text-rose-700 on overridden bg-rose-50) and the 'Account Open' badge/stat (text-sky-700 on overridden bg-sky-50) have about 1.85:1 contrast. The 'Duplicate' and 'Trade Done' stat cards stay white (violet/indigo-50 not overridden), which looks inconsistent.", "selector": "My Leads badges", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Homepage Holi hero", "issues": ["The 'Holi Special' badge and the top festival strip text (accent2 #a78bfa on purple) are fairly low contrast."]},
+      {"screen": "Admin /admin/festivals", "issues": ["Schedule rows use the native browser date picker (type=date) instead of the shadcn calendar."]},
+      {"screen": "Mobile dashboard hero", "issues": ["The compact diya motif stacks below the text, which makes the hero very tall (~400px) on 390px. Consider placing the motif side by side or making it smaller."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/contrast.js"],
+  "action_items": [
+    "Add fest-dash overrides in festival.css for text-emerald-800/900, text-violet-700/800/900 + bg-violet-50, and text-rose-700/text-sky-700 (lighter shades such as #fda4af / #7dd3fc), or theme BonusWalletCard and the lead badges directly",
+    "Fix the Refer & Earn 'Earn' pill: override bg-amber-100 under fest-dash (e.g. color-mix accent 25%) or avoid overriding its text colour",
+    "Optional: find the source of the React 'Encountered two children with the same key 9' warning (seen 5x during the homepage/dashboard load; not from the festival components, whose keys are unique)",
+    "Optional: replace the native date inputs on /admin/festivals with the shadcn Calendar"
+  ],
+  "critical_code_review_comments": [
+    "festivals.py: the 30s in-process cache on /festival/active is invalidated on PUT. This works with uvicorn --workers 1, but with multiple workers or replicas the other workers keep serving stale data for up to 30s.",
+    "FestivalMotif.jsx imports Diya from FestivalTheme.jsx, and FestivalTheme imports FestivalMotif. It works because both are only used at render time, but it is a fragile circular import. Consider moving Diya into its own file.",
+    "Diya lit state persists in localStorage per year, so once tapped the wish always shows. That is intended, but tests need a fresh context to see the hint.",
+    "AdminFestivals onChange applies optimistic patch.force_active and clears the others, which matches the backend un-force-others logic. Good."
+  ],
+  "updated_files": ["/app/tests/contrast.js (new helper used by Playwright for contrast scan; no app code modified)"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "~92% (all functional checks pass; 3 contrast defects under fest-dash)"},
+  "seed_data_creation": "None. Temporarily forced holi/independence/sankranti/christmas and toggled christmas enabled off→on; edited christmas headline_en then restored it. Verified via API that the final state is all force_active=false, enabled=true, preview=false, Diwali active.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin: visit /rt-control-hb27, then /admin/login, PIN 2580 (unlock-pin-key-N). Customer: /app/login, PIN 2468. Employee gate is /rt-team-9k4e; employee rahul.k has an app-lock PIN that is unknown, so the employee panel was only checked as not festival-skinned on the lock screen and through code (DashboardLayout applies fest-dash only when isCust). Contrast scanner is in /app/tests/contrast.js (page.evaluate(open(...).read())).",
+  "test_credentials": "Used /app/memory/test_credentials.md + review request (admin PIN 2580, customer PIN 2468). The employee app-lock PIN is not documented."
+}

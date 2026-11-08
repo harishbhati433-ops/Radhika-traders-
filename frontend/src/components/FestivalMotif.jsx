@@ -84,7 +84,7 @@ const MAP = {
   newyear: <Fireworks />,
   rakhi: <Rakhi />,
   navratri: <Dandiya />,
-  ganesh: <Glyph ch="🕉️" label="ganesh" />,
+  ganesh: <Glyph ch={<span style={{ color: "var(--fest-accent2)", fontFamily: "serif", fontWeight: 700 }}>ॐ</span>} label="ganesh" />,
   janmashtami: <Glyph ch="🦚" label="janmashtami" extra={<span className="flute" />} />,
   shivratri: <Glyph ch="🔱" label="shivratri" extra={<span className="moon" />} />,
 };

@@ -49,6 +49,21 @@ html .fest-dash .bg-sky-50 { background-color: rgba(14, 165, 233, .14); }
 html .fest-dash .bg-rose-50 { background-color: rgba(244, 63, 94, .14); }
 html .fest-dash .border-amber-200, html .fest-dash .border-amber-300\/50 { border-color: color-mix(in srgb, var(--fest-accent) 50%, transparent); }
 html .fest-dash .text-amber-800 { color: var(--fest-accent2); }
+html .fest-dash .text-emerald-800, html .fest-dash .text-emerald-900 { color: #a7f3d0; }
+html .fest-dash .text-violet-700, html .fest-dash .text-violet-800, html .fest-dash .text-violet-900, html .fest-dash .text-indigo-700 { color: #c4b5fd; }
+html .fest-dash .text-rose-700, html .fest-dash .text-rose-800 { color: #fda4af; }
+html .fest-dash .text-sky-700, html .fest-dash .text-sky-800 { color: #7dd3fc; }
+html .fest-dash .bg-violet-50, html .fest-dash .bg-indigo-50 { background-color: rgba(139, 92, 246, .16); }
+html .fest-dash .bg-emerald-100 { background-color: rgba(16, 185, 129, .24); }
+html .fest-dash .bg-amber-100 { background-color: color-mix(in srgb, var(--fest-accent) 32%, transparent); }
+html .fest-dash .bg-rose-100 { background-color: rgba(244, 63, 94, .24); }
+html .fest-dash .bg-red-100 { background-color: rgba(220, 38, 38, .26); }
+html .fest-dash .border-emerald-200, html .fest-dash .border-emerald-300 { border-color: rgba(16, 185, 129, .4); }
+html .fest-dash .border-violet-200, html .fest-dash .border-indigo-200 { border-color: rgba(139, 92, 246, .4); }
+html .fest-dash .border-rose-200 { border-color: rgba(244, 63, 94, .4); }
+html .fest-dash .border-sky-200 { border-color: rgba(14, 165, 233, .4); }
+html .fest-dash .from-amber-50, html .fest-dash .from-emerald-50, html .fest-dash .from-slate-50 { --tw-gradient-from: color-mix(in srgb, var(--fest-bg) 86%, #fff) var(--tw-gradient-from-position); --tw-gradient-to: transparent var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+html .fest-dash .to-white { --tw-gradient-to: color-mix(in srgb, var(--fest-bg) 80%, #fff) var(--tw-gradient-to-position); }
 html .fest-dash .shadow-sm, html .fest-dash .shadow-md, html .fest-dash .shadow-lg { --tw-shadow-color: rgba(0, 0, 0, .55); --tw-shadow: var(--tw-shadow-colored); }
 html .fest-dash input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), html .fest-dash select, html .fest-dash textarea { background-color: color-mix(in srgb, var(--fest-bg) 80%, #fff); color: var(--fest-text); border-color: color-mix(in srgb, var(--fest-accent) 40%, transparent); }
 html .fest-dash input::placeholder, html .fest-dash textarea::placeholder { color: color-mix(in srgb, var(--fest-text) 45%, transparent); }
