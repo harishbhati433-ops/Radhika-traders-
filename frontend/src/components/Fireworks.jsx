@@ -79,4 +79,4 @@ export function Fireworks({ fixed = false, intensity = 1, zone = "hero" }) {
   return <canvas ref={ref} aria-hidden="true" data-testid="festival-fireworks" className={`${fixed ? "fixed" : "absolute"} inset-0 z-0 pointer-events-none`} />;
 }
 
-export const FIREWORK_FESTIVALS = new Set(["diwali", "newyear"]);
+export const FIREWORK_FESTIVALS = new Set(["diwali", "newyear"]); // informational; runtime uses fest.fireworks from API

@@ -20,7 +20,7 @@ import { LangToggle } from "./LangToggle";
 import { trackPage, popPrevious, homeFor } from "../lib/navStack";
 import { useFestival } from "../lib/festival";
 import { FestiveStrip, festVars } from "./FestivalTheme";
-import { Fireworks, FIREWORK_FESTIVALS } from "./Fireworks";
+import { Fireworks } from "./Fireworks";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -153,7 +153,7 @@ export function DashboardLayout({ nav, children, title }) {
 
   return (
     <div className={`min-h-screen bg-slate-50 ${isCust && fest ? "fest-dash" : ""}`} style={isCust && fest ? festVars(fest) : undefined} data-festival={isCust && fest ? fest.key : undefined}>
-      {isCust && fest && FIREWORK_FESTIVALS.has(fest.key) && <Fireworks fixed zone="any" />}
+      {isCust && fest?.fireworks && <Fireworks fixed zone="any" />}
       {isCust && <FestiveStrip fest={fest} />}
       {/* Top bar (mobile) */}
       <div className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-4 lg:hidden">

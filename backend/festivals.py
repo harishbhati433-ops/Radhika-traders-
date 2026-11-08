@@ -95,8 +95,18 @@ def _windows_around(f: dict, today: date):
             yield y, w
 
 
-def _public(f: dict, start=None, end=None, mode="scheduled") -> dict:
-    return {"key": f["key"], "name": f["name"], "emoji": f.get("emoji", ""), "headline_hi": f["headline_hi"], "headline_en": f["headline_en"], "tagline": f["tagline"], "greeting": f.get("greeting", ""), "wish": f.get("wish") or SEED.get(f["key"], {}).get("wish") or f["name"],
+FIREWORKS_ALWAYS = {"diwali", "newyear"}
+FIREWORKS_LAST_DAY = {"navratri": "शुभ विजयादशमी"}  # Dussehra = last day of the Navratri window
+
+
+def _public(f: dict, start=None, end=None, mode="scheduled", today=None) -> dict:
+    key = f["key"]
+    last_day = bool(end and today and end == today)
+    wish = f.get("wish") or SEED.get(key, {}).get("wish") or f["name"]
+    if last_day and key in FIREWORKS_LAST_DAY:
+        wish = FIREWORKS_LAST_DAY[key]
+    return {"key": key, "name": f["name"], "emoji": f.get("emoji", ""), "headline_hi": f["headline_hi"], "headline_en": f["headline_en"], "tagline": f["tagline"], "greeting": f.get("greeting", ""), "wish": wish,
+            "fireworks": key in FIREWORKS_ALWAYS or (last_day and key in FIREWORKS_LAST_DAY),
             "palette": f["palette"], "start": start.isoformat() if start else None, "end": end.isoformat() if end else None, "mode": mode}
 
 
@@ -146,7 +156,7 @@ def build_festival_router(db, require_admin, get_current_user_optional, log_acti
         fests = await db.festival_themes.find({}, {"_id": 0}).to_list(50)
         today = datetime.now(IST).date()
         best = pick(fests, today, include_preview=is_admin)
-        out = {"active": _public(best[2], best[3], best[4], best[5]) if best else None, "today": today.isoformat()}
+        out = {"active": _public(best[2], best[3], best[4], best[5], today) if best else None, "today": today.isoformat()}
         if not is_admin:
             cache["at"], cache["value"] = now, out
         return out

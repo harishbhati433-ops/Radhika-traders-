@@ -4,7 +4,7 @@ import { ArrowRight, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { Logo } from "./Logo";
 import { palette } from "../lib/festival";
 import { FestivalMotif } from "./FestivalMotif";
-import { Fireworks, FIREWORK_FESTIVALS } from "./Fireworks";
+import { Fireworks } from "./Fireworks";
 import { enableSound, toggleSound, isSoundOn, onSoundChange, playBurst } from "../lib/fireworksSound";
 import "../styles/festival.css";
 
@@ -53,7 +53,7 @@ export function FestivalHero({ fest }) {
     <section className="fest-hero fest-grain" style={festVars(fest)} data-testid="festival-hero" data-festival={fest.key}>
       <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
       <div className="fest-lights" aria-hidden="true">{LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
-      {FIREWORK_FESTIVALS.has(fest.key) && <Fireworks />}
+      {fest.fireworks && <Fireworks />}
       <div className="relative z-[1] mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-5 lg:py-24">
         <div className="rt-fade-up lg:col-span-3">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-badge">
@@ -82,7 +82,7 @@ export function FestivalDashHero({ fest, name }) {
       <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
       <div className="fest-lights" aria-hidden="true">{DASH_LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
       <span className="fest-corner" aria-hidden="true" /><span className="fest-corner br" aria-hidden="true" />
-      {FIREWORK_FESTIVALS.has(fest.key) && <Fireworks intensity={0.8} />}
+      {fest.fireworks && <Fireworks intensity={0.8} />}
       <div className="relative z-[1] grid grid-cols-5 items-center gap-2 px-4 pb-4 pt-7 sm:gap-4 sm:px-8 sm:pb-7 sm:pt-9">
         <div className="col-span-3">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-dash-badge"><span>{fest.emoji}</span> {fest.name} Special</div>
