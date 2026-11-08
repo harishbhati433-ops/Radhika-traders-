@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import api from "../../lib/api";
@@ -27,10 +27,19 @@ function YearRow({ f, year, info, onSave, onReset }) {
   );
 }
 
+function BlurInput({ value, onCommit, ...rest }) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  const commit = () => { if (v !== value) onCommit(v); };
+  return <Input value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} {...rest} />;
+}
+
 function FestCard({ f, onChange, onPreview, previewing }) {
   const save = (patch) => onChange(f.key, patch);
+  const ref = useRef(null);
+  useEffect(() => { if (previewing) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [previewing]);
   return (
-    <div className={`rounded-2xl border bg-white p-4 ${f.active_now ? "border-amber-400 ring-2 ring-amber-200" : f.force_active ? "border-red-400 ring-2 ring-red-200" : "border-slate-200"}`} data-testid={`fest-card-${f.key}`}>
+    <div ref={ref} className={`scroll-mt-20 rounded-2xl border bg-white p-4 ${f.force_active ? "border-red-400 ring-2 ring-red-200" : f.active_now ? "border-amber-400 ring-2 ring-amber-200" : "border-slate-200"}`} data-testid={`fest-card-${f.key}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl text-2xl" style={{ background: f.palette?.bg }}>{f.emoji}</span>
@@ -44,15 +53,17 @@ function FestCard({ f, onChange, onPreview, previewing }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600">
-          <label className="flex items-center gap-1.5">Priority <Input type="number" value={f.priority} onChange={(e) => save({ priority: Number(e.target.value) })} className="h-8 w-16 text-xs" data-testid={`fest-priority-${f.key}`} /></label>
+          <label className="flex items-center gap-1.5">Priority <BlurInput type="number" value={String(f.priority)} onCommit={(v) => save({ priority: Number(v) || 0 })} className="h-8 w-16 text-xs" data-testid={`fest-priority-${f.key}`} /></label>
           <label className="flex items-center gap-1.5"><Switch checked={!!f.enabled} onCheckedChange={(v) => save({ enabled: v })} data-testid={`fest-enabled-${f.key}`} /> Auto schedule</label>
           <button onClick={() => save({ force_active: !f.force_active })} className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 ${f.force_active ? "bg-red-600 text-white" : "border border-slate-200"}`} data-testid={`fest-force-${f.key}`}><Zap className="h-3.5 w-3.5" /> {f.force_active ? "Force ON" : "Force now"}</button>
           <button onClick={() => onPreview(f)} className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 ${previewing ? "bg-slate-900 text-white" : "border border-slate-200"}`} data-testid={`fest-preview-${f.key}`}>{previewing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />} Preview</button>
         </div>
       </div>
+      {previewing && <div className="mt-3 overflow-hidden rounded-xl ring-2 ring-sky-300" data-testid={`fest-preview-pane-${f.key}`}><FestivalHero fest={f} /></div>}
+      {f.force_active && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" data-testid={`fest-force-note-${f.key}`}>⚡ यह theme अभी website पर सभी को दिख रही है (तारीख की परवाह किए बिना)। बंद करने के लिए "Force ON" दोबारा दबाएँ। <a href="/" target="_blank" rel="noreferrer" className="underline">Website देखें ↗</a></p>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Input value={f.headline_hi} onChange={(e) => save({ headline_hi: e.target.value })} className="h-8 text-xs" data-testid={`fest-headline-hi-${f.key}`} />
-        <Input value={f.headline_en} onChange={(e) => save({ headline_en: e.target.value })} className="h-8 text-xs" data-testid={`fest-headline-en-${f.key}`} />
+        <BlurInput value={f.headline_hi} onCommit={(v) => save({ headline_hi: v })} className="h-8 text-xs" data-testid={`fest-headline-hi-${f.key}`} />
+        <BlurInput value={f.headline_en} onCommit={(v) => save({ headline_en: v })} className="h-8 text-xs" data-testid={`fest-headline-en-${f.key}`} />
       </div>
       <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"><CalendarDays className="h-3.5 w-3.5" /> Schedule (IST) — auto every year</div>
       <div className="mt-1.5 space-y-1.5">
@@ -68,22 +79,24 @@ export default function AdminFestivals() {
   const load = () => api.get("/admin/festivals").then(({ data }) => setList(data));
   useEffect(() => { load(); }, []);
   const onChange = async (key, patch, resetYear) => {
+    if (patch) setList((l) => l?.map((f) => (f.key === key ? { ...f, ...patch } : patch.force_active ? { ...f, force_active: false } : f)));
     try {
       if (resetYear) await api.delete(`/admin/festivals/${key}/override/${resetYear}`);
       else await api.put(`/admin/festivals/${key}`, patch);
-      refreshFestival(); await load(); toast.success("Saved");
-    } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); }
+      refreshFestival(); await load();
+      toast.success(patch?.force_active ? "Theme अभी website पर live है" : patch?.force_active === false ? "Force बंद — अब schedule के अनुसार चलेगा" : "Saved");
+    } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); await load(); }
   };
   const active = list?.find((f) => f.force_active) || list?.find((f) => f.active_now);
   return (
     <DashboardLayout nav={adminNav} title="Festival Themes">
       <p className="mb-4 text-sm text-slate-500">Website का banner, रंग और greeting त्योहार की तारीखों पर <b>अपने-आप</b> बदलते हैं और त्योहार ख़त्म होते ही normal design वापस आ जाता है। Dates Drik Panchang (IST) के अनुसार 2025–2035 तक pre-set हैं — किसी भी साल की तारीख यहाँ बदल सकते हैं। एक साथ दो त्योहार हों तो ऊँची <b>Priority</b> वाला दिखेगा। Live campaigns, payouts और data पर कोई असर नहीं।</p>
       <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm" data-testid="fest-status">
-        {active ? <span>🎉 Active now: <b>{active.name}</b>{active.years?.[active.today?.slice(0, 4)] && <> · {fmt(active.years[active.today.slice(0, 4)].start)} → {fmt(active.years[active.today.slice(0, 4)].end)}</>}</span> : <span className="text-slate-600">No festival active today — website is showing the normal design.</span>}
+        {active ? <span>🎉 Active now: <b>{active.name}</b>{active.force_active ? <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">FORCED</span> : active.years?.[active.today?.slice(0, 4)] && <> · {fmt(active.years[active.today.slice(0, 4)].start)} → {fmt(active.years[active.today.slice(0, 4)].end)}</>}</span> : <span className="text-slate-600">No festival active today — website is showing the normal design.</span>}
+        <p className="mt-1 text-xs text-slate-400">Preview सिर्फ आपको इसी page पर card के अंदर दिखता है · Force now सभी visitors को तुरंत दिखाता है</p>
       </div>
-      {preview && <div className="mb-6 overflow-hidden rounded-2xl ring-2 ring-sky-300" data-testid="fest-preview-pane"><FestivalHero fest={preview} /></div>}
       {!list ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-red-600" /></div> : (
-        <div className="space-y-3">{list.map((f) => <FestCard key={f.key} f={f} onChange={onChange} previewing={preview?.key === f.key} onPreview={(x) => setPreview(preview?.key === x.key ? null : x)} />)}</div>
+        <div className="space-y-3">{list.map((f) => <FestCard key={f.key} f={f} onChange={onChange} previewing={preview === f.key} onPreview={(x) => setPreview(preview === x.key ? null : x.key)} />)}</div>
       )}
     </DashboardLayout>
   );

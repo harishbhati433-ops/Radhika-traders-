@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "./api";
 
 const KEY = "rt-festival";
-const TTL = 10 * 60 * 1000;
+const TTL = 2 * 60 * 1000;
 let mem = null, inflight = null;
 
 export const palette = (f) => f?.palette || { bg: "#0B0F17", accent: "#f59e0b", accent2: "#fde68a", glow: "#f97316", text: "#fff7ed" };
@@ -28,7 +28,9 @@ export function useFestival() {
     if (mem && Date.now() - mem.at < TTL) { setFest(mem.value); return; }
     let on = true;
     fetchActive().then((v) => on && setFest(v));
-    return () => { on = false; };
+    const onVis = () => { if (document.visibilityState === "visible" && (!mem || Date.now() - mem.at >= TTL)) fetchActive().then((v) => on && setFest(v)); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { on = false; document.removeEventListener("visibilitychange", onVis); };
   }, []);
   return fest;
 }
