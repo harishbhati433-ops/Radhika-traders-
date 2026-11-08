@@ -20,6 +20,7 @@ import { LangToggle } from "./LangToggle";
 import { trackPage, popPrevious, homeFor } from "../lib/navStack";
 import { useFestival } from "../lib/festival";
 import { FestiveStrip, festVars } from "./FestivalTheme";
+import { Fireworks, FIREWORK_FESTIVALS } from "./Fireworks";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -152,6 +153,7 @@ export function DashboardLayout({ nav, children, title }) {
 
   return (
     <div className={`min-h-screen bg-slate-50 ${isCust && fest ? "fest-dash" : ""}`} style={isCust && fest ? festVars(fest) : undefined} data-festival={isCust && fest ? fest.key : undefined}>
+      {isCust && fest && FIREWORK_FESTIVALS.has(fest.key) && <Fireworks fixed zone="any" />}
       {isCust && <FestiveStrip fest={fest} />}
       {/* Top bar (mobile) */}
       <div className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-4 lg:hidden">
@@ -174,7 +176,7 @@ export function DashboardLayout({ nav, children, title }) {
         </aside>
       </div>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
+      <div className="relative z-[1] mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
         {/* Desktop sidebar: fixed height, scrolls inside */}
         <aside className="hidden lg:block sticky top-6 h-[calc(100vh-3rem)] w-60 shrink-0">{sidebarCard}</aside>
 

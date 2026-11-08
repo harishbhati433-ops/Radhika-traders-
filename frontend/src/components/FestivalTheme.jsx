@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { Logo } from "./Logo";
 import { palette } from "../lib/festival";
 import { FestivalMotif } from "./FestivalMotif";
+import { Fireworks, FIREWORK_FESTIVALS } from "./Fireworks";
+import { enableSound, toggleSound, isSoundOn, onSoundChange, playBurst } from "../lib/fireworksSound";
 import "../styles/festival.css";
 
 const LIGHTS = Array.from({ length: 18 }, (_, i) => ({ left: `${(i * 53) % 100}%`, top: `${20 + ((i * 37) % 70)}%`, delay: `${(i * 0.7) % 9}s`, dx: `${((i % 5) - 2) * 14}px`, dur: `${7 + (i % 4) * 1.5}s` }));
@@ -12,20 +14,30 @@ const BULBS = Array.from({ length: 24 }, (_, i) => ({ left: `${(i + 0.5) * (100 
 export function Diya({ fest, compact }) {
   const key = `rt-diya-${fest.key}-${new Date().getFullYear()}`;
   const [lit, setLit] = useState(() => localStorage.getItem(key) === "1");
-  const light = () => { if (!lit) { setLit(true); localStorage.setItem(key, "1"); } };
+  const [sound, setSound] = useState(isSoundOn());
+  useEffect(() => onSoundChange(setSound), []);
+  const light = () => {
+    if (!lit) { setLit(true); localStorage.setItem(key, "1"); }
+    enableSound();
+    playBurst(true);
+    window.dispatchEvent(new CustomEvent("rt-fireworks-burst", { detail: { count: 3 } }));
+  };
+  const toggle = (e) => { e.stopPropagation(); toggleSound(); };
   return (
     <div className="flex flex-col items-center gap-3" data-testid="festival-diya-wrap">
-      <button type="button" onClick={light} aria-pressed={lit} aria-label={lit ? "Diya lit" : "Tap to light the diya"} data-testid="festival-diya" className={`diya ${lit ? "lit" : ""} ${compact ? "scale-75" : ""}`}>
+      <button type="button" onClick={light} aria-pressed={lit} aria-label={lit ? "Diya lit — tap for fireworks" : "Tap to light the diya"} data-testid="festival-diya" className={`diya ${lit ? "lit" : ""} ${compact ? "scale-75" : ""}`}>
         <span className="diya-glow" /><span className="diya-body" /><span className="diya-rim" /><span className="diya-oil" /><span className="diya-wick" /><span className="diya-flame" />
       </button>
       {lit ? (
         <div className="fest-wish max-w-xs text-center" data-testid="festival-wish">
           <div className="font-display text-lg font-extrabold" style={{ color: "var(--fest-accent2)" }}>{fest.emoji} {fest.wish || fest.name}!</div>
-          <p className="mt-1 text-sm leading-snug opacity-90">{fest.greeting}</p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider opacity-70">— Radhika Traders</p>
+          {!compact && <p className="mt-1 text-sm leading-snug opacity-90">{fest.greeting}</p>}
+          <button type="button" onClick={toggle} data-testid="festival-sound-toggle" aria-pressed={sound} className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ring-1 transition-colors" style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }}>
+            {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />} {sound ? "पटाखों की आवाज़ चालू" : "आवाज़ बंद — चालू करें"}
+          </button>
         </div>
       ) : (
-        <div className="diya-hint inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold" style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)" }} data-testid="festival-diya-hint"><Sparkles className="h-3.5 w-3.5" /> दीया जलाने के लिए tap करें</div>
+        <div className="diya-hint inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold" style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)" }} data-testid="festival-diya-hint"><Sparkles className="h-3.5 w-3.5" /> दीया जलाएँ — पटाखे चलाएँ</div>
       )}
     </div>
   );
@@ -41,7 +53,8 @@ export function FestivalHero({ fest }) {
     <section className="fest-hero fest-grain" style={festVars(fest)} data-testid="festival-hero" data-festival={fest.key}>
       <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
       <div className="fest-lights" aria-hidden="true">{LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
-      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-5 lg:py-24">
+      {FIREWORK_FESTIVALS.has(fest.key) && <Fireworks />}
+      <div className="relative z-[1] mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-5 lg:py-24">
         <div className="rt-fade-up lg:col-span-3">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-badge">
             <span>{fest.emoji}</span> {fest.name} Special
@@ -69,7 +82,8 @@ export function FestivalDashHero({ fest, name }) {
       <div className="fest-string" aria-hidden="true">{BULBS.map((b, i) => <span key={i} className="fest-bulb" style={{ left: b.left, animationDelay: b.delay }} />)}</div>
       <div className="fest-lights" aria-hidden="true">{DASH_LIGHTS.map((l, i) => <span key={i} className="fest-light" style={{ left: l.left, top: l.top, animationDelay: l.delay, animationDuration: l.dur, "--dx": l.dx }} />)}</div>
       <span className="fest-corner" aria-hidden="true" /><span className="fest-corner br" aria-hidden="true" />
-      <div className="relative grid grid-cols-5 items-center gap-2 px-4 pb-4 pt-7 sm:gap-4 sm:px-8 sm:pb-7 sm:pt-9">
+      {FIREWORK_FESTIVALS.has(fest.key) && <Fireworks intensity={0.8} />}
+      <div className="relative z-[1] grid grid-cols-5 items-center gap-2 px-4 pb-4 pt-7 sm:gap-4 sm:px-8 sm:pb-7 sm:pt-9">
         <div className="col-span-3">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 18%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }} data-testid="festival-dash-badge"><span>{fest.emoji}</span> {fest.name} Special</div>
           <h2 className="fest-wish-title mt-3 font-display text-2xl font-extrabold leading-tight sm:text-4xl" data-testid="festival-dash-wish">{fest.wish || fest.name}{name ? `, ${name}` : ""}!</h2>
