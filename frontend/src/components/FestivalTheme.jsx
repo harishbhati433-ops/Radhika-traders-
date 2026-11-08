@@ -30,9 +30,9 @@ export function Diya({ fest, compact }) {
       </button>
       {lit ? (
         <div className="fest-wish max-w-xs text-center" data-testid="festival-wish">
-          <div className="font-display text-lg font-extrabold" style={{ color: "var(--fest-accent2)" }}>{fest.emoji} {fest.wish || fest.name}!</div>
+          {!compact && <div className="font-display text-lg font-extrabold" style={{ color: "var(--fest-accent2)" }}>{fest.emoji} {fest.wish || fest.name}!</div>}
           {!compact && <p className="mt-1 text-sm leading-snug opacity-90">{fest.greeting}</p>}
-          <button type="button" onClick={toggle} data-testid="festival-sound-toggle" aria-pressed={sound} className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ring-1 transition-colors" style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }}>
+          <button type="button" onClick={toggle} data-testid="festival-sound-toggle" aria-pressed={sound} className={`${compact ? "" : "mt-2"} inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ring-1 transition-colors`} style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }}>
             {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />} {sound ? "पटाखों की आवाज़ चालू" : "आवाज़ बंद — चालू करें"}
           </button>
         </div>
