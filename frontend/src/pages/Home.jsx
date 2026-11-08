@@ -5,6 +5,8 @@ import { CampaignCard } from "../components/CampaignCard";
 import { Testimonials } from "../components/Testimonials";
 import { TeamSection } from "../components/TeamSection";
 import api from "../lib/api";
+import { useFestival } from "../lib/festival";
+import { FestivalHero } from "../components/FestivalTheme";
 import { ArrowRight, ShieldCheck, Wallet, Users, TrendingUp, Zap, BadgeCheck, IndianRupee, Megaphone, MousePointerClick, Target, Link2, ClipboardList, BarChart3, Handshake } from "lucide-react";
 
 const AGENCY_SERVICES = [
@@ -28,6 +30,7 @@ const ticker = [
 
 export default function Home() {
   const [campaigns, setCampaigns] = useState([]);
+  const fest = useFestival();
 
   useEffect(() => {
     api.get("/campaigns").then(({ data }) => setCampaigns(data.slice(0, 6))).catch(() => {});
@@ -46,7 +49,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Hero */}
+      {/* Hero (festival theme replaces the default hero while a festival window is active) */}
+      {fest ? <FestivalHero fest={fest} /> : (
       <section className="relative overflow-hidden bg-[#0B0F17] text-white" data-testid="home-hero">
         <div className="pointer-events-none absolute -left-32 top-0 h-96 w-96 rounded-full bg-red-700/30 blur-3xl" />
         <div className="pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-amber-500/20 blur-3xl" />
@@ -116,6 +120,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Agency services */}
       <section className="mx-auto max-w-7xl px-6 py-16" data-testid="home-services">

@@ -1,0 +1,29 @@
+/* Festival theme — CSS-only, GPU-light (transform/opacity), honours reduced motion */
+.fest-hero { position: relative; overflow: hidden; color: var(--fest-text); background: radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--fest-glow) 28%, transparent), transparent 55%), radial-gradient(ellipse at 90% 100%, color-mix(in srgb, var(--fest-accent) 22%, transparent), transparent 50%), var(--fest-bg); }
+.fest-grain::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .07; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E"); }
+.fest-lights { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.fest-light { position: absolute; width: 6px; height: 6px; border-radius: 9999px; background: var(--fest-accent2); box-shadow: 0 0 12px 3px color-mix(in srgb, var(--fest-accent) 70%, transparent); opacity: 0; animation: fest-float 9s ease-in-out infinite; will-change: transform, opacity; }
+@keyframes fest-float { 0% { transform: translate3d(0, 20px, 0) scale(.6); opacity: 0; } 20% { opacity: .9; } 80% { opacity: .7; } 100% { transform: translate3d(var(--dx, 10px), -120px, 0) scale(1.1); opacity: 0; } }
+.fest-string { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fest-accent) 60%, transparent), transparent); }
+.fest-bulb { position: absolute; top: 2px; width: 10px; height: 14px; border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%; background: var(--fest-accent2); box-shadow: 0 0 10px 2px var(--fest-accent); animation: fest-twinkle 2.4s ease-in-out infinite; }
+@keyframes fest-twinkle { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.fest-headline { text-shadow: 0 2px 24px color-mix(in srgb, var(--fest-glow) 45%, transparent); }
+.fest-btn { background: linear-gradient(135deg, var(--fest-accent), var(--fest-glow)); color: #0b0f17; box-shadow: 0 10px 30px -10px var(--fest-accent); }
+.fest-strip { background: linear-gradient(90deg, var(--fest-bg), color-mix(in srgb, var(--fest-accent) 35%, var(--fest-bg)), var(--fest-bg)); color: var(--fest-accent2); }
+
+/* Diya */
+.diya { position: relative; width: 160px; height: 120px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.diya-body { position: absolute; bottom: 0; left: 50%; width: 150px; height: 56px; transform: translateX(-50%); border-radius: 0 0 80px 80px / 0 0 60px 60px; background: linear-gradient(180deg, #b45309, #7c2d12 70%, #431407); box-shadow: inset 0 6px 10px rgba(255, 255, 255, .15), 0 10px 25px -8px rgba(0, 0, 0, .7); }
+.diya-rim { position: absolute; bottom: 48px; left: 50%; width: 156px; height: 18px; transform: translateX(-50%); border-radius: 50%; background: linear-gradient(180deg, #f59e0b, #b45309); box-shadow: inset 0 -3px 6px rgba(0, 0, 0, .35); }
+.diya-oil { position: absolute; bottom: 52px; left: 50%; width: 120px; height: 10px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse at center, #fcd34d, #d97706); opacity: .85; }
+.diya-wick { position: absolute; bottom: 58px; left: 50%; width: 4px; height: 14px; transform: translateX(-50%); border-radius: 2px; background: #1c1917; }
+.diya-flame { position: absolute; bottom: 68px; left: 50%; width: 26px; height: 46px; transform: translateX(-50%) scale(0); transform-origin: 50% 100%; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: radial-gradient(ellipse at 50% 80%, #fff7ed 0%, #fde68a 25%, #f59e0b 55%, rgba(249, 115, 22, .0) 75%); filter: drop-shadow(0 0 14px #f59e0b) drop-shadow(0 0 36px rgba(249, 115, 22, .6)); transition: transform .5s cubic-bezier(.2, 1.4, .4, 1); }
+.diya.lit .diya-flame { transform: translateX(-50%) scale(1); animation: diya-flicker 1.4s ease-in-out infinite; }
+@keyframes diya-flicker { 0%, 100% { transform: translateX(-50%) scale(1) rotate(-2deg); } 50% { transform: translateX(-52%) scale(1.06, .96) rotate(2deg); } }
+.diya-glow { position: absolute; bottom: 30px; left: 50%; width: 220px; height: 220px; transform: translate(-50%, 30%); border-radius: 9999px; background: radial-gradient(circle, rgba(245, 158, 11, .45), transparent 60%); opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+.diya.lit .diya-glow { opacity: 1; }
+.diya-hint { animation: fest-twinkle 1.8s ease-in-out infinite; }
+.fest-wish { animation: fest-rise .6s ease-out both; }
+@keyframes fest-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) { .fest-light, .fest-bulb, .diya.lit .diya-flame, .diya-hint { animation: none !important; } .fest-light { opacity: .6; } }

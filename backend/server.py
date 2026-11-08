@@ -38,6 +38,7 @@ from xlsx_util import xlsx_bytes
 from rbac import make_require_perm, make_log_activity, has_perm
 from employee_routes import build_router as build_employee_router
 from search_routes import build_search_router
+from festivals import build_festival_router
 from employee_kyc_routes import build_router as build_employee_kyc_router
 from attendance_routes import build_router as build_attendance_router
 from leave_routes import build_router as build_leave_router
@@ -3491,6 +3492,16 @@ api.include_router(build_leave_router(db, require_admin, _emp_router.require_emp
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
 api.include_router(build_search_router(db, get_current_user, has_perm))
+
+
+async def _optional_user(request: Request):
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
+
+
+api.include_router(build_festival_router(db, require_admin, _optional_user, log_activity))
 api.include_router(build_password_reset_router(db, get_current_user, _log_security, public_user))
 api.include_router(assistant_routes.build_router(db, get_current_user, compute_wallet, push_service, log_activity))
 rewards_api = rewards.build(db, get_settings, compute_wallet, push_service, log_activity, require_perm, require_admin, get_current_user, _signup_dup, lock_signup_bonus)

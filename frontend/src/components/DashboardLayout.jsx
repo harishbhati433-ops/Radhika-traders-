@@ -18,6 +18,8 @@ import { prefetchRoute } from "../lib/prefetch";
 import { useT } from "../lib/i18n";
 import { LangToggle } from "./LangToggle";
 import { trackPage, popPrevious, homeFor } from "../lib/navStack";
+import { useFestival } from "../lib/festival";
+import { FestiveStrip } from "./FestivalTheme";
 
 function ThemeToggle({ compact }) {
   const [theme, setT] = useState(getTheme());
@@ -62,6 +64,7 @@ export function DashboardLayout({ nav, children, title }) {
   const { user, logout } = useAuth();
   const t = useT();
   const isCust = user?.role === "customer";
+  const fest = useFestival();
   const loc = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -149,6 +152,7 @@ export function DashboardLayout({ nav, children, title }) {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {isCust && <FestiveStrip fest={fest} />}
       {/* Top bar (mobile) */}
       <div className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-4 lg:hidden">
         <Link to="/" className="min-w-0 shrink"><Logo size="sm" /></Link>
