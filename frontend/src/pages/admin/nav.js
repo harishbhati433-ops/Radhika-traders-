@@ -1,10 +1,11 @@
-import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, ShieldAlert, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History, Wallet, Headphones, CalendarCheck, Camera, MailCheck, PartyPopper } from "lucide-react";
+import { LayoutDashboard, Megaphone, Tag, Users, ArrowDownToLine, Image, ShieldCheck, ShieldAlert, Send, ClipboardList, Lock, FolderUp, Gift, UserCog, History, Wallet, Headphones, CalendarCheck, Camera, MailCheck, PartyPopper, CircleDashed } from "lucide-react";
 
 export const adminNav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
   { to: "/admin/campaigns", label: "Campaigns", icon: Megaphone, group: "Campaigns", perm: "campaigns" },
   { to: "/admin/festivals", label: "Festival Themes", icon: PartyPopper, group: "Campaigns", adminOnly: true },
   { to: "/admin/banners", label: "Offer Banners", icon: Image, group: "Campaigns", perm: "campaigns" },
+  { to: "/admin/stories", label: "Stories", icon: CircleDashed, group: "Campaigns", perm: "campaigns" },
   { to: "/admin/categories", label: "Categories", icon: Tag, group: "Campaigns", perm: "campaigns" },
   { to: "/admin/customers", label: "Customers", icon: Users, group: "Customers", perm: "clients" },
   { to: "/admin/dedicated-referrals", label: "Dedicated Referral", icon: Gift, group: "Customers", adminOnly: true },

@@ -64,6 +64,7 @@ const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminCustomers = lazy(() => import("./pages/admin/AdminCustomers"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminBanners = lazy(() => import("./pages/admin/AdminBanners"));
+const AdminStories = lazy(() => import("./pages/admin/AdminStories"));
 const AdminFestivals = lazy(() => import("./pages/admin/AdminFestivals"));
 const AdminKyc = lazy(() => import("./pages/admin/AdminKyc"));
 const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
@@ -213,6 +214,7 @@ function App() {
             <Route path="/admin/customers" element={A(<AdminCustomers />, "clients")} />
             <Route path="/admin/withdrawals" element={A(<AdminWithdrawals />, "withdrawals")} />
             <Route path="/admin/banners" element={A(<AdminBanners />, "campaigns")} />
+            <Route path="/admin/stories" element={A(<AdminStories />, "campaigns")} />
             <Route path="/admin/festivals" element={A(<AdminFestivals />)} />
             <Route path="/admin/kyc" element={A(<AdminKyc />, "clients")} />
             <Route path="/admin/broadcast" element={A(<AdminBroadcast />, "reports")} />

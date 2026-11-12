@@ -57,3 +57,12 @@ def get_object(path: str):
         resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
     resp.raise_for_status()
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+def delete_object(path: str) -> bool:
+    key = init_storage()
+    resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=30)
+    if resp.status_code in (200, 202, 204, 404):
+        return True
+    resp.raise_for_status()
+    return True

@@ -6,6 +6,7 @@ import { Leaderboard } from "../../components/Leaderboard";
 import { OfferBanners } from "../../components/OfferBanners";
 import { WelcomeModal } from "../../components/WelcomeModal";
 import { ReferEarnSection } from "../../components/ReferEarnSection";
+import { StoriesBar } from "../../components/StoriesBar";
 import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
@@ -57,6 +58,8 @@ export default function CustomerDashboard() {
           <ShieldAlert className="h-5 w-5 shrink-0" /> {t("Complete your KYC to enable withdrawals.")} <ArrowRight className="ml-auto h-4 w-4" />
         </Link>
       )}
+
+      <StoriesBar />
 
       {fest && <FestivalDashHero fest={fest} name={firstName} />}
 
