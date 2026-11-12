@@ -167,7 +167,7 @@ function MaintenanceRoute() {
 function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-right" richColors />
+      <Toaster position={window.matchMedia("(min-width: 768px)").matches ? "bottom-center" : "top-center"} richColors />
       <BrowserRouter>
         <RouteSeo />
         <ShutdownGate>
