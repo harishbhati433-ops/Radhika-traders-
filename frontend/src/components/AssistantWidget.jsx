@@ -13,9 +13,46 @@ const SUGGEST_IN = ["Mera wallet balance kitna hai?", "Meri withdrawal ka status
 const authHeaders = () => { const t = getToken("customer"); return t ? { Authorization: `Bearer ${t}` } : {}; };
 const loggedIn = () => !!getToken("customer");
 
-const sid = () => { let s = localStorage.getItem(SID_KEY); if (!s) { s = "s" + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, s); } return s; };
+let SID = null; // per page-load only: a fresh chat every visit/refresh (nothing persisted in storage)
+const sid = () => { if (!SID) { SID = "s" + Math.random().toString(36).slice(2) + Date.now().toString(36); try { localStorage.removeItem(SID_KEY); } catch {} } return SID; };
+const GREETING = { role: "assistant", text: "Namaste! Main Radhika Voice Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." };
 const clean = (t) => t.replace(/\[SUPPORT\]/g, "").trim();
 const isHindi = (t) => /[\u0900-\u097F]/.test(t);
+// Speech-only text: strip emoji / pictographs / decorative symbols so TTS never reads "smiling face"; on-screen text is untouched.
+const forSpeech = (t) => clean(t).replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/gu, " ").replace(/[•●▪■►★☆✓✔✅❌→←↑↓*_#~`|]/g, " ").replace(/\s{2,}/g, " ").trim();
+
+const FEMALE_HINTS = /female|woman|swara|neerja|heera|lekha|veena|samantha|zira|aria|jenny|kalpana|google (हिन्दी|hindi|uk english female|us english)|ananya|priya|kiara|isha|aditi|raveena|nidhi/i;
+const MALE_HINTS = /male|man\b|ravi|rishi|prabhat|madhur|hemant|david|mark|guy|daniel|george|arjun|rahul|amit/i;
+let VOICES = [];
+const loadVoices = () => { try { VOICES = window.speechSynthesis?.getVoices() || []; } catch {} };
+loadVoices();
+try { window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices); } catch {}
+
+function pickVoice(hindi) {
+  if (!VOICES.length) loadVoices();
+  const lang = (v) => (v.lang || "").toLowerCase().replace("_", "-");
+  const pools = hindi ? [(v) => lang(v).startsWith("hi"), (v) => lang(v) === "en-in"] : [(v) => lang(v) === "en-in", (v) => lang(v).startsWith("en")];
+  const isF = (v) => FEMALE_HINTS.test(v.name) && !/male(?!s)/i.test(v.name.replace(/female/i, ""));
+  const isM = (v) => MALE_HINTS.test(v.name) && !FEMALE_HINTS.test(v.name);
+  for (const p of pools) {
+    const c = VOICES.filter(p);
+    const f = c.find(isF) || c.find((v) => !isM(v));
+    if (f) return f;
+  }
+  return VOICES.find(isF) || null;
+}
+
+function speak(text) {
+  try {
+    window.speechSynthesis.cancel();
+    const hindi = isHindi(text);
+    const u = new SpeechSynthesisUtterance(forSpeech(text).slice(0, 600));
+    u.voice = pickVoice(hindi);
+    u.lang = u.voice?.lang || (hindi ? "hi-IN" : "en-IN");
+    u.rate = 0.95; u.pitch = 1.08; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
 
 // Downscale in the browser so uploads stay small; returns a JPEG data URL.
 async function toDataUrl(file) {
@@ -27,18 +64,6 @@ async function toDataUrl(file) {
   canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
   canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.85);
-}
-
-function speak(text) {
-  try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(clean(text).slice(0, 600));
-    const voices = window.speechSynthesis.getVoices();
-    const want = isHindi(text) ? "hi" : "en-IN";
-    u.voice = voices.find((v) => v.lang.toLowerCase().startsWith(want)) || voices.find((v) => v.lang.toLowerCase().startsWith("en-in")) || voices.find((v) => v.lang.toLowerCase().startsWith("hi")) || null;
-    u.lang = u.voice?.lang || (isHindi(text) ? "hi-IN" : "en-IN");
-    u.rate = 1; window.speechSynthesis.speak(u);
-  } catch {}
 }
 
 export function AssistantWidget({ enabled = true }) {
@@ -61,7 +86,7 @@ export function AssistantWidget({ enabled = true }) {
 
   useEffect(() => {
     if (!open || msgs.length) return;
-    fetch(`${API}/api/assistant/history/${sid()}`).then((r) => r.json()).then((h) => setMsgs(Array.isArray(h) && h.length ? h.map((m) => ({ role: m.role, text: m.content, support: m.content.includes("[SUPPORT]") })) : [{ role: "assistant", text: "Namaste! Main Radhika Voice Assistant hoon. Earning, offers, withdrawal, KYC — kuch bhi poochhiye (Hindi/English)." }])).catch(() => {});
+    setMsgs([GREETING]); // fresh chat every page visit — never reload old history from storage/server
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, open]);
   useEffect(() => {
@@ -149,7 +174,7 @@ export function AssistantWidget({ enabled = true }) {
                   {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-lg" data-testid="assistant-msg-image" />}
                   {m.text ? clean(m.text) : <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
                   {m.support && !m.streaming && (
-                    <a href={waLink(contact.support_mobile, "Hello Radhika Traders support, I need help with: ")} target="_blank" rel="noreferrer" data-testid="assistant-support-btn"
+                    <a href={waLink(contact.whatsapp_number || contact.support_mobile, "Hello Radhika Traders support, I need help with: ")} target="_blank" rel="noreferrer" data-testid="assistant-support-btn"
                       className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"><MessageCircle className="h-3.5 w-3.5" /> Contact Support (WhatsApp)</a>
                   )}
                 </div>

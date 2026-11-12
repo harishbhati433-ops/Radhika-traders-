@@ -175,6 +175,7 @@ def build_router(db, get_current_user, compute_wallet, push_service=None, log_ac
         s = await db.settings.find_one({"key": "app"}) or {}
         camps = await db.campaigns.find({"status": "live", "is_deleted": False, "offer_enabled": {"$ne": False}},
                                         {"offer_name": 1, "company": 1, "category": 1, "payout_amount": 1, "customer_benefit": 1, "description": 1, "payment_terms": 1}).to_list(50)
+        await contact_settings.refresh_if_stale(db, ttl=60.0)
         c = contact_settings.CONTACT
         live = "\n".join(f"- {x['offer_name']} ({x.get('company', '')}; {x.get('category', '') or 'offer'}): partner payout ₹{x.get('payout_amount', 0):g} per approved lead."
                          + (f" Customer benefit: {x['customer_benefit']}." if x.get("customer_benefit") else "") + (f" {str(x.get('description', ''))[:200]}" if x.get("description") else "")
@@ -188,7 +189,8 @@ def build_router(db, get_current_user, compute_wallet, push_service=None, log_ac
         live_numbers = (f"Minimum withdrawal: ₹{float(s.get('min_withdrawal', 100)):g}. {wd_rule} "
                         f"Signup bonus for new partners: {'₹' + format(float(s.get('signup_bonus', 0)), 'g') if s.get('signup_bonus_enabled', True) and float(s.get('signup_bonus', 0) or 0) > 0 else 'not active right now'}. "
                         f"Refer & Earn bonus per partner referral: ₹{float(s.get('referral_bonus', 0)):g} (limits: {int(s.get('referral_daily_limit', 2))} per day, {int(s.get('referral_monthly_limit', 10))} per month).")
-        support = (f"Support WhatsApp/Call: +91 {c['support_mobile']} · Email: {c['support_email']} · Website: www.radhikatraders.net"
+        wa = c.get("whatsapp_number") or c["support_mobile"]
+        support = (f"Support WhatsApp: +91 {wa} · Support Call: +91 {c['support_mobile']} · Email: {c['support_email']} · Website: www.radhikatraders.net"
                    + (f" · Instagram: {c['instagram_url']}" if c.get("instagram_url") else "") + (f" · YouTube: {c['youtube_url']}" if c.get("youtube_url") else ""))
         return f"{STATIC_FACTS}\nLIVE NUMBERS (current settings): {live_numbers}\nLIVE CAMPAIGNS TODAY:\n{live}\nSUPPORT CONTACT: {support}\nToday's date: {datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=5, minutes=30))).strftime('%d %b %Y')} (IST)."
 
@@ -203,7 +205,9 @@ def build_router(db, get_current_user, compute_wallet, push_service=None, log_ac
         if not body.message.strip() and not body.image_base64:
             raise HTTPException(status_code=400, detail="Message is empty")
         since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        if await db.assistant_messages.count_documents({"session_id": sid, "role": "user", "created_at": {"$gte": since}}) >= MAX_PER_HOUR:
+        ip_now = request.headers.get("x-forwarded-for", request.client.host if request.client else "")[:60]
+        if await db.assistant_messages.count_documents({"session_id": sid, "role": "user", "created_at": {"$gte": since}}) >= MAX_PER_HOUR \
+                or (ip_now and await db.assistant_messages.count_documents({"ip": ip_now, "role": "user", "created_at": {"$gte": since}}) >= MAX_PER_HOUR * 3):
             raise HTTPException(status_code=429, detail="Too many questions in a short time. Please try again in a while or contact support.")
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if not api_key:
