@@ -59,6 +59,17 @@ def get_object(path: str):
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
+def stream_object(path: str, chunk: int = 1024 * 1024):
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60, stream=True)
+    if resp.status_code == 404:
+        key = init_storage(force=True)
+        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60, stream=True)
+    resp.raise_for_status()
+    with resp:
+        yield from resp.iter_content(chunk)
+
+
 def delete_object(path: str) -> bool:
     key = init_storage()
     resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=30)

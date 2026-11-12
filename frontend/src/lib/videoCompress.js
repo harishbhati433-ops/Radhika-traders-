@@ -45,3 +45,20 @@ export async function compressVideo(file, { maxW = 720, maxH = 1280, videoBps = 
   const type = mime.split(";")[0], ext = type === "video/mp4" ? "mp4" : "webm";
   return new File([new Blob(chunks, { type })], file.name.replace(/\.[^.]+$/, "") + `-compressed.${ext}`, { type });
 }
+
+// Grab one frame (~0.5s in) as a small JPEG — used as the story ring thumbnail.
+export const videoThumbnail = (file, size = 320) => new Promise((res) => {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement("video");
+  Object.assign(v, { src: url, muted: true, playsInline: true, preload: "auto" });
+  const fail = () => { URL.revokeObjectURL(url); res(null); };
+  v.onerror = fail;
+  v.onloadeddata = () => { v.currentTime = Math.min(0.5, (Number.isFinite(v.duration) ? v.duration : 1) / 2); };
+  v.onseeked = () => {
+    const scale = Math.min(1, size / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    c.toBlob((b) => { URL.revokeObjectURL(url); res(b ? new File([b], "thumb.jpg", { type: "image/jpeg" }) : null); }, "image/jpeg", 0.82);
+  };
+  setTimeout(fail, 8000);
+});

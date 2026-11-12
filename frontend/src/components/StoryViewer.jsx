@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { X, ChevronLeft, ChevronRight, ExternalLink, Pause, Play } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ExternalLink, Pause, Play, Volume2, VolumeX, Loader2, VideoOff } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
 import { fontCss } from "../lib/storyFonts";
 
@@ -42,16 +42,19 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const [idx, setIdx] = useState(start);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [vidState, setVidState] = useState("loading"); // loading | ready | error
   const vidRef = useRef(null);
   const raf = useRef(0);
   const pausedRef = useRef(false);
+  const durRef = useRef(0);
   const s = stories[idx];
   const isVideo = s.media_type === "video";
 
   useEffect(() => {
     if (!s) return;
     if (!seenThisSession.has(s.id)) { seenThisSession.add(s.id); api.post(`/stories/${s.id}/view`).catch(() => {}); onSeen?.(s.id); }
-    setProgress(0);
+    setProgress(0); setVidState("loading"); durRef.current = 0;
     if (isVideo) return;
     let startAt = performance.now(), acc = 0;
     const tick = (t) => {
@@ -74,7 +77,17 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
 
   const next = () => (idx + 1 < stories.length ? setIdx(idx + 1) : onClose());
   const prev = () => setIdx(Math.max(0, idx - 1));
-  const onVideoTime = (e) => { const v = e.target; if (v.duration) setProgress(v.currentTime / v.duration); };
+  const onVideoTime = (e) => { const v = e.target; const d = Number.isFinite(v.duration) ? v.duration : durRef.current; if (d) setProgress(Math.min(1, v.currentTime / d)); };
+  const onVideoMeta = (e) => {
+    const v = e.target;
+    if (Number.isFinite(v.duration)) { durRef.current = v.duration; return; }
+    // WebM recorded in-browser has no duration header — seek to the end once to learn it, then rewind
+    v.ondurationchange = () => { if (Number.isFinite(v.duration)) { durRef.current = v.duration; v.ondurationchange = null; v.currentTime = 0; } };
+    v.currentTime = 1e101;
+  };
+  const tryPlay = (v) => { v.play().then(() => setVidState("ready")).catch(() => { v.muted = true; setMuted(true); v.play().then(() => setVidState("ready")).catch(() => {}); }); };
+  const onCanPlay = (e) => { setVidState("ready"); if (!pausedRef.current && e.target.paused) tryPlay(e.target); };
+  const toggleMute = () => { const v = vidRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); if (v.paused && !pausedRef.current) tryPlay(v); };
   const togglePause = () => { setPaused((p) => { const n = !p; pausedRef.current = n; if (vidRef.current) n ? vidRef.current.pause() : vidRef.current.play(); return n; }); };
   const openLink = () => { onClose(); if (s.link?.startsWith("http")) window.open(s.link, "_blank"); else nav(s.link); };
 
@@ -89,13 +102,17 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
         <div className="absolute left-0 right-0 top-6 z-20 flex items-center gap-2 px-3 text-white">
           <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-[#0B0F17]">{s.logo_url ? <img src={fileUrl(s.logo_url)} alt="" className="h-full w-full bg-white object-contain p-1" /> : <span className="font-display text-sm font-extrabold text-amber-400">RT</span>}</span>
           <div className="min-w-0 flex-1 leading-tight"><div className="truncate text-sm font-bold" data-testid="story-viewer-title">{s.kind === "campaign" ? s.title : "Radhika Traders"}</div><div className="truncate text-[11px] text-white/70">{s.category} · {ago(s.published_at)}</div></div>
+          {isVideo && <button type="button" onClick={toggleMute} className="rounded-full bg-white/15 p-2" data-testid="story-mute">{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}
           <button type="button" onClick={togglePause} className="rounded-full bg-white/15 p-2" data-testid="story-pause">{paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button>
           <button type="button" onClick={onClose} className="rounded-full bg-white/15 p-2" data-testid="story-close" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         {/* media */}
         <div className="flex h-full w-full items-center justify-center">
           {s.media_type === "image" && <img src={fileUrl(s.media_url)} alt={s.title} className="max-h-full w-full object-contain" data-testid="story-media-image" />}
-          {isVideo && <video ref={vidRef} src={fileUrl(s.media_url)} autoPlay playsInline onTimeUpdate={onVideoTime} onEnded={next} className="max-h-full w-full object-contain" data-testid="story-media-video" />}
+          {isVideo && <video key={s.id} ref={vidRef} src={fileUrl(s.media_url)} poster={s.thumb_url ? fileUrl(s.thumb_url) : undefined} autoPlay playsInline preload="auto" muted={muted} onLoadedMetadata={onVideoMeta} onCanPlay={onCanPlay} onPlaying={() => setVidState("ready")} onWaiting={() => setVidState("loading")} onError={() => setVidState("error")} onTimeUpdate={onVideoTime} onEnded={next} className="max-h-full w-full object-contain" data-testid="story-media-video" />}
+          {isVideo && vidState === "loading" && <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center" data-testid="story-video-loading"><Loader2 className="h-10 w-10 animate-spin text-white/80" /></div>}
+          {isVideo && vidState === "error" && <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2 px-8 text-center text-white" data-testid="story-video-error"><VideoOff className="h-10 w-10 text-white/70" /><p className="text-sm text-white/80">Video load nahi ho paaya — network check karke dobara try karein</p></div>}
+          {isVideo && muted && vidState === "ready" && <button type="button" onClick={toggleMute} className="absolute left-1/2 top-24 z-[15] -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-xs font-bold text-white backdrop-blur" data-testid="story-tap-sound"><VolumeX className="mr-1 inline h-4 w-4" /> Tap for sound</button>}
           {s.media_type === "text" && (
             <div className="px-8 text-center text-white" data-testid="story-media-text" style={fontCss(s.font)}>
               <div className="text-3xl leading-tight drop-shadow">{s.title}</div>

@@ -43,6 +43,8 @@ class StoryIn(BaseModel):
     media_type: str = "image"  # image | video | text
     media_path: str = ""
     media_url: str = ""
+    thumb_path: str = ""
+    thumb_url: str = ""
     bg_color: str = Field("#7c1d1d", max_length=16)
     font: str = Field("display", max_length=20)
     link: str = Field("", max_length=500)
@@ -139,7 +141,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         items = [s for s in await hydrate(docs) if s["visible"]]
         seen = {v["story_id"] for v in await db.story_views.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1}).to_list(200)}
         mine = {x["story_id"]: x["emoji"] for x in await db.story_reactions.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1, "emoji": 1}).to_list(200)}
-        public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "bg_color", "font", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
+        public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "thumb_url", "bg_color", "font", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
         return [{**{k: s.get(k) for k in public_keys}, "seen": s["id"] in seen, "my_reaction": mine.get(s["id"])} for s in items]
 
     class ReactIn(BaseModel):
@@ -250,6 +252,8 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         media_type: Optional[str] = None
         media_path: Optional[str] = None
         media_url: Optional[str] = None
+        thumb_path: Optional[str] = None
+        thumb_url: Optional[str] = None
         bg_color: Optional[str] = Field(None, max_length=16)
         font: Optional[str] = Field(None, max_length=20)
         link: Optional[str] = Field(None, max_length=500)
@@ -272,6 +276,8 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
             upd["active"] = True
         if "media_url" in upd and upd["media_url"] != s.get("media_url") and s.get("media_path"):
             await _delete_media(s["media_path"])
+        if "thumb_url" in upd and upd["thumb_url"] != s.get("thumb_url") and s.get("thumb_path"):
+            await _delete_media(s["thumb_path"])
         upd["updated_at"] = iso(now())
         await db.stories.update_one({"_id": s["_id"]}, {"$set": upd})
         if body.republish and s.get("kind") != "campaign" and announce:
@@ -304,6 +310,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         await db.story_views.delete_many({"story_id": sid})
         await db.story_reactions.delete_many({"story_id": sid})
         await _delete_media(s.get("media_path", ""))
+        await _delete_media(s.get("thumb_path", ""))
         await log_activity(admin, "story_deleted", request, entity_type="story", entity_id=sid, entity_label=s.get("title", ""))
         return {"ok": True}
 
@@ -334,12 +341,13 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
     # ---------- cron: media cleanup for expired auto-expire stories (7-day grace so admin can republish) ----------
     async def cleanup():
         cutoff = now() - timedelta(days=MEDIA_GRACE_DAYS)
-        cur = db.stories.find({"kind": "manual", "auto_expire": True, "media_path": {"$nin": ["", None]}, "media_deleted": {"$ne": True}}, {"published_at": 1, "auto_expire": 1, "media_path": 1})
+        cur = db.stories.find({"kind": "manual", "auto_expire": True, "media_path": {"$nin": ["", None]}, "media_deleted": {"$ne": True}}, {"published_at": 1, "auto_expire": 1, "media_path": 1, "thumb_path": 1})
         n = 0
         async for s in cur:
             if is_expired(s, cutoff):
                 await _delete_media(s["media_path"])
-                await db.stories.update_one({"_id": s["_id"]}, {"$set": {"media_deleted": True, "active": False, "media_url": "", "media_path": ""}})
+                await db.stories.update_one({"_id": s["_id"]}, {"$set": {"media_deleted": True, "active": False, "media_url": "", "media_path": "", "thumb_url": "", "thumb_path": ""}})
+                await _delete_media(s.get("thumb_path", ""))
                 n += 1
         logger.info("stories cleanup: removed media of %d expired stories", n)
 

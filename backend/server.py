@@ -3112,13 +3112,72 @@ async def upload_image(file: UploadFile = File(...), user: dict = Depends(get_cu
     return {"path": result["path"], "url": f"/api/files/{result['path']}"}
 
 
+MEDIA_CACHE_DIR = "/tmp/rt_media_cache"
+MEDIA_CACHE_MAX = 400 * 1024 * 1024
+
+
+def _cached_media(path: str) -> str:
+    """Download object to a local disk cache once (streamed, no RAM spike) so videos can be served with HTTP Range."""
+    import hashlib
+    from storage_service import stream_object
+    os.makedirs(MEDIA_CACHE_DIR, exist_ok=True)
+    fp = os.path.join(MEDIA_CACHE_DIR, hashlib.sha1(path.encode()).hexdigest())
+    if os.path.exists(fp) and os.path.getsize(fp) > 0:
+        os.utime(fp, None)
+        return fp
+    tmp = f"{fp}.{uuid.uuid4().hex}.part"
+    with open(tmp, "wb") as f:
+        for chunk in stream_object(path):
+            f.write(chunk)
+    os.replace(tmp, fp)
+    files = sorted((os.path.join(MEDIA_CACHE_DIR, n) for n in os.listdir(MEDIA_CACHE_DIR) if not n.endswith(".part")), key=os.path.getmtime)
+    total = sum(os.path.getsize(x) for x in files)
+    for x in files:
+        if total <= MEDIA_CACHE_MAX or x == fp:
+            break
+        total -= os.path.getsize(x)
+        os.remove(x)
+    return fp
+
+
 @api.get("/files/{path:path}")
-async def serve_file(path: str):
+async def serve_file(path: str, request: Request):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
-    data, ct = await asyncio.to_thread(get_object, path)
-    return Response(content=data, media_type=record.get("content_type", ct))
+    fp = await asyncio.to_thread(_cached_media, path)
+    size = os.path.getsize(fp)
+    ct = record.get("content_type") or "application/octet-stream"
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=31536000, immutable"}
+    start, end, status = 0, size - 1, 200
+    rng = request.headers.get("range", "")
+    if rng.startswith("bytes=") and size:
+        a, _, b = rng[6:].partition("-")
+        try:
+            if a:
+                start, end = int(a), (int(b) if b else size - 1)
+            else:
+                start = max(0, size - int(b))
+        except ValueError:
+            raise HTTPException(status_code=416, detail="Bad range")
+        if start >= size or start > end:
+            raise HTTPException(status_code=416, detail="Range not satisfiable", headers={"Content-Range": f"bytes */{size}"})
+        end, status = min(end, size - 1), 206
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    headers["Content-Length"] = str(end - start + 1)
+
+    def body():
+        with open(fp, "rb") as f:
+            f.seek(start)
+            left = end - start + 1
+            while left > 0:
+                chunk = f.read(min(256 * 1024, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(body(), status_code=status, media_type=ct, headers=headers)
 
 
 # ----------------------------- Share Kit (QR + poster) -----------------------------

@@ -9,7 +9,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { toast } from "sonner";
 import { Upload, Loader2, Trash2, Power, Pencil, Eye, Users, RefreshCw, Clock, Sparkles, Film, Image as ImageIcon, Type, X } from "lucide-react";
 import { StoryViewersDialog } from "../../components/StoryViewersDialog";
-import { canCompressVideo, compressVideo, videoDuration } from "../../lib/videoCompress";
+import { canCompressVideo, compressVideo, videoDuration, videoThumbnail } from "../../lib/videoCompress";
 import { STORY_FONTS, fontCss } from "../../lib/storyFonts";
 
 const empty = { title: "", caption: "", category: "Radhika Updates", media_type: "image", media_url: "", media_path: "", bg_color: "#7c1d1d", font: "display", link: "", campaign_id: "", auto_expire: true, active: true };
@@ -44,7 +44,12 @@ function MediaUpload({ f, setF }) {
       setStage("Uploading…");
       const fd = new FormData(); fd.append("file", file.type ? file : new File([file], file.name, { type }));
       const { data } = await api.post("/admin/stories/upload", fd, { headers: { "Content-Type": "multipart/form-data" }, timeout: 180000 });
-      setF((x) => ({ ...x, media_url: data.url, media_path: data.path, media_type: data.media_type }));
+      let thumb = { thumb_url: "", thumb_path: "" };
+      if (data.media_type === "video") {
+        const t = await videoThumbnail(file).catch(() => null);
+        if (t) { const tf = new FormData(); tf.append("file", t); const { data: td } = await api.post("/admin/stories/upload", tf, { headers: { "Content-Type": "multipart/form-data" } }).catch(() => ({ data: null })); if (td) thumb = { thumb_url: td.url, thumb_path: td.path }; }
+      }
+      setF((x) => ({ ...x, media_url: data.url, media_path: data.path, media_type: data.media_type, ...thumb }));
       toast.success(`${data.media_type === "video" ? "Video" : "Photo"} uploaded (${Math.round(data.size / 1024)} KB)`);
     } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || (err.message === "unsupported" ? "Is browser me video compress nahi ho sakta" : "Upload failed")); }
     finally { setBusy(false); setStage(""); }
@@ -56,7 +61,7 @@ function MediaUpload({ f, setF }) {
       <div className="mt-1.5 flex items-center gap-3">
         <div className="relative flex h-28 w-20 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50">
           {f.media_url ? (f.media_type === "video" ? <video src={fileUrl(f.media_url)} className="h-full w-full object-cover" muted /> : <img src={fileUrl(f.media_url)} alt="" className="h-full w-full object-cover" />) : busy ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : <Upload className="h-5 w-5 text-slate-300" />}
-          {f.media_url && <button type="button" onClick={() => setF((x) => ({ ...x, media_url: "", media_path: "" }))} className="absolute right-1 top-1 rounded-full bg-rose-500 p-0.5 text-white" data-testid="story-media-remove"><X className="h-3 w-3" /></button>}
+          {f.media_url && <button type="button" onClick={() => setF((x) => ({ ...x, media_url: "", media_path: "", thumb_url: "", thumb_path: "" }))} className="absolute right-1 top-1 rounded-full bg-rose-500 p-0.5 text-white" data-testid="story-media-remove"><X className="h-3 w-3" /></button>}
         </div>
         <div className="text-xs text-slate-500">
           <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="story-upload-btn" className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> <span data-testid="story-upload-stage">{stage || "Working…"}</span></> : <><Upload className="h-4 w-4" /> {f.media_url ? "Change" : "Upload Photo / Video"}</>}</button>
