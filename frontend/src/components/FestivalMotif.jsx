@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { Diya } from "./FestivalTheme";
+import { enableSound, toggleSound, isSoundOn, onSoundChange, playBurst } from "../lib/fireworksSound";
 
 const HOLI = ["#ec4899", "#facc15", "#22c55e", "#3b82f6", "#a855f7", "#f97316"];
 
@@ -92,5 +95,22 @@ const MAP = {
 export function FestivalMotif({ fest, compact }) {
   if (fest.key === "diwali") return <Diya fest={fest} compact={compact} />;
   const m = MAP[fest.key] || <Glyph ch={fest.emoji} label={fest.key} />;
+  if (fest.fireworks) return <CrackerMotif fest={fest} compact={compact}>{m}</CrackerMotif>;
   return <div className={`motif-wrap ${compact ? "scale-75" : ""}`} data-testid="festival-motif" data-festival={fest.key}>{m}</div>;
+}
+
+// Dussehra / New Year: no diya, so the festival motif itself is the tap target that starts cracker sounds (never auto-starts).
+function CrackerMotif({ fest, compact, children }) {
+  const [sound, setSound] = useState(isSoundOn());
+  useEffect(() => onSoundChange(setSound), []);
+  const fire = () => { enableSound(); playBurst(true); window.dispatchEvent(new CustomEvent("rt-fireworks-burst", { detail: { count: 3 } })); };
+  const toggle = (e) => { e.stopPropagation(); toggleSound(); };
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button type="button" onClick={fire} aria-label="Tap for crackers" data-testid="festival-cracker-btn" className={`motif-wrap cursor-pointer rounded-3xl transition-transform active:scale-95 ${compact ? "scale-75" : ""}`} data-festival={fest.key}>{children}</button>
+      <button type="button" onClick={sound ? toggle : fire} data-testid="festival-sound-toggle" aria-pressed={sound} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ring-1" style={{ background: "color-mix(in srgb, var(--fest-accent) 20%, transparent)", color: "var(--fest-accent2)", borderColor: "var(--fest-accent)" }}>
+        {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />} {sound ? "पटाखों की आवाज़ चालू" : "पटाखे चलाने के लिए tap करें"}
+      </button>
+    </div>
+  );
 }
