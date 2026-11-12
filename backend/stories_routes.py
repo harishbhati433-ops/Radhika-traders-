@@ -43,6 +43,7 @@ class StoryIn(BaseModel):
     media_path: str = ""
     media_url: str = ""
     bg_color: str = Field("#7c1d1d", max_length=16)
+    font: str = Field("display", max_length=20)
     link: str = Field("", max_length=500)
     campaign_id: str = ""
     auto_expire: bool = True
@@ -135,7 +136,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         docs = await db.stories.find(flt, {"viewers": 0}).sort("published_at", -1).to_list(100)
         items = [s for s in await hydrate(docs) if s["visible"]]
         seen = {v["story_id"] for v in await db.story_views.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1}).to_list(200)}
-        public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "bg_color", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
+        public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "bg_color", "font", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
         return [{**{k: s.get(k) for k in public_keys}, "seen": s["id"] in seen} for s in items]
 
     @r.post("/stories/{sid}/view", status_code=202)
@@ -221,6 +222,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         media_path: Optional[str] = None
         media_url: Optional[str] = None
         bg_color: Optional[str] = Field(None, max_length=16)
+        font: Optional[str] = Field(None, max_length=20)
         link: Optional[str] = Field(None, max_length=500)
         auto_expire: Optional[bool] = None
         active: Optional[bool] = None

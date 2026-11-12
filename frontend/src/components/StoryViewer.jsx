@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { X, ChevronLeft, ChevronRight, ExternalLink, Pause, Play } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
+import { fontCss } from "../lib/storyFonts";
 
 const IMAGE_MS = 5000;
 const seenThisSession = new Set();
@@ -69,8 +70,8 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
           {s.media_type === "image" && <img src={fileUrl(s.media_url)} alt={s.title} className="max-h-full w-full object-contain" data-testid="story-media-image" />}
           {isVideo && <video ref={vidRef} src={fileUrl(s.media_url)} autoPlay playsInline onTimeUpdate={onVideoTime} onEnded={next} className="max-h-full w-full object-contain" data-testid="story-media-video" />}
           {s.media_type === "text" && (
-            <div className="px-8 text-center text-white" data-testid="story-media-text">
-              <div className="font-display text-3xl font-extrabold leading-tight drop-shadow">{s.title}</div>
+            <div className="px-8 text-center text-white" data-testid="story-media-text" style={fontCss(s.font)}>
+              <div className="text-3xl leading-tight drop-shadow">{s.title}</div>
               {s.caption && <p className="mt-4 text-base leading-relaxed text-white/90">{s.caption}</p>}
               {s.payout ? <div className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 font-mono text-xl font-extrabold text-slate-900">Payout ₹{s.payout}</div> : null}
             </div>
