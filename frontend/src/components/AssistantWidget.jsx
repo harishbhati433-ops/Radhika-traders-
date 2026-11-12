@@ -19,7 +19,12 @@ const GREETING = { role: "assistant", text: "Namaste! Main Radhika Voice Assista
 const clean = (t) => t.replace(/\[SUPPORT\]/g, "").trim();
 const isHindi = (t) => /[\u0900-\u097F]/.test(t);
 // Speech-only text: strip emoji / pictographs / decorative symbols so TTS never reads "smiling face"; on-screen text is untouched.
-const forSpeech = (t) => clean(t).replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/gu, " ").replace(/[•●▪■►★☆✓✔✅❌→←↑↓*_#~`|]/g, " ").replace(/\s{2,}/g, " ").trim();
+const forSpeech = (t) => clean(t)
+  .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Regional_Indicator}\uFE0F\uFE0E\u200D\u20E3]/gu, " ")
+  .replace(/[\u2190-\u21FF\u2300-\u23FF\u2460-\u27BF\u2900-\u29FF\u2B00-\u2BFF\u3030\u303D\u3297\u3299\uD83C-\uDBFF\uDC00-\uDFFF]/g, " ")
+  .replace(/[•●▪■►★☆✓✔✅❌→←↑↓*_#~`|]/g, " ")
+  .replace(/(^|\s)[:;=8xX][-^o]?[)(DPpOo3/\\|]+(?=\s|$)/g, " ")
+  .replace(/\s{2,}/g, " ").trim();
 
 const FEMALE_HINTS = /female|woman|swara|neerja|heera|lekha|veena|samantha|zira|aria|jenny|kalpana|google (हिन्दी|hindi|uk english female|us english)|ananya|priya|kiara|isha|aditi|raveena|nidhi/i;
 const MALE_HINTS = /male|man\b|ravi|rishi|prabhat|madhur|hemant|david|mark|guy|daniel|george|arjun|rahul|amit/i;
