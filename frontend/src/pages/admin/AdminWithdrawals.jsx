@@ -3,12 +3,13 @@ import { DateFilterBar, EMPTY_FILTER } from "../../components/DateFilterBar";
 import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
-import api, { formatApiErrorDetail, fileUrl } from "../../lib/api";
+import api, { formatApiErrorDetail, fileUrl, API } from "../../lib/api";
+import { getToken } from "../../lib/portal";
 import { PayoutDetails } from "../../components/PayoutDetails";
 import { MarkPaidDialog } from "../../components/MarkPaidDialog";
 import { celebrate } from "../../components/Celebration";
 import { toast } from "sonner";
-import { Check, X, IndianRupee, Receipt } from "lucide-react";
+import { Check, X, IndianRupee, Receipt, FileText, FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { Pager } from "../../components/Pager";
 import { useCan } from "../../lib/perm";
 
@@ -40,6 +41,21 @@ export default function AdminWithdrawals() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlight, list]);
 
+  const [busy, setBusy] = useState("");
+  const exportList = async (fmt) => {
+    setBusy(fmt);
+    try {
+      const qs = new URLSearchParams({ format: fmt, ...(tab !== "all" ? { status: tab } : {}), ...(f.from ? { from_date: f.from } : {}), ...(f.to ? { to_date: f.to } : {}), ...(f.q ? { q: f.q } : {}) }).toString();
+      const res = await fetch(`${API}/admin/withdrawals/export?${qs}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Download failed");
+      const count = Number(res.headers.get("X-Row-Count") || 0);
+      const blob = await res.blob();
+      const name = (res.headers.get("Content-Disposition") || "").split("filename=")[1] || `withdrawals.${fmt === "excel" ? "xlsx" : fmt}`;
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+      toast.success(`${count} request${count === 1 ? "" : "s"} downloaded (${fmt.toUpperCase()})`);
+    } catch (e) { toast.error(String(e.message || "Download failed")); } finally { setBusy(""); }
+  };
+
   const update = async (w, status, extra = {}) => {
     let note = "";
     if (status === "rejected") { note = window.prompt("Reason for rejection (optional):") || ""; }
@@ -50,6 +66,12 @@ export default function AdminWithdrawals() {
   return (
     <DashboardLayout nav={adminNav} title="Withdrawal Requests">
       <DateFilterBar f={f} setF={setF} testId="wd-filter" />
+      <div className="mb-4 flex flex-wrap items-center gap-2" data-testid="wd-export-bar">
+        <span className="text-xs font-semibold text-slate-500">Download {f.from || f.to || f.q || tab !== "all" ? "filtered" : "all"} requests:</span>
+        {[["pdf", FileText, "PDF"], ["excel", FileSpreadsheet, "Excel"], ["csv", Download, "CSV"]].map(([fmt, I, l]) => (
+          <button key={fmt} type="button" onClick={() => exportList(fmt)} disabled={!!busy} data-testid={`wd-export-${fmt}`} className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white hover:brightness-125 disabled:opacity-60">{busy === fmt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <I className="h-3.5 w-3.5" />} {l}</button>
+        ))}
+      </div>
       {summary && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="wd-summary">
           <div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Requests</div><div className="font-mono text-lg font-extrabold text-slate-900" data-testid="wd-sum-total">{summary.total}</div></div>

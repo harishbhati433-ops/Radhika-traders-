@@ -2171,11 +2171,9 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
     return [{**{k: v for k, v in w.items() if k != "_id"}, "id": str(w["_id"])} for w in items]
 
 
-@api.get("/admin/withdrawals")
-async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: int = 50, from_date: Optional[str] = None, to_date: Optional[str] = None, q: Optional[str] = None,
-                          admin: dict = Depends(require_perm("withdrawals", "view"))):
+def _withdrawal_filter(status: Optional[str], from_date: Optional[str], to_date: Optional[str], q: Optional[str]) -> tuple:
+    """Returns (base_filter_without_status, filter_with_status). Date filter = IST calendar days on UTC ISO created_at — read-only."""
     base: dict = {}
-    # Date filter = IST calendar days (created_at is stored as UTC ISO) — read-only, never touches records.
     rng = {}
     try:
         if from_date:
@@ -2197,6 +2195,78 @@ async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: in
     qry = dict(base)
     if status:
         qry["status"] = status
+    return base, qry
+
+
+@api.get("/admin/withdrawals/export")
+async def export_withdrawals(format: str = "excel", status: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None, q: Optional[str] = None,
+                             admin: dict = Depends(require_perm("withdrawals", "view"))):
+    _, qry = _withdrawal_filter(status, from_date, to_date, q)
+    items = await db.withdrawals.find(qry).sort("created_at", -1).to_list(10000)
+    uids = [ObjectId(w["user_id"]) for w in items if ObjectId.is_valid(str(w.get("user_id", "")))]
+    codes = {str(u["_id"]): u.get("referral_code", "") for u in await db.users.find({"_id": {"$in": uids}}, {"referral_code": 1}).to_list(10000)} if uids else {}
+    cols = ["Request ID", "Date (IST)", "Customer", "Email", "Customer ID", "Amount", "Method", "Payout Details", "Status", "UTR / Ref", "Admin Note", "Updated (IST)"]
+    def ist(s):
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(IST).strftime("%d-%m-%Y %H:%M") if s else ""
+        except Exception:
+            return s or ""
+    rows = []
+    for w in items:
+        pi = w.get("payout_info") or {}
+        details = pi.get("upi") or pi.get("upi_id") or " / ".join(str(pi.get(k, "")) for k in ("account_holder", "account_number", "ifsc", "bank_name") if pi.get(k))
+        rows.append({"Request ID": f"WD-{str(w['_id'])[:8]}", "Date (IST)": ist(w.get("created_at")), "Customer": w.get("user_name", ""), "Email": w.get("user_email", ""),
+                     "Customer ID": w.get("customer_id") or codes.get(str(w.get("user_id", "")), "") or "", "Amount": w.get("amount", 0), "Method": w.get("method", ""), "Payout Details": details,
+                     "Status": (w.get("status") or "").capitalize(), "UTR / Ref": w.get("utr", ""), "Admin Note": w.get("admin_note", ""), "Updated (IST)": ist(w.get("updated_at"))})
+    label = (f"{from_date or 'start'}_to_{to_date or 'today'}" if (from_date or to_date) else "all") + (f"_{status}" if status else "")
+    fname = f"withdrawals_{label}"
+    total_amt = round(sum(float(w.get("amount") or 0) for w in items), 2)
+    hdrs = {"X-Row-Count": str(len(rows))}
+    if format == "csv":
+        import csv
+        sio = io.StringIO()
+        wr = csv.DictWriter(sio, fieldnames=cols)
+        wr.writeheader(); wr.writerows(rows)
+        return Response(content=("\ufeff" + sio.getvalue()).encode("utf-8"), media_type="text/csv", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.csv"})
+    if format == "excel":
+        from xlsx_util import xlsx_bytes
+        buf = xlsx_bytes(rows, cols, sheet="Withdrawals")
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.xlsx"})
+    if format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=1.2 * cm, leftMargin=1 * cm, rightMargin=1 * cm)
+        styles = getSampleStyleSheet()
+        counts = {s: sum(1 for w in items if w.get("status") == s) for s in ("pending", "approved", "paid", "rejected")}
+        period = f"{from_date or 'Beginning'} → {to_date or 'Today'}" if (from_date or to_date) else "All time"
+        elems = [Paragraph("RADHIKA TRADERS", ParagraphStyle("t", parent=styles["Title"], textColor=colors.HexColor("#991B1B"))),
+                 Paragraph("Withdrawal Requests Report · Trusted Partner for Financial Growth", styles["Normal"]), Spacer(1, 6),
+                 Paragraph(f"<b>Period:</b> {period} &nbsp;|&nbsp; <b>Status:</b> {(status or 'All').capitalize()}" + (f" &nbsp;|&nbsp; <b>Search:</b> {q}" if q else "") +
+                           f" &nbsp;|&nbsp; <b>Requests:</b> {len(rows)} &nbsp;|&nbsp; <b>Total Amount:</b> Rs. {total_amt:g} &nbsp;|&nbsp; Pending {counts['pending']} · Approved {counts['approved']} · Paid {counts['paid']} · Rejected {counts['rejected']}", styles["Normal"]),
+                 Paragraph(f"Generated {datetime.now(IST).strftime('%d-%m-%Y %H:%M')} IST by {admin.get('name', '')}", ParagraphStyle("s", parent=styles["Normal"], fontSize=7, textColor=colors.grey)), Spacer(1, 10)]
+        pcols = ["Request ID", "Date (IST)", "Customer", "Email", "Amount", "Method", "Payout Details", "Status", "UTR / Ref"]
+        cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=7, leading=8.5)
+        data = [pcols] + [[Paragraph(str(r[c]), cell) if c in ("Customer", "Email", "Payout Details") else (f"Rs.{r[c]}" if c == "Amount" else str(r[c])) for c in pcols] for r in rows]
+        if len(data) == 1:
+            data.append(["-", "No withdrawal requests match this filter", "", "", "", "", "", "", ""])
+        table = Table(data, repeatRows=1, colWidths=[2.2 * cm, 2.6 * cm, 3.6 * cm, 4.6 * cm, 1.8 * cm, 1.8 * cm, 5.2 * cm, 1.8 * cm, 3.2 * cm])
+        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#991B1B")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 7),
+                                   ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")), ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+        elems.append(table)
+        doc.build(elems)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={**hdrs, "Content-Disposition": f"attachment; filename={fname}.pdf"})
+    raise HTTPException(status_code=400, detail="format must be csv, excel or pdf")
+
+
+@api.get("/admin/withdrawals")
+async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: int = 50, from_date: Optional[str] = None, to_date: Optional[str] = None, q: Optional[str] = None,
+                          admin: dict = Depends(require_perm("withdrawals", "view"))):
+    base, qry = _withdrawal_filter(status, from_date, to_date, q)
     paged = page > 0
     if paged:
         page, limit = _paged(page, limit)
