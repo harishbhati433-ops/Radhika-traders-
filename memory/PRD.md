@@ -775,3 +775,10 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## 2026-06 — Mobile search box full width
 - Admin Customers / Campaigns / Wallets / Email Log search inputs take the full row on mobile (`basis-full sm:basis-auto …`), desktop layout unchanged.
+
+## 2026-06 — Permanent de-indexing hardening (staff panels)
+- Secret staff entry slugs moved OUT of the frontend bundle into DB (`staff_gates` doc `_id:"gates"` {admin, employee, rotated_at}; module `backend/staff_gates.py`, loaded at startup, auto-generated as `rt-<10hex>`). Old slugs rt-control-hb27 / rt-team-9k4e are gone everywhere (code, index.html manifest script, emails) and now render the 404 page.
+- API: GET /api/gate/{slug} (public; 404 for unknown slug or bot UA) → {portal}; GET /api/admin/security/gates; POST /api/admin/security/gates/rotate (logs `staff_links_rotated`). Email deep links (withdrawal alert, salary, attendance, leave) use `staff_gates.link()`.
+- Frontend: catch-all route `*` → `GateOrNotFound` (GateEntry.jsx): single-segment path asks /api/gate, valid → grantGate + redirect to /admin|/employee login; else `NotFoundPage` (title "Page not found | Radhika Traders", visible 404 text, noindex). PortalSync shows NotFoundPage for bots (isBot UA regex) and for ungated devices; `?source=pwa` no longer bypasses the gate (only real standalone display). RouteSeo: unknown paths default to noindex + "Page not found".
+- Admin Security → `HiddenLinksCard` (fetches links, Copy, **Rotate links** button). Installed PWAs & already-unlocked devices keep working after rotation.
+- Verified in preview: old slugs/admin/employee login/random path → 404 + noindex; Googlebot/headless UA → 404 even on valid slug; real UA valid slug → unlock → 2FA login → Security card shows slug; rotate → old slug 404, session still unlocked.

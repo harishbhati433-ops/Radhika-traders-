@@ -8,6 +8,7 @@ from bson import ObjectId
 
 import contact_settings
 import push_service
+import staff_gates
 from email_service import send_leave_request_email, send_leave_decision_email
 
 logger = logging.getLogger("leaves")
@@ -120,7 +121,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
         admins = await db.users.find({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1, "name": 1}).to_list(20)
         targets = {a["email"].lower(): a.get("name", "Admin") for a in admins if a.get("email")}
         targets.setdefault(contact_settings.CONTACT["owner_email"].lower(), "Admin")
-        link = f"{origin_of(request)}/rt-control-hb27?next=/admin/attendance"
+        link = staff_gates.link(origin_of(request), "admin", "/admin/attendance")
         for to, name in targets.items():
             background.add_task(send_leave_request_email, to, name, out(doc), link)
         if admins:
@@ -192,7 +193,7 @@ def build_router(db, require_admin, require_employee, log_activity) -> APIRouter
                            detail=f"{label} · {new['from_date']} → {new['to_date']} · {new['days']} day(s)" + (f" · {body.note}" if body.note else ""))
         emp = await db.users.find_one({"_id": ObjectId(new["employee_id"])}) if ObjectId.is_valid(new["employee_id"]) else None
         if emp and real_email(emp):
-            background.add_task(send_leave_decision_email, real_email(emp), emp.get("name", ""), out(new), label, f"{origin_of(request)}/rt-team-9k4e?next=/employee/attendance")
+            background.add_task(send_leave_decision_email, real_email(emp), emp.get("name", ""), out(new), label, staff_gates.link(origin_of(request), "employee", "/employee/attendance"))
         return out(new)
 
     return r

@@ -50,6 +50,7 @@ from team_routes import build_router as build_team_router
 from stories_routes import build_router as build_stories_router
 from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked, describe_ua
+import staff_gates
 import contact_settings
 import push_service
 import assistant_routes
@@ -304,6 +305,7 @@ class Login2faIn(LoginIn):
 
 TRUSTED_DEVICE_DAYS = 30
 TWO_FA_MAX_TRIES = 5
+BOT_UA = re.compile(r"bot|crawl|spider|slurp|headlesschrome|lighthouse|googlebot|google-inspectiontool|adsbot|mediapartners|apis-google|feedfetcher|storebot|bingpreview|yandex|duckduck|baidu|facebookexternalhit|whatsapp|telegram|twitter|linkedin|discord|curl|wget|python-requests|go-http-client")
 
 
 def _tdev_hash(token: str) -> str:
@@ -907,6 +909,35 @@ async def login_verify_2fa(body: Login2faIn, request: Request, background: Backg
                                                    "created_at": now_iso(), "last_used": now_iso(), "expires_at": (datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS)).isoformat()})
         out["trusted_device"] = tok
     return out
+
+
+@api.get("/gate/{slug}")
+async def resolve_gate(slug: str, request: Request):
+    """Public: tells the SPA which staff portal a secret link unlocks. Bots and unknown slugs get a plain 404."""
+    ua = request.headers.get("user-agent", "").lower()
+    if BOT_UA.search(ua):
+        raise HTTPException(status_code=404, detail="Not found")
+    portal = staff_gates.portal_for(slug)
+    if not portal:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"portal": portal}
+
+
+def _gate_links(request: Request) -> dict:
+    origin = request.headers.get("origin") or _origin(request)
+    return {"admin": staff_gates.link(origin, "admin"), "employee": staff_gates.link(origin, "employee"), "rotated_at": staff_gates._cache.get("rotated_at")}
+
+
+@api.get("/admin/security/gates")
+async def get_gates(request: Request, admin: dict = Depends(require_admin)):
+    return _gate_links(request)
+
+
+@api.post("/admin/security/gates/rotate")
+async def rotate_gates(request: Request, admin: dict = Depends(require_admin)):
+    await staff_gates.rotate(db)
+    await _log_security(admin["id"], "staff_links_rotated", request, "admin + employee secret links changed")
+    return _gate_links(request)
 
 
 @api.get("/admin/security/trusted-devices")
@@ -2262,7 +2293,7 @@ async def request_withdrawal(body: WithdrawIn, request: Request, background: Bac
 
 async def _notify_admin_withdrawal(w: dict, customer_id: str, origin: str):
     when = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %B %Y, %I:%M %p IST")
-    link = f"{origin}/rt-control-hb27?next=/admin/withdrawals%3Fhighlight={w['id']}"
+    link = staff_gates.link(origin, "admin", f"/admin/withdrawals?highlight={w['id']}")
     admins = await db.users.find({"role": "admin"}, {"email": 1, "_id": 1}).to_list(10)
     emails = {a["email"] for a in admins if a.get("email")} | {os.environ.get("ADMIN_EMAIL", "").lower(), contact_settings.CONTACT["owner_email"]} - {""}
     for email in emails:
@@ -3826,6 +3857,7 @@ async def _fresh_contact(request: Request, call_next):
 @app.on_event("startup")
 async def startup():
     await contact_settings.load_contact(db)
+    await staff_gates.load(db)
     await office_timing.load(db)
     await attendance_policy.load(db)
     email_service.set_db(db)

@@ -4,9 +4,9 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
 import { PwaEntry, isStandalone } from "./components/PwaEntry";
-import { GateEntry } from "./components/GateEntry";
+import { GateOrNotFound, NotFoundPage } from "./components/GateEntry";
 import { RouteSeo } from "./components/RouteSeo";
-import { GATES, hasGate } from "./lib/gate";
+import { hasGate, isBot } from "./lib/gate";
 import { getToken, portalFromPath } from "./lib/portal";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { Toaster } from "sonner";
@@ -114,18 +114,9 @@ function PortalSync({ children }) {
     const m = document.getElementById("rt-manifest");
     if (m) m.href = portal === "admin" ? "/manifest-admin.json" : portal === "employee" ? "/manifest-employee.json" : "/manifest.json";
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (portal !== "customer" && !hasGate(portal) && !(portal === "admin" && hasGate("employee")) && !isStandalone()) return <HiddenPage />;
+  if (portal !== "customer" && (isBot() || (!hasGate(portal) && !(portal === "admin" && hasGate("employee")) && !isStandalone()))) return <NotFoundPage />;
   return children;
 }
-
-const HiddenPage = () => (
-  <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-6 text-center" data-testid="hidden-page">
-    <img src="/images/logo-tile.png" alt="" className="mb-6 h-16 w-16 rounded-2xl shadow-lg ring-1 ring-amber-500/40" />
-    <div className="font-display text-5xl font-extrabold text-slate-900">404</div>
-    <p className="mt-2 text-sm text-slate-500">The page you're looking for doesn't exist.</p>
-    <a href="/" className="mt-6 rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:bg-red-700">Go to homepage</a>
-  </div>
-);
 
 // Warm all route chunks while the browser is idle so the first click on any menu item is instant.
 const CUSTOMER_CHUNKS = [() => import("./pages/customer/Wallet"), () => import("./pages/customer/Withdrawals"), () => import("./pages/customer/Profile"), () => import("./pages/customer/CustomerCampaigns"), () => import("./pages/customer/MyLeads"), () => import("./pages/customer/Statements"), () => import("./pages/customer/Reports"), () => import("./pages/customer/WelcomeLetter"), () => import("./pages/CampaignDetail")];
@@ -177,8 +168,6 @@ function App() {
           <PortalSync>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path={`/${GATES.admin}`} element={<GateEntry portal="admin" />} />
-            <Route path={`/${GATES.employee}`} element={<GateEntry portal="employee" />} />
             <Route path="/maintenance" element={<MaintenanceRoute />} />
             <Route path="/about" element={<About />} />
             <Route path="/services" element={<Services />} />
@@ -235,6 +224,7 @@ function App() {
             <Route path="/admin/suspicious-signups" element={A(<AdminSuspicious />)} />
             <Route path="/employee/kyc" element={E(<EmployeeKyc />)} />
             <Route path="/employee/attendance" element={E(<EmployeeAttendance />)} />
+            <Route path="*" element={<GateOrNotFound />} />
           </Routes>
           </PortalSync>
         </Suspense>

@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { GATES } from "../lib/gate";
 
 const BRAND = "Radhika Traders";
 const DEFAULT_DESC = "Radhika Traders — Trusted Partner for Financial Growth. Affiliate campaigns for Demat, Credit Cards, Savings & Insurance.";
@@ -18,7 +17,7 @@ const PUBLIC = {
   "/app/signup": { title: `Create Account | ${BRAND}`, desc: "Join Radhika Traders for free and start earning with affiliate campaigns." },
 };
 const PUBLIC_PREFIX = { "/campaign/": { title: `Campaign | ${BRAND}`, desc: DEFAULT_DESC }, "/join/": { title: `Apply | ${BRAND}`, desc: DEFAULT_DESC } };
-const PRIVATE_PREFIX = ["/admin", "/employee", `/${GATES.admin}`, `/${GATES.employee}`, "/app/", "/maintenance", "/offer-ended"];
+const PRIVATE_PREFIX = ["/admin", "/employee", "/app/", "/maintenance", "/offer-ended"];
 
 const setMeta = (name, content) => {
   let el = document.head.querySelector(`meta[name="${name}"]`);
@@ -37,7 +36,8 @@ export const seoFor = (pathname) => {
   const pub = PUBLIC[p] || Object.entries(PUBLIC_PREFIX).find(([k]) => p.startsWith(k))?.[1];
   if (pub) return { ...pub, robots: "index, follow" };
   if (PRIVATE_PREFIX.some((k) => p === k || p.startsWith(k))) return { title: BRAND, desc: DEFAULT_DESC, robots: "noindex, nofollow" };
-  return { title: `${BRAND} | Trusted Partner for Financial Growth`, desc: DEFAULT_DESC, robots: "index, follow" };
+  // Unknown path → 404 page: never indexable
+  return { title: `Page not found | ${BRAND}`, desc: DEFAULT_DESC, robots: "noindex, nofollow" };
 };
 
 export function RouteSeo() {
