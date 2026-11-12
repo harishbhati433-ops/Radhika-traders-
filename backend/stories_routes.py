@@ -23,6 +23,7 @@ MAX_VIDEO = 20 * 1024 * 1024
 EXPIRY_HOURS = 24
 MEDIA_GRACE_DAYS = 7
 VIEW_DEDUP_SECONDS = 30
+REACTIONS = ("heart", "fire")
 
 now = lambda: datetime.now(timezone.utc)
 iso = lambda d: d.isoformat()
@@ -72,6 +73,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         await db.stories.create_index([("active", 1), ("published_at", -1)])
         await db.story_views.create_index([("story_id", 1), ("user_id", 1)], unique=True)
         await db.story_views.create_index([("story_id", 1), ("viewed_at", -1)])
+        await db.story_reactions.create_index([("story_id", 1), ("user_id", 1)], unique=True)
 
     asyncio.get_event_loop().create_task(ensure_indexes())
     last_sync = {"at": 0.0}
@@ -136,8 +138,28 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         docs = await db.stories.find(flt, {"viewers": 0}).sort("published_at", -1).to_list(100)
         items = [s for s in await hydrate(docs) if s["visible"]]
         seen = {v["story_id"] for v in await db.story_views.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1}).to_list(200)}
+        mine = {x["story_id"]: x["emoji"] for x in await db.story_reactions.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1, "emoji": 1}).to_list(200)}
         public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "bg_color", "font", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
-        return [{**{k: s.get(k) for k in public_keys}, "seen": s["id"] in seen} for s in items]
+        return [{**{k: s.get(k) for k in public_keys}, "seen": s["id"] in seen, "my_reaction": mine.get(s["id"])} for s in items]
+
+    class ReactIn(BaseModel):
+        emoji: Optional[str] = None  # "heart" | "fire" | None (remove)
+
+    @r.post("/stories/{sid}/react")
+    async def react(sid: str, body: ReactIn, user: dict = Depends(get_current_user)):
+        if user.get("role") != "customer" or not ObjectId.is_valid(sid):
+            raise HTTPException(status_code=403, detail="Only customers can react")
+        if body.emoji is not None and body.emoji not in REACTIONS:
+            raise HTTPException(status_code=400, detail="Invalid reaction")
+        s = await db.stories.find_one({"_id": ObjectId(sid), "active": True}, {"auto_expire": 1, "published_at": 1})
+        if not s or is_expired(s):
+            raise HTTPException(status_code=404, detail="Story not found")
+        key = {"story_id": sid, "user_id": user["id"]}
+        if body.emoji is None:
+            await db.story_reactions.delete_one(key)
+        else:
+            await db.story_reactions.update_one(key, {"$set": {"emoji": body.emoji, "reacted_at": iso(now()), "user_name": user.get("name", "")}}, upsert=True)
+        return {"ok": True, "my_reaction": body.emoji}
 
     @r.post("/stories/{sid}/view", status_code=202)
     async def record_view(sid: str, user: dict = Depends(get_current_user)):
@@ -158,7 +180,14 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
     # ---------- admin ----------
     async def _stats(ids: list) -> dict:
         agg = await db.story_views.aggregate([{"$match": {"story_id": {"$in": ids}}}, {"$group": {"_id": "$story_id", "unique": {"$sum": 1}, "total": {"$sum": "$count"}}}]).to_list(500)
-        return {a["_id"]: {"total_views": a["total"], "unique_viewers": a["unique"]} for a in agg}
+        out = {a["_id"]: {"total_views": a["total"], "unique_viewers": a["unique"], "hearts": 0, "fires": 0} for a in agg}
+        ragg = await db.story_reactions.aggregate([{"$match": {"story_id": {"$in": ids}}}, {"$group": {"_id": {"s": "$story_id", "e": "$emoji"}, "n": {"$sum": 1}}}]).to_list(1000)
+        for a in ragg:
+            d = out.setdefault(a["_id"]["s"], {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0})
+            d["hearts" if a["_id"]["e"] == "heart" else "fires"] += a["n"]
+        return out
+
+    EMPTY_STATS = {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0}
 
     @r.get("/admin/stories")
     async def admin_list(_: dict = Depends(view_mgmt)):
@@ -167,7 +196,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         items = await hydrate(docs)
         stats = await _stats([s["id"] for s in items])
         for s in items:
-            s.update(stats.get(s["id"], {"total_views": 0, "unique_viewers": 0}))
+            s.update(stats.get(s["id"], EMPTY_STATS))
         return {"manual": [s for s in items if s["kind"] != "campaign"], "campaign": [s for s in items if s["kind"] == "campaign"], "categories": list(CATEGORIES)}
 
     @r.post("/admin/stories/upload")
@@ -250,7 +279,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         await log_activity(admin, "story_updated", request, entity_type="story", entity_id=sid, entity_label=s.get("title", ""), detail=", ".join(sorted(upd)))
         fresh = await db.stories.find_one({"_id": s["_id"]})
         out = (await hydrate([fresh]))[0]
-        out.update((await _stats([sid])).get(sid, {"total_views": 0, "unique_viewers": 0}))
+        out.update((await _stats([sid])).get(sid, EMPTY_STATS))
         return out
 
     async def _delete_media(path: str):
@@ -273,6 +302,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
             raise HTTPException(status_code=400, detail="Campaign stories follow the campaign — pause/close the campaign or deactivate the story instead")
         await db.stories.delete_one({"_id": s["_id"]})
         await db.story_views.delete_many({"story_id": sid})
+        await db.story_reactions.delete_many({"story_id": sid})
         await _delete_media(s.get("media_path", ""))
         await log_activity(admin, "story_deleted", request, entity_type="story", entity_id=sid, entity_label=s.get("title", ""))
         return {"ok": True}
@@ -289,14 +319,15 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         rows = await db.story_views.find(flt).sort("viewed_at", -1).skip(skip).limit(limit).to_list(limit)
         ids = [ObjectId(v["user_id"]) for v in rows if ObjectId.is_valid(v["user_id"])]
         users = {str(u["_id"]): u for u in await db.users.find({"_id": {"$in": ids}}, {"name": 1, "mobile": 1, "customer_id": 1, "avatar_url": 1, "referral_code": 1}).to_list(limit)} if ids else {}
+        reactions = {x["user_id"]: x["emoji"] for x in await db.story_reactions.find({"story_id": sid, "user_id": {"$in": [v["user_id"] for v in rows]}}, {"user_id": 1, "emoji": 1}).to_list(limit)}
         show_mobile = admin.get("role") == "admin"
         items = []
         for v in rows:
             u = users.get(v["user_id"], {})
             items.append({"user_id": v["user_id"], "name": u.get("name") or v.get("user_name", ""), "customer_id": u.get("customer_id") or u.get("referral_code") or v["user_id"][-6:].upper(),
                           "avatar_url": u.get("avatar_url") or v.get("avatar_url") or "", "viewed_at": v["viewed_at"], "first_viewed_at": v.get("first_viewed_at"), "count": v.get("count", 1),
-                          "mobile": (u.get("mobile") or "") if show_mobile else None})
-        stats = (await _stats([sid])).get(sid, {"total_views": 0, "unique_viewers": 0})
+                          "mobile": (u.get("mobile") or "") if show_mobile else None, "reaction": reactions.get(v["user_id"])})
+        stats = (await _stats([sid])).get(sid, EMPTY_STATS)
         filtered = await db.story_views.count_documents(flt) if q.strip() else total_docs
         return {**stats, "items": items, "page": page, "limit": limit, "filtered": filtered, "has_more": skip + len(items) < filtered}
 

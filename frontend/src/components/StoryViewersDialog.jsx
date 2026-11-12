@@ -25,9 +25,11 @@ export function StoryViewersDialog({ story, onClose }) {
         <div className="flex items-start gap-3 border-b border-slate-100 p-4">
           <div className="min-w-0 flex-1">
             <h3 className="truncate font-display text-lg font-bold text-slate-900">Viewers — {story.title || story.category}</h3>
-            <div className="mt-1 flex gap-2 text-xs">
+            <div className="mt-1 flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700" data-testid="viewers-total"><Eye className="h-3.5 w-3.5" /> {data?.total_views ?? story.total_views ?? 0} Total Views</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700" data-testid="viewers-unique"><Users className="h-3.5 w-3.5" /> {data?.unique_viewers ?? story.unique_viewers ?? 0} Unique Viewers</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700" data-testid="viewers-hearts">❤️ {data?.hearts ?? story.hearts ?? 0}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 font-semibold text-orange-700" data-testid="viewers-fires">🔥 {data?.fires ?? story.fires ?? 0}</span>
             </div>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-slate-100" data-testid="viewers-close"><X className="h-5 w-5" /></button>
@@ -44,6 +46,7 @@ export function StoryViewersDialog({ story, onClose }) {
                 <div className="truncate text-[11px] text-slate-500">ID: {v.customer_id}{v.mobile ? ` · ${v.mobile}` : ""}</div>
               </div>
               <div className="text-right text-[11px] text-slate-500"><div>{fmt(v.viewed_at)}</div>{v.count > 1 && <div className="font-semibold text-slate-700">{v.count}× viewed</div>}</div>
+              {v.reaction && <span className="text-lg" data-testid={`viewer-reaction-${v.user_id}`}>{v.reaction === "heart" ? "❤️" : "🔥"}</span>}
             </div>
           ))}
           {data?.has_more && <button type="button" onClick={() => load(data.page + 1, true)} disabled={busy} className="mt-3 w-full rounded-full border border-slate-200 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60" data-testid="viewers-load-more">{busy ? "Loading…" : "Load more"}</button>}

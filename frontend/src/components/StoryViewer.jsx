@@ -7,8 +7,35 @@ import { fontCss } from "../lib/storyFonts";
 
 const IMAGE_MS = 5000;
 const seenThisSession = new Set();
+const reactionsThisSession = new Map();
 
 const ago = (iso) => { const m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+
+function Reactions({ story }) {
+  const initial = reactionsThisSession.has(story.id) ? reactionsThisSession.get(story.id) : story.my_reaction || null;
+  const [mine, setMine] = useState(initial);
+  const [pop, setPop] = useState(null);
+  useEffect(() => { setMine(reactionsThisSession.has(story.id) ? reactionsThisSession.get(story.id) : story.my_reaction || null); setPop(null); }, [story.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tap = (emoji) => {
+    const nextVal = mine === emoji ? null : emoji;
+    setMine(nextVal); reactionsThisSession.set(story.id, nextVal);
+    if (nextVal) { setPop(emoji); setTimeout(() => setPop(null), 700); navigator.vibrate?.(15); }
+    api.post(`/stories/${story.id}/react`, { emoji: nextVal }).catch(() => {});
+  };
+  const btn = (emoji, glyph) => (
+    <button type="button" onClick={(e) => { e.stopPropagation(); tap(emoji); }} aria-pressed={mine === emoji} data-testid={`story-react-${emoji}`}
+      className={`relative flex h-11 w-11 items-center justify-center rounded-full border text-xl transition-transform duration-150 active:scale-90 ${mine === emoji ? "scale-110 border-white bg-white/30 shadow-[0_0_0_3px_rgba(255,255,255,.25)]" : "border-white/30 bg-white/10"}`}>
+      <span className={mine === emoji ? "" : "opacity-80 grayscale-[35%]"}>{glyph}</span>
+      {pop === emoji && <span className="pointer-events-none absolute -top-8 animate-[storyPop_.7s_ease-out_forwards] text-2xl" data-testid="story-react-pop">{glyph}</span>}
+    </button>
+  );
+  return (
+    <div className="flex items-center gap-2" data-testid="story-reactions">
+      {btn("heart", "❤️")}{btn("fire", "🔥")}
+      <style>{`@keyframes storyPop{0%{transform:translateY(0) scale(.6);opacity:0}30%{opacity:1}100%{transform:translateY(-36px) scale(1.4);opacity:0}}`}</style>
+    </div>
+  );
+}
 
 export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const nav = useNavigate();
@@ -80,7 +107,10 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
         {/* caption + CTA */}
         <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-6 pt-14 text-white">
           {s.media_type !== "text" && (s.title || s.caption) && <div className="mb-3"><div className="font-display text-lg font-bold">{s.title}</div>{s.caption && <p className="text-sm text-white/85" data-testid="story-caption">{s.caption}</p>}</div>}
-          {s.link && <button type="button" onClick={openLink} data-testid="story-cta" className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 active:scale-[.98]"><ExternalLink className="h-4 w-4" /> {s.kind === "campaign" ? "Open Campaign" : "Learn More"}</button>}
+          <div className="flex items-center gap-3">
+            <Reactions story={s} />
+            {s.link && <button type="button" onClick={openLink} data-testid="story-cta" className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 active:scale-[.98]"><ExternalLink className="h-4 w-4" /> {s.kind === "campaign" ? "Open Campaign" : "Learn More"}</button>}
+          </div>
         </div>
         {/* tap zones */}
         <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-24 left-0 z-10 w-1/3" data-testid="story-prev" />
