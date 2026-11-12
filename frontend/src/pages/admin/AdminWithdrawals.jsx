@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DateFilterBar, EMPTY_FILTER } from "../../components/DateFilterBar";
 import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
@@ -28,9 +29,11 @@ export default function AdminWithdrawals() {
   const highlight = params.get("highlight");
 
   const [pg, setPg] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
-  const load = (page = pg.page) => api.get("/admin/withdrawals", { params: { ...(tab === "all" ? {} : { status: tab }), page: Number(page) || 1, limit: pg.limit } })
-    .then(({ data }) => { setList(data.items); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
-  useEffect(() => { load(1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [f, setF] = useState(EMPTY_FILTER);
+  const [summary, setSummary] = useState(null);
+  const load = (page = pg.page) => api.get("/admin/withdrawals", { params: { ...(tab === "all" ? {} : { status: tab }), page: Number(page) || 1, limit: pg.limit, from_date: f.from || undefined, to_date: f.to || undefined, q: f.q || undefined } })
+    .then(({ data }) => { setList(data.items); setSummary(data.summary); setPg({ page: data.page, pages: data.pages, total: data.total, limit: data.limit }); });
+  useEffect(() => { const t = setTimeout(() => load(1), f.q ? 300 : 0); return () => clearTimeout(t); }, [tab, f.from, f.to, f.q]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!highlight || !list.length) return;
     const el = document.querySelector(`[data-testid="wd-row-${highlight}"]`);
@@ -46,6 +49,14 @@ export default function AdminWithdrawals() {
 
   return (
     <DashboardLayout nav={adminNav} title="Withdrawal Requests">
+      <DateFilterBar f={f} setF={setF} testId="wd-filter" />
+      {summary && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="wd-summary">
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Requests</div><div className="font-mono text-lg font-extrabold text-slate-900" data-testid="wd-sum-total">{summary.total}</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Amount</div><div className="font-mono text-lg font-extrabold text-slate-900" data-testid="wd-sum-amount">₹{summary.amount.toLocaleString("en-IN")}</div></div>
+          {["pending", "approved", "paid", "rejected"].map((s) => <button key={s} type="button" onClick={() => setTab(s)} className={`rounded-xl border px-3 py-2 text-left ${STATUS[s]}`} data-testid={`wd-sum-${s}`}><div className="text-[10px] font-bold uppercase tracking-wider opacity-80">{s}</div><div className="font-mono text-lg font-extrabold">{summary[s]}</div></button>)}
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)} data-testid={`wd-tab-${t}`}
@@ -54,7 +65,7 @@ export default function AdminWithdrawals() {
       </div>
 
       <div className="space-y-3">
-        {list.length === 0 ? <p className="py-12 text-center text-slate-500" data-testid="wd-empty">No requests.</p> : list.map((w) => (
+        {list.length === 0 ? <p className="py-12 text-center text-slate-500" data-testid="wd-empty">{f.from || f.to || f.q ? "No requests match this filter." : "No requests."}</p> : list.map((w) => (
           <div key={w.id} data-testid={`wd-row-${w.id}`} className={`flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-white p-5 ${highlight === w.id ? "border-amber-400 ring-2 ring-amber-300 shadow-lg" : "border-slate-200"}`}>
             <div className="min-w-0 flex-1">
               {highlight === w.id && <div className="mb-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800" data-testid="wd-highlighted">From email alert</div>}
@@ -63,7 +74,7 @@ export default function AdminWithdrawals() {
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-bold capitalize ${STATUS[w.status]}`}>{w.status}</span>
               </div>
               <div className="text-sm font-semibold text-slate-700">{w.user_name} <span className="font-normal text-slate-400">· {w.user_email}</span></div>
-              <div className="text-xs text-slate-500">Requested {(w.created_at || "").slice(0, 10)}</div>
+              <div className="text-xs text-slate-500">Requested {(w.created_at || "").slice(0, 10)} · <span className="font-mono" data-testid={`wd-id-${w.id}`}>WD-{w.id.slice(0, 8)}</span></div>
               {w.admin_note && <div className="text-xs text-rose-500">Note: {w.admin_note}</div>}
               {w.status === "paid" && (w.proof_url || w.utr) && (
                 <div className="mt-1 flex items-center gap-2 text-xs text-emerald-700">

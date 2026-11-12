@@ -2172,17 +2172,42 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
 
 
 @api.get("/admin/withdrawals")
-async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: int = 50, admin: dict = Depends(require_perm("withdrawals", "view"))):
-    q = {}
+async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: int = 50, from_date: Optional[str] = None, to_date: Optional[str] = None, q: Optional[str] = None,
+                          admin: dict = Depends(require_perm("withdrawals", "view"))):
+    base: dict = {}
+    # Date filter = IST calendar days (created_at is stored as UTC ISO) — read-only, never touches records.
+    rng = {}
+    try:
+        if from_date:
+            rng["$gte"] = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=IST).astimezone(timezone.utc).isoformat()
+        if to_date:
+            rng["$lt"] = (datetime.strptime(to_date, "%Y-%m-%d").replace(tzinfo=IST) + timedelta(days=1)).astimezone(timezone.utc).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD")
+    if rng:
+        base["created_at"] = rng
+    if q and q.strip():
+        term = re.escape(q.strip()[:60])
+        rx = {"$regex": term, "$options": "i"}
+        ors = [{"user_name": rx}, {"user_email": rx}, {"utr": rx}]
+        hexpart = re.sub(r"^wd-?", "", q.strip(), flags=re.I)
+        if re.fullmatch(r"[0-9a-fA-F]{4,24}", hexpart):
+            ors.append({"$expr": {"$regexMatch": {"input": {"$toString": "$_id"}, "regex": f"^{hexpart.lower()}"}}})
+        base["$or"] = ors
+    qry = dict(base)
     if status:
-        q["status"] = status
+        qry["status"] = status
     paged = page > 0
     if paged:
         page, limit = _paged(page, limit)
-        total = await db.withdrawals.count_documents(q)
-        items = await db.withdrawals.find(q).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+        total = await db.withdrawals.count_documents(qry)
+        items = await db.withdrawals.find(qry).sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+        agg = await db.withdrawals.aggregate([{"$match": base}, {"$group": {"_id": "$status", "n": {"$sum": 1}, "amount": {"$sum": "$amount"}}}]).to_list(10)
+        summary = {"total": sum(a["n"] for a in agg), "amount": round(sum(a["amount"] or 0 for a in agg), 2), **{s: 0 for s in ("pending", "approved", "paid", "rejected")}}
+        for a in agg:
+            summary[a["_id"]] = a["n"]
     else:
-        items = await db.withdrawals.find(q).sort("created_at", -1).to_list(5000)
+        items = await db.withdrawals.find(qry).sort("created_at", -1).to_list(5000)
     codes = {(w.get("payout_info") or {}).get("ifsc") for w in items if not (w.get("payout_info") or {}).get("bank_name") and (w.get("payout_info") or {}).get("ifsc")}
     found = {}
     for code in list(codes)[:100]:
@@ -2197,7 +2222,7 @@ async def all_withdrawals(status: Optional[str] = None, page: int = 0, limit: in
             await db.withdrawals.update_one({"_id": w["_id"]}, {"$set": {"payout_info.bank_name": pi["bank_name"], "payout_info.branch": pi["branch"]}})
         out.append({**{k: v for k, v in w.items() if k != "_id"}, "payout_info": pi, "id": str(w["_id"])})
     if paged:
-        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit))}
+        return {"items": out, "total": total, "page": page, "limit": limit, "pages": max(1, -(-total // limit)), "summary": summary}
     return out
 
 
