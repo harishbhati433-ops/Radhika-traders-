@@ -746,3 +746,8 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - API: POST /api/stories/{id}/react {emoji: "heart"|"fire"|null} (customers only, 403 others, 400 invalid, 404 expired/inactive). GET /api/stories returns `my_reaction`. Admin: /admin/stories items + /admin/stories/{id}/viewers return `hearts`/`fires`; each viewer row has `reaction`. Reactions deleted with story.
 - UI: StoryViewer.jsx `Reactions` (story-react-heart / story-react-fire, aria-pressed, pop animation, vibrate). AdminStories card chips story-hearts-{id} / story-fires-{id}; StoryViewersDialog chips viewers-hearts / viewers-fires + per-row viewer-reaction-{uid}. Customers do NOT see counts (admin only, per user default).
 - Verified via curl (react/switch/remove/invalid/403) + UI screenshots (customer viewer + admin card/dialog).
+
+## 2026-06 — Story video: 50 MB pick + client-side auto-compress
+- `lib/videoCompress.js`: `videoDuration(file)` (handles Infinity-duration WebM via seek trick), `canCompressVideo()`, `compressVideo(file,{onProgress})` — canvas.captureStream + MediaRecorder re-encode to ≤720×1280, 1.5 Mbps video / 96 kbps audio (audio via video.captureStream when supported). Runs entirely in admin's browser → ZERO server RAM/CPU; server limit stays 20 MB.
+- AdminStories MediaUpload: videos up to 50 MB accepted (30 sec max unchanged); >20 MB → "Compressing… N%" (story-upload-stage) then upload; toast shows before→after size. Unsupported browser / still >20 MB → clear error.
+- Verified in headless Chromium: 25.2 MB 1080×1920 webm → 3.3 MB uploaded, preview rendered.

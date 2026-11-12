@@ -9,32 +9,45 @@ import { Textarea } from "../../components/ui/textarea";
 import { toast } from "sonner";
 import { Upload, Loader2, Trash2, Power, Pencil, Eye, Users, RefreshCw, Clock, Sparkles, Film, Image as ImageIcon, Type, X } from "lucide-react";
 import { StoryViewersDialog } from "../../components/StoryViewersDialog";
+import { canCompressVideo, compressVideo, videoDuration } from "../../lib/videoCompress";
 import { STORY_FONTS, fontCss } from "../../lib/storyFonts";
 
 const empty = { title: "", caption: "", category: "Radhika Updates", media_type: "image", media_url: "", media_path: "", bg_color: "#7c1d1d", font: "display", link: "", campaign_id: "", auto_expire: true, active: true };
 const left = (iso) => { const ms = new Date(iso) - Date.now(); if (ms <= 0) return "expired"; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h ? `${h}h ${m}m left` : `${m}m left`; };
 
+const MAX_PICK_VIDEO = 50 * 1024 * 1024, MAX_UPLOAD_VIDEO = 20 * 1024 * 1024;
+
 function MediaUpload({ f, setF }) {
   const ref = useRef();
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState("");
   const pick = async (e) => {
-    const file = e.target.files?.[0]; e.target.value = "";
+    let file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     const ext = (file.name.split(".").pop() || "").toLowerCase();
     const type = file.type || ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" }[ext] || "");
-    if (type.startsWith("video/")) {
-      if (file.size > 20 * 1024 * 1024) return toast.error("Video 20 MB se bada hai");
-      const dur = await new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => res(v.duration); v.onerror = () => res(0); v.src = URL.createObjectURL(file); });
-      if (dur > 31) return toast.error(`Video ${Math.round(dur)} sec ka hai — max 30 sec allowed`);
-    } else if (!type.startsWith("image/")) return toast.error("Sirf photo (JPG/PNG/WEBP) ya video (MP4/WEBM/MOV) files allowed hain");
     setBusy(true);
     try {
+      if (type.startsWith("video/")) {
+        if (file.size > MAX_PICK_VIDEO) return toast.error("Video 50 MB se bada hai");
+        const dur = await videoDuration(file);
+        if (dur > 31) return toast.error(`Video ${Math.round(dur)} sec ka hai — max 30 sec allowed`);
+        if (file.size > MAX_UPLOAD_VIDEO) {
+          if (!canCompressVideo()) return toast.error("Video 20 MB se bada hai aur is browser me compress nahi ho sakta — Chrome use karein");
+          setStage("Compressing… 0%");
+          const before = file.size;
+          file = await compressVideo(file, { onProgress: (p) => setStage(`Compressing… ${Math.round(p * 100)}%`) });
+          if (file.size > MAX_UPLOAD_VIDEO) return toast.error("Compress ke baad bhi video 20 MB se bada hai — chhota video chunein");
+          toast.success(`Compressed ${Math.round(before / 1048576)} MB → ${(file.size / 1048576).toFixed(1)} MB (phone par hi, server RAM safe)`);
+        }
+      } else if (!type.startsWith("image/")) return toast.error("Sirf photo (JPG/PNG/WEBP) ya video (MP4/WEBM/MOV) files allowed hain");
+      setStage("Uploading…");
       const fd = new FormData(); fd.append("file", file.type ? file : new File([file], file.name, { type }));
       const { data } = await api.post("/admin/stories/upload", fd, { headers: { "Content-Type": "multipart/form-data" }, timeout: 180000 });
       setF((x) => ({ ...x, media_url: data.url, media_path: data.path, media_type: data.media_type }));
       toast.success(`${data.media_type === "video" ? "Video" : "Photo"} uploaded (${Math.round(data.size / 1024)} KB)`);
-    } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Upload failed"); }
-    finally { setBusy(false); }
+    } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || (err.message === "unsupported" ? "Is browser me video compress nahi ho sakta" : "Upload failed")); }
+    finally { setBusy(false); setStage(""); }
   };
   return (
     <div>
@@ -46,8 +59,8 @@ function MediaUpload({ f, setF }) {
           {f.media_url && <button type="button" onClick={() => setF((x) => ({ ...x, media_url: "", media_path: "" }))} className="absolute right-1 top-1 rounded-full bg-rose-500 p-0.5 text-white" data-testid="story-media-remove"><X className="h-3 w-3" /></button>}
         </div>
         <div className="text-xs text-slate-500">
-          <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="story-upload-btn" className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</> : <><Upload className="h-4 w-4" /> {f.media_url ? "Change" : "Upload Photo / Video"}</>}</button>
-          <div>Gallery, Files ya Drive — kahin se bhi chunein · Photo: JPG/PNG/WEBP, auto-compressed to WebP (max 8 MB) · Video: MP4/WEBM/MOV, max 20 MB / 30 sec · Best size 1080×1920 (9:16)</div>
+          <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="story-upload-btn" className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> <span data-testid="story-upload-stage">{stage || "Working…"}</span></> : <><Upload className="h-4 w-4" /> {f.media_url ? "Change" : "Upload Photo / Video"}</>}</button>
+          <div>Gallery, Files ya Drive — kahin se bhi chunein · Photo: JPG/PNG/WEBP, auto-compressed to WebP (max 8 MB) · Video: MP4/WEBM/MOV, 50 MB tak / 30 sec — 20 MB se bade videos aapke phone/browser me hi auto-compress hote hain (720p) · Best size 1080×1920 (9:16)</div>
         </div>
       </div>
     </div>
