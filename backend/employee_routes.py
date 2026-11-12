@@ -11,6 +11,7 @@ from bson import ObjectId
 from auth_utils import hash_password, verify_password, create_access_token, get_current_user_from_db
 from rbac import PERMISSION_MODULES, normalize_permissions
 import push_service
+import two_factor
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,30}$")
 MAX_ATTEMPTS, LOCK_MINUTES = 5, 30
@@ -20,6 +21,11 @@ IST = timezone(timedelta(hours=5, minutes=30))
 class EmployeeLoginIn(BaseModel):
     username: str
     password: str
+
+
+class Employee2faIn(EmployeeLoginIn):
+    code: str
+    remember_device: bool = False
 
 
 class EmployeeIn(BaseModel):
@@ -99,12 +105,60 @@ def build_router(db, require_admin, log_activity, public_user) -> APIRouter:
             raise HTTPException(status_code=401, detail="Invalid username or password.")
         if st != "active":
             raise HTTPException(status_code=403, detail="Your employee account is disabled. Contact the Super Admin.")
+        if not await two_factor.trusted_ok(db, user, request):
+            to, via_admin = await _otp_target(user)
+            if not await two_factor.send_otp(db, user, to, user.get("name", "")):
+                raise HTTPException(status_code=503, detail="Could not send the verification code right now. Please try again in a minute.")
+            await log_activity({"id": str(user["_id"]), "name": user.get("name"), "role": "employee", "username": username}, "employee_2fa_challenge", request,
+                               entity_type="employee", entity_id=str(user["_id"]), detail=f"OTP sent to {'Super Admin' if via_admin else 'employee email'} · IP {ip}")
+            return {"two_factor_required": True, "sent_to": "your Super Admin (ask them for the code)" if via_admin else two_factor.mask_email(to), "via_admin": via_admin,
+                    "message": "Verification code sent to your Super Admin — ask them for it." if via_admin else "Verification code sent to your email."}
+        return await _finish_employee_login(user, username, ip, request)
+
+    async def _otp_target(user: dict) -> tuple[str, bool]:
+        """Employee's real inbox, else the owner/admin inbox (placeholder employee emails can't receive mail)."""
+        e = (user.get("email") or "").strip().lower()
+        if e and not e.endswith("@employee.radhikatraders.net"):
+            return e, False
+        admin = await db.users.find_one({"role": "admin", "account_status": {"$ne": "deleted"}}, {"email": 1}, sort=[("created_at", 1)])
+        return admin["email"], True
+
+    async def _finish_employee_login(user: dict, username: str, ip: str, request: Request) -> dict:
+        now = _now()
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"last_login_at": now, "last_login_ip": ip}})
         token = create_access_token(str(user["_id"]), user["email"], "employee", user.get("token_version", 0))
         pu = public_user(user)
         await log_activity({"id": pu["id"], "name": pu["name"], "role": "employee", "username": username}, "employee_login", request,
                            entity_type="employee", entity_id=pu["id"], status="success")
         return {"token": token, "user": pu}
+
+    async def _employee_by_password(body: EmployeeLoginIn) -> dict:
+        user = await db.users.find_one({"username": body.username.strip().lower(), "role": "employee", "account_status": "active"})
+        if not user or not await asyncio.to_thread(verify_password, body.password, user.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+        return user
+
+    @r.post("/auth/employee/login/resend-2fa")
+    async def employee_resend_2fa(body: EmployeeLoginIn):
+        user = await _employee_by_password(body)
+        to, _ = await _otp_target(user)
+        if not await two_factor.send_otp(db, user, to, user.get("name", "")):
+            raise HTTPException(status_code=503, detail="Could not send the code right now. Try again shortly.")
+        return {"message": "Code resent"}
+
+    @r.post("/auth/employee/login/verify-2fa")
+    async def employee_verify_2fa(body: Employee2faIn, request: Request):
+        user = await _employee_by_password(body)
+        username = body.username.strip().lower()
+
+        async def locked():
+            await log_activity({"id": str(user["_id"]), "name": user.get("name"), "role": "employee", "username": username}, "employee_2fa_failed_locked", request,
+                               entity_type="employee", entity_id=str(user["_id"]), status="failed")
+        await two_factor.verify_code(db, user, body.code, locked)
+        out = await _finish_employee_login(user, username, two_factor.client_ip(request), request)
+        if body.remember_device:
+            out["trusted_device"] = await two_factor.issue_trusted(db, user, request)
+        return out
 
     @r.post("/employee/change-password")
     async def employee_change_password(body: ChangePasswordIn, request: Request, emp: dict = Depends(require_employee)):

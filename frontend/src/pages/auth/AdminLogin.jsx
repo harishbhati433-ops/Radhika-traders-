@@ -54,7 +54,7 @@ export default function AdminLogin() {
   if (twoFa) {
     return (
       <AuthShell installAudience="admin" title="Verify it's you" subtitle="Step 2 of 2 — enter the code from your email">
-        <AdminTwoFactorStep email={email} password={password} onSuccess={finish} onBack={() => setTwoFa(false)} />
+        <AdminTwoFactorStep credentials={{ email, password, portal: "admin" }} sentTo={email} onSuccess={finish} onBack={() => setTwoFa(false)} />
       </AuthShell>
     );
   }

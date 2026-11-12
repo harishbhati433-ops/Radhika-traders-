@@ -3,8 +3,9 @@ import { toast } from "sonner";
 import { Loader2, MailCheck, ShieldCheck } from "lucide-react";
 import api, { formatApiErrorDetail, setTrustedDevice } from "../lib/api";
 
-// Second step of admin login: 6-digit email code, optional "trust this device for 30 days".
-export function AdminTwoFactorStep({ email, password, onSuccess, onBack }) {
+// Second step of a staff login: 6-digit email code, optional "trust this device for 30 days".
+// credentials = body sent with verify/resend (admin: {email,password,portal}; employee: {username,password}).
+export function AdminTwoFactorStep({ credentials, sentTo, viaAdmin = false, verifyUrl = "/auth/login/verify-2fa", resendUrl = "/auth/login/resend-2fa", onSuccess, onBack }) {
   const [code, setCode] = useState("");
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState("");
@@ -19,7 +20,7 @@ export function AdminTwoFactorStep({ email, password, onSuccess, onBack }) {
     if (code.length !== 6) return;
     setBusy("verify");
     try {
-      const { data } = await api.post("/auth/login/verify-2fa", { email, password, portal: "admin", code, remember_device: remember });
+      const { data } = await api.post(verifyUrl, { ...credentials, code, remember_device: remember });
       setTrustedDevice(data.trusted_device || "");
       onSuccess(data);
     } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Verification failed"); setCode(""); inputRef.current?.focus(); }
@@ -27,7 +28,7 @@ export function AdminTwoFactorStep({ email, password, onSuccess, onBack }) {
   };
   const resend = async () => {
     setBusy("resend");
-    try { await api.post("/auth/login/resend-2fa", { email, password, portal: "admin" }); toast.success("New code sent to your email"); setCooldown(45); }
+    try { await api.post(resendUrl, credentials); toast.success("New code sent"); setCooldown(45); }
     catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Could not resend"); }
     finally { setBusy(""); }
   };
@@ -36,7 +37,7 @@ export function AdminTwoFactorStep({ email, password, onSuccess, onBack }) {
     <form onSubmit={verify} className="space-y-4" data-testid="admin-2fa-step">
       <div className="flex items-start gap-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
         <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-        <div><p className="font-bold">2-Step Verification</p><p className="mt-0.5 text-xs">A 6-digit code was sent to <b data-testid="admin-2fa-email">{email}</b>. It expires in 5 minutes.</p></div>
+        <div><p className="font-bold">2-Step Verification</p><p className="mt-0.5 text-xs">{viaAdmin ? <>A 6-digit code was sent to <b data-testid="admin-2fa-email">{sentTo}</b>. Ask them for it to continue.</> : <>A 6-digit code was sent to <b data-testid="admin-2fa-email">{sentTo}</b>. It expires in 5 minutes.</>}</p></div>
       </div>
       <input ref={inputRef} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} value={code} data-testid="admin-2fa-code"
         onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
