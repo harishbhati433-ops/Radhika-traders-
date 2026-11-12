@@ -50,7 +50,7 @@ export default function AdminEmailLog() {
       )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {FILTERS.map(([k, l]) => <button key={k} onClick={() => setStatus(k)} data-testid={`email-log-filter-${k || "all"}`} className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${status === k ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{l}</button>)}
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search email or subject…" data-testid="email-log-search" className="h-9 w-64" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search email or subject…" data-testid="email-log-search" className="h-9 w-full sm:w-64" />
         <button onClick={load} data-testid="email-log-refresh" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
       </div>
       <p className="mb-3 text-xs text-slate-500">Every email the system sends (attendance, reminders, leave, salary, campaign status, OTP…) is recorded here with the exact provider response. Reminders that fail are retried automatically on the next 15-minute run.</p>

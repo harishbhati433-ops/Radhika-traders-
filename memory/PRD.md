@@ -772,3 +772,6 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## 2026-06 — Toast position fix
 - Toasts (sonner) moved from top-right to bottom-center on ≥768px (top-center on mobile) so "Lead updated" etc. never cover a modal's X close button (App.js Toaster).
+
+## 2026-06 — Mobile search box full width
+- Admin Customers / Campaigns / Wallets / Email Log search inputs take the full row on mobile (`basis-full sm:basis-auto …`), desktop layout unchanged.

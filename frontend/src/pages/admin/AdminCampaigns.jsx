@@ -52,7 +52,7 @@ export default function AdminCampaigns() {
   return (
     <DashboardLayout nav={adminNav} title="Campaign Management">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative max-w-xs flex-1">
+        <div className="relative basis-full sm:basis-auto sm:max-w-xs sm:flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input data-testid="admin-campaign-search" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" disabled={showArchived} />
         </div>
