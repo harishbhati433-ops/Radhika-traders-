@@ -10,6 +10,7 @@ import { Loader2, Lock, ShieldAlert } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
 import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
 import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
+import { AdminTwoFactorStep } from "../../components/AdminTwoFactorStep";
 
 const saved = () => loadRemembered("admin");
 
@@ -19,8 +20,16 @@ export default function AdminLogin() {
   const [remember, setRemember] = useState(() => !!saved());
   const [loading, setLoading] = useState(false);
   const [lockMsg, setLockMsg] = useState("");
+  const [twoFa, setTwoFa] = useState(false);
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
+
+  const finish = (data) => {
+    if (remember) saveRemembered("admin", email, password); else clearRemembered("admin");
+    loginWithToken(data.token, data.user);
+    toast.success("Welcome, Admin!");
+    nav("/admin");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -28,21 +37,27 @@ export default function AdminLogin() {
     setLockMsg("");
     try {
       const { data } = await api.post("/auth/login", { email, password, portal: "admin" });
+      if (data.two_factor_required) { setTwoFa(true); toast.success(data.message); return; }
       if (data.user.role !== "admin") {
         toast.error("This login is for admins only.");
         setLoading(false);
         return;
       }
-      if (remember) saveRemembered("admin", email, password); else clearRemembered("admin");
-      loginWithToken(data.token, data.user);
-      toast.success("Welcome, Admin!");
-      nav("/admin");
+      finish(data);
     } catch (err) {
       const msg = formatApiErrorDetail(err.response?.data?.detail) || "Login failed";
       if (err.response?.status === 429) setLockMsg(msg);
       toast.error(msg);
     } finally { setLoading(false); }
   };
+
+  if (twoFa) {
+    return (
+      <AuthShell installAudience="admin" title="Verify it's you" subtitle="Step 2 of 2 — enter the code from your email">
+        <AdminTwoFactorStep email={email} password={password} onSuccess={finish} onBack={() => setTwoFa(false)} />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell installAudience="admin" title="Admin Access" subtitle="Restricted — Radhika Traders control panel">

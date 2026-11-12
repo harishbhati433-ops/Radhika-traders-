@@ -763,3 +763,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - `components/RouteSeo.jsx` (mounted in App.js inside BrowserRouter): per-route title/description/canonical for public pages; `noindex, nofollow` + neutral title for /admin*, /employee*, gate links (/rt-control-hb27, /rt-team-9k4e), /app/* account pages, /maintenance, /offer-ended.
 - Backend middleware adds `X-Robots-Tag: noindex, nofollow` on all /api responses. Server-side JWT auth/RBAC already enforced (admin endpoints 401 without token).
 - Needs Re-publish + Search Console: submit sitemap, Removals → temporary removal of /admin/login, /employee/login, gate URLs, then URL Inspection → Request indexing so Google sees noindex.
+
+## 2026-06 — Admin 2-Step Verification (email OTP + trusted devices)
+- /auth/login (portal=admin): after password OK, unless `X-Trusted-Device` header matches a valid `admin_trusted_devices` row → sends 6-digit OTP (purpose admin_2fa, sha256 hashed, 5 min, 5 wrong tries then discarded, resend throttle 45s) and returns `{two_factor_required:true}`. Customers/employees unaffected.
+- POST /auth/login/verify-2fa {email,password,code,remember_device} → token (+ `trusted_device` 32-byte token, 30 days, hash stored). POST /auth/login/resend-2fa. GET/DELETE /admin/security/trusted-devices/{id|all}. Security log events: 2fa_challenge, 2fa_verified, 2fa_failed_locked, trusted_device(s)_revoked.
+- Frontend: `AdminTwoFactorStep.jsx` (code input, trust checkbox default ON, resend cooldown), `TrustedDevices.jsx` panel on /admin/security; token in localStorage `rt_admin_trusted_device`, sent via api.js interceptor.
+- Verified via curl (challenge, wrong code, success+trust, reuse blocked, trusted-header skip, revoke-all) + browser (2FA screen → login → panel shows "This device"). Test bypass documented in test_credentials.md.

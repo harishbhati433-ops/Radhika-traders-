@@ -2,6 +2,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import { getToken, clearSession } from "./portal";
 
+// Admin 2-step verification: a device the owner marked "trusted" skips the email OTP for 30 days.
+const TDEV_KEY = "rt_admin_trusted_device";
+export const getTrustedDevice = () => { try { return localStorage.getItem(TDEV_KEY) || ""; } catch { return ""; } };
+export const setTrustedDevice = (t) => { try { t ? localStorage.setItem(TDEV_KEY, t) : localStorage.removeItem(TDEV_KEY); } catch {} };
+
 const ENV_URL = process.env.REACT_APP_BACKEND_URL;
 const sameHost = (() => {
   try { return new URL(ENV_URL).host === window.location.host; } catch { return false; }
@@ -89,6 +94,8 @@ export const prefetchApi = (list) => Promise.allSettled(list.filter(([url, param
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const tdev = getTrustedDevice();
+  if (tdev) config.headers["X-Trusted-Device"] = tdev;
   return config;
 });
 

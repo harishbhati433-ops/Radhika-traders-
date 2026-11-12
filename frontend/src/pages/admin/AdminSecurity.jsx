@@ -2,6 +2,7 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { adminNav } from "./nav";
 import { SecuritySettings } from "../../components/SecuritySettings";
 import { AppLockSettings } from "../../components/applock/AppLockSettings";
+import { TrustedDevices } from "../../components/TrustedDevices";
 import { ShutdownControl } from "../../components/ShutdownControl";
 import { useAuth } from "../../context/AuthContext";
 import { ShieldAlert } from "lucide-react";
@@ -29,6 +30,7 @@ export default function AdminSecurity() {
           ))}
         </div>
       </div>
+      <div className="mb-6"><TrustedDevices /></div>
       <div className="mb-6"><AppLockSettings /></div>
       <SecuritySettings showTxn={false} />
     </DashboardLayout>

@@ -7,6 +7,7 @@ import re
 import uuid
 import json
 import hashlib
+import secrets
 from pymongo.errors import DuplicateKeyError
 import logging
 from pathlib import Path
@@ -48,7 +49,7 @@ from contact_routes import build_router as build_contact_router
 from team_routes import build_router as build_team_router
 from stories_routes import build_router as build_stories_router
 from password_reset import build_router as build_password_reset_router
-from login_alerts import record_admin_login, notify_admin_login_locked
+from login_alerts import record_admin_login, notify_admin_login_locked, describe_ua
 import contact_settings
 import push_service
 import assistant_routes
@@ -294,6 +295,44 @@ class LoginIn(BaseModel):
 
 class LoginEmailOtpIn(LoginIn):
     code: str
+
+
+class Login2faIn(LoginIn):
+    code: str
+    remember_device: bool = False
+
+
+TRUSTED_DEVICE_DAYS = 30
+TWO_FA_MAX_TRIES = 5
+
+
+def _tdev_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _trusted_device_ok(user: dict, request: Request) -> bool:
+    tok = request.headers.get("x-trusted-device", "")
+    if not tok:
+        return False
+    rec = await db.admin_trusted_devices.find_one({"user_id": str(user["_id"]), "token_hash": _tdev_hash(tok)})
+    if not rec or rec["expires_at"] < now_iso():
+        return False
+    await db.admin_trusted_devices.update_one({"_id": rec["_id"]}, {"$set": {"last_used": now_iso(), "ip": _client_ip(request)}})
+    return True
+
+
+async def _send_2fa_otp(user: dict) -> bool:
+    email = user["email"]
+    recent = await db.otp_codes.find_one({"email": email, "purpose": "admin_2fa", "used": False, "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()}})
+    if recent:
+        return True
+    code = generate_otp()
+    await db.otp_codes.delete_many({"email": email, "purpose": "admin_2fa"})
+    await db.otp_codes.insert_one({"email": email, "code_hash": _tdev_hash(code), "purpose": "admin_2fa", "tries": 0,
+                                   "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(), "used": False, "created_at": now_iso()})
+    sent = await send_otp_email(email, user.get("name", ""), code, "admin_2fa")
+    logger.info(f"[OTP admin_2fa] {email} (sent={bool(sent)})")
+    return bool(sent)
 
 
 class AdminEmailChangeIn(BaseModel):
@@ -821,7 +860,76 @@ async def login(body: LoginIn, request: Request, background: BackgroundTasks):
     if user["role"] == "customer" and user.get("pending_email_verification"):
         await _send_email_change_otp(user)
         return {"otp_required": True, "email": email, "message": "Your login email was updated by Radhika Traders. Enter the OTP sent to this new email to continue."}
+    if user["role"] == "admin" and user.get("two_factor_enabled", True) and not await _trusted_device_ok(user, request):
+        if not await _send_2fa_otp(user):
+            raise email_service.otp_unavailable()
+        await _log_security(str(user["_id"]), "2fa_challenge", request, f"OTP sent · IP {ip}")
+        return {"two_factor_required": True, "email": email, "message": "Verification code sent to your email."}
     return await _finish_login(user, body, request, background)
+
+
+async def _verify_admin_password(body: LoginIn) -> dict:
+    user = await db.users.find_one({"email": body.email.lower(), "role": "admin"})
+    if not user or not await asyncio.to_thread(verify_password, body.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    return user
+
+
+@api.post("/auth/login/resend-2fa")
+async def login_resend_2fa(body: LoginIn):
+    user = await _verify_admin_password(body)
+    if not await _send_2fa_otp(user):
+        raise email_service.otp_unavailable()
+    return {"message": "Code resent"}
+
+
+@api.post("/auth/login/verify-2fa")
+async def login_verify_2fa(body: Login2faIn, request: Request, background: BackgroundTasks):
+    user = await _verify_admin_password(body)
+    rec = await db.otp_codes.find_one({"email": user["email"], "purpose": "admin_2fa", "used": False})
+    if not rec or rec["expires_at"] < now_iso():
+        raise HTTPException(status_code=400, detail="Code expired. Please request a new one.")
+    if rec.get("tries", 0) >= TWO_FA_MAX_TRIES:
+        await db.otp_codes.delete_one({"_id": rec["_id"]})
+        await _log_security(str(user["_id"]), "2fa_failed_locked", request, f"IP {_client_ip(request)}")
+        raise HTTPException(status_code=429, detail="Too many wrong codes. Request a new code.")
+    if rec["code_hash"] != _tdev_hash(body.code.strip()):
+        await db.otp_codes.update_one({"_id": rec["_id"]}, {"$inc": {"tries": 1}})
+        left = TWO_FA_MAX_TRIES - rec.get("tries", 0) - 1
+        raise HTTPException(status_code=400, detail=f"Wrong code. {left} attempt{'s' if left != 1 else ''} left.")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+    await _log_security(str(user["_id"]), "2fa_verified", request, f"IP {_client_ip(request)}")
+    out = await _finish_login(user, body, request, background)
+    if body.remember_device:
+        tok = secrets.token_urlsafe(32)
+        browser, os_name = describe_ua(request.headers.get("user-agent", ""))
+        await db.admin_trusted_devices.insert_one({"user_id": str(user["_id"]), "token_hash": _tdev_hash(tok), "browser": browser, "os": os_name, "ip": _client_ip(request),
+                                                   "created_at": now_iso(), "last_used": now_iso(), "expires_at": (datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS)).isoformat()})
+        out["trusted_device"] = tok
+    return out
+
+
+@api.get("/admin/security/trusted-devices")
+async def list_trusted_devices(request: Request, admin: dict = Depends(require_admin)):
+    cur = request.headers.get("x-trusted-device", "")
+    rows = await db.admin_trusted_devices.find({"user_id": admin["id"], "expires_at": {"$gt": now_iso()}}).sort("last_used", -1).to_list(50)
+    return [{"id": str(r["_id"]), "browser": r["browser"], "os": r["os"], "ip": r.get("ip", ""), "created_at": r["created_at"], "last_used": r["last_used"], "expires_at": r["expires_at"],
+             "current": bool(cur) and r["token_hash"] == _tdev_hash(cur)} for r in rows]
+
+
+@api.delete("/admin/security/trusted-devices/{tid}")
+async def revoke_trusted_device(tid: str, request: Request, admin: dict = Depends(require_admin)):
+    if tid == "all":
+        res = await db.admin_trusted_devices.delete_many({"user_id": admin["id"]})
+        await _log_security(admin["id"], "trusted_devices_revoked", request, f"{res.deleted_count} device(s)")
+        return {"ok": True, "removed": res.deleted_count}
+    if not ObjectId.is_valid(tid):
+        raise HTTPException(status_code=404, detail="Device not found")
+    res = await db.admin_trusted_devices.delete_one({"_id": ObjectId(tid), "user_id": admin["id"]})
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Device not found")
+    await _log_security(admin["id"], "trusted_device_revoked", request, tid)
+    return {"ok": True}
 
 
 async def _finish_login(user: dict, body: LoginIn, request: Request, background: BackgroundTasks):
@@ -3768,6 +3876,7 @@ async def _ensure_schema():
         await db.pwd_reset_otps.create_index("email")
         await db.otp_locks.create_index("identifier", unique=True)
         await db.admin_devices.create_index([("user_id", 1), ("fingerprint", 1)], unique=True)
+        await db.admin_trusted_devices.create_index([("user_id", 1), ("token_hash", 1)])
         await db.attendance.create_index([("employee_id", 1), ("date", 1)], unique=True)
         await db.salary_adjustments.create_index([("employee_id", 1), ("month", 1)], unique=True)
         for coll, keys in (("users", [("role", 1), ("email_verified", 1), ("account_status", 1), ("created_at", -1)]), ("users", [("role", 1), ("kyc.status", 1), ("kyc.submitted_at", -1)]),
