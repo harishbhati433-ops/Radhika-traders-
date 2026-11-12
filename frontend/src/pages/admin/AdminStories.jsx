@@ -11,7 +11,7 @@ import { Upload, Loader2, Trash2, Power, Pencil, Eye, Users, RefreshCw, Clock, S
 import { StoryViewersDialog } from "../../components/StoryViewersDialog";
 
 const empty = { title: "", caption: "", category: "Radhika Updates", media_type: "image", media_url: "", media_path: "", bg_color: "#7c1d1d", link: "", campaign_id: "", auto_expire: true, active: true };
-const left = (iso) => { const ms = new Date(iso) - Date.now(); if (ms <= 0) return "expired"; const h = Math.floor(ms / 3600000), m = Math.round((ms % 3600000) / 60000); return h ? `${h}h ${m}m left` : `${m}m left`; };
+const left = (iso) => { const ms = new Date(iso) - Date.now(); if (ms <= 0) return "expired"; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h ? `${h}h ${m}m left` : `${m}m left`; };
 
 function MediaUpload({ f, setF }) {
   const ref = useRef();

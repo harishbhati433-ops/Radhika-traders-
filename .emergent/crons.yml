@@ -29,6 +29,8 @@ crons:
     timezone: "Asia/Kolkata"
     endpoint: "{{BASE_URL}}/api/cron/stories-cleanup"
     method: POST
+    headers:
+      Authorization: "Bearer {{WEBHOOK_CRON_SECRET}}"
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
   - name: email-retry

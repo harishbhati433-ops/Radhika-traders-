@@ -1,0 +1,43 @@
+{
+  "summary": "Stories feature tested end-to-end. Backend: 18/18 pytest cases pass (upload webp/400/413, create text/image/24h expiry/validation, customer feed shape + no leakage + 401, view dedupe + viewers list with mobile/search/pagination, activate/deactivate/republish/auto_expire edit, campaign-story title lock, Mongo-forced expiry, campaign pause->hidden->live->visible, delete manual (views removed, 404) & delete campaign 400, customer 403 on admin, cron 401/202). Frontend: customer mobile dashboard shows stories-bar with 38 rings; viewer opens full-screen above header, text/image media, progress, next/prev/close, CTA on linked story, ring turns grey after view; wallet stats, OfferBanners and Refer & Earn still render. Admin /admin/stories: form, text toggle, auto-expire default checked, publish, card stats/buttons, viewers dialog (totals, search, row with name/ID/mobile/count), toggle, edit, delete confirm; campaign section 36 cards with 24h checkbox and no Edit/Delete; nav 'Stories' link under Campaigns; /admin/campaigns loads. Only minor issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "sync_campaign_stories (GET /api/stories, GET /api/admin/stories)", "issue": "Upsert on (kind,campaign_id) with NON-unique index; concurrent first requests after a campaign goes live can insert duplicate campaign stories. Add a unique (partial) index on {kind:'campaign', campaign_id}."},
+      {"endpoint": "GET /api/stories", "issue": "Sync runs ~2-3 writes per live campaign on EVERY customer dashboard load (~100 DB ops for 36 campaigns). Throttle (e.g. run at most once per 60s) or move to campaign status change hook."},
+      {"endpoint": "GET /api/stories", "issue": "Query fetches find({active:true}).limit(100) BEFORE filtering expired/paused stories. Expired text stories & campaign stories stay active=true forever (cleanup only deactivates manual media stories), so over time visible stories can be pushed out of the 100 window. Filter expiry/campaign_live in the Mongo query or raise/paginate."},
+      {"endpoint": "/app/.emergent/crons.yml stories-cleanup", "issue": "No Authorization header configured while endpoint requires Bearer WEBHOOK_CRON_SECRET (email-retry entry sets headers explicitly). Same pattern as other existing crons - confirm platform injects bearer, otherwise nightly cleanup always 401."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StoryViewer", "issue": "Pause/Play resets progress: effect depends on [idx, paused] and calls setProgress(0)/acc=0 on re-run, so resuming restarts the 5s timer from 0 instead of continuing.", "selector": "[data-testid='story-pause']", "priority": "LOW"},
+      {"component": "AdminStories left()", "issue": "Shows '23h 60m left' due to Math.round on minutes; use Math.floor.", "selector": "[data-testid^='story-card-']", "priority": "LOW"},
+      {"component": "StoryViewersDialog", "issue": "Custom overlay dialog does not close on Escape key (close button works).", "selector": "[data-testid='story-viewers-dialog']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Story viewer", "issues": ["With ~38 stories the progress bar shows 38 tiny segments across one strip (barely visible); consider grouping (manual vs campaign) or capping segments."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_stories.py", "/app/test_reports/pytest/pytest_stories.xml"],
+  "action_items": [
+    "Add unique partial index for campaign stories to prevent duplicate upserts under concurrency",
+    "Throttle sync_campaign_stories on customer GET /api/stories",
+    "Filter expired/non-live stories in Mongo query (or mark expired as inactive) so 100-doc limit doesn't hide visible stories",
+    "Fix StoryViewer pause resetting progress",
+    "Use Math.floor in admin 'left' time label (23h 60m)",
+    "Add Escape-to-close on StoryViewersDialog",
+    "Verify stories-cleanup cron gets Bearer header in production"
+  ],
+  "critical_code_review_comments": [
+    "stories_routes.py ensure_indexes uses asyncio.get_event_loop().create_task at router build time - works but prefer startup event.",
+    "Campaign-status PATCH used in tests triggers in-app notifications to all customers (2 notifications per customer created by pause/live test on 1 campaign)."
+  ],
+  "updated_files": ["/app/backend/tests/test_stories.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (core flows); 3 low-priority UI bugs"},
+  "seed_data_creation": "None persisted. All TEST_ stories created were deleted; 2 seeded manual stories untouched; one live campaign paused and restored to live (36 live). testcust views recorded on seeded stories 'Office Diwali Celebration' and 'Diwali Dhamaka Offer' (view counts increased).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest /app/backend/tests/test_stories.py -p no:xdist -o addopts=''. Campaign status route is PATCH /api/campaigns/{cid}/status?status=paused|live. PinPad keys selectable via [data-testid$='-key-<digit>'] inside app-lock-screen. Viewers dialog closes via viewers-close (not Escape)."
+}

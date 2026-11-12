@@ -67,22 +67,31 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
     view_mgmt = require_perm("campaigns", "view")
 
     async def ensure_indexes():
-        await db.stories.create_index([("kind", 1), ("campaign_id", 1)])
+        await db.stories.create_index([("kind", 1), ("campaign_id", 1)], unique=True, partialFilterExpression={"kind": "campaign"}, name="uniq_campaign_story")
+        await db.stories.create_index([("active", 1), ("published_at", -1)])
         await db.story_views.create_index([("story_id", 1), ("user_id", 1)], unique=True)
         await db.story_views.create_index([("story_id", 1), ("viewed_at", -1)])
 
     asyncio.get_event_loop().create_task(ensure_indexes())
+    last_sync = {"at": 0.0}
 
     # ---------- campaign sync (no duplicate media: campaign poster/logo referenced at read time) ----------
-    async def sync_campaign_stories():
+    async def sync_campaign_stories(force: bool = False):
+        import time
+        if not force and time.monotonic() - last_sync["at"] < 60:
+            return
+        last_sync["at"] = time.monotonic()
         live = await db.campaigns.find({"status": "live"}, {"_id": 1, "offer_name": 1, "updated_at": 1}).to_list(500)
         live_ids = {str(c["_id"]) for c in live}
         for c in live:
             cid = str(c["_id"])
-            res = await db.stories.update_one({"kind": "campaign", "campaign_id": cid},
-                                              {"$setOnInsert": {"kind": "campaign", "campaign_id": cid, "category": "Live Campaigns", "auto_expire": True, "active": True,
-                                                                "published_at": iso(now()), "created_at": iso(now()), "media_type": "image"}}, upsert=True)
-            if res.upserted_id is None:
+            try:
+                res = await db.stories.update_one({"kind": "campaign", "campaign_id": cid},
+                                                  {"$setOnInsert": {"kind": "campaign", "campaign_id": cid, "category": "Live Campaigns", "auto_expire": True, "active": True,
+                                                                    "published_at": iso(now()), "created_at": iso(now()), "media_type": "image"}}, upsert=True)
+            except Exception:  # concurrent insert lost the race on the unique index — the doc exists now
+                res = None
+            if res is None or res.upserted_id is None:
                 # republish automatically when a paused campaign goes live again (new publish time → fresh 24h window)
                 await db.stories.update_one({"kind": "campaign", "campaign_id": cid, "live_cycle": {"$ne": c.get("updated_at", "")}, "campaign_live": False},
                                             {"$set": {"published_at": iso(now())}})
@@ -120,7 +129,10 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
     @r.get("/stories")
     async def list_stories(user: dict = Depends(get_current_user)):
         await sync_campaign_stories()
-        docs = await db.stories.find({"active": True}, {"viewers": 0}).sort("published_at", -1).to_list(100)
+        cutoff = iso(now() - timedelta(hours=EXPIRY_HOURS))
+        flt = {"active": True, "$and": [{"$or": [{"auto_expire": {"$ne": True}}, {"published_at": {"$gte": cutoff}}]},
+                                        {"$or": [{"kind": {"$ne": "campaign"}}, {"campaign_live": True}]}]}
+        docs = await db.stories.find(flt, {"viewers": 0}).sort("published_at", -1).to_list(100)
         items = [s for s in await hydrate(docs) if s["visible"]]
         seen = {v["story_id"] for v in await db.story_views.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1}).to_list(200)}
         public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "bg_color", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
@@ -149,7 +161,7 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
 
     @r.get("/admin/stories")
     async def admin_list(_: dict = Depends(view_mgmt)):
-        await sync_campaign_stories()
+        await sync_campaign_stories(force=True)
         docs = await db.stories.find({}).sort([("created_at", -1)]).to_list(300)
         items = await hydrate(docs)
         stats = await _stats([s["id"] for s in items])

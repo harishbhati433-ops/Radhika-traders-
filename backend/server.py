@@ -1605,6 +1605,7 @@ async def update_campaign_status(cid: str, request: Request, background: Backgro
     if old == status:
         return {"message": f"Already {status}", "status": status, "notified": False}
     await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
+    background.add_task(_stories_router.sync_campaign_stories, True)  # live-campaign stories follow the status instantly
     # Email + in-app notice is triggered here, at API level, after the DB write succeeded — every path (UI, API, old or new campaign) notifies.
     background.add_task(announce_campaign_status, c, status, _origin(request))
     await log_activity(admin, "campaign_status_changed", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
@@ -3485,7 +3486,8 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 
 _emp_router = build_employee_router(db, require_admin, log_activity, public_user)
 api.include_router(_emp_router)
-api.include_router(build_stories_router(db, require_perm, get_current_user, log_activity))
+_stories_router = build_stories_router(db, require_perm, get_current_user, log_activity)
+api.include_router(_stories_router)
 api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.require_employee, log_activity, pan_error, aadhaar_error, lookup_ifsc_info))
 from app_lock_routes import build_app_lock_router  # noqa: E402
 api.include_router(build_app_lock_router(db, get_current_user, hash_password, verify_password, send_otp_email, log_activity))

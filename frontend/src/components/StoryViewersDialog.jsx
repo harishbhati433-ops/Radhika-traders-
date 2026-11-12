@@ -18,6 +18,7 @@ export function StoryViewersDialog({ story, onClose }) {
     } finally { setBusy(false); }
   };
   useEffect(() => { const t = setTimeout(() => load(1), 250); return () => clearTimeout(t); }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const onKey = (e) => e.key === "Escape" && onClose(); window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose} data-testid="story-viewers-dialog">
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-3xl bg-white sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>

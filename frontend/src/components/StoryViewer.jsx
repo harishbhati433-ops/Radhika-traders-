@@ -16,6 +16,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const [paused, setPaused] = useState(false);
   const vidRef = useRef(null);
   const raf = useRef(0);
+  const pausedRef = useRef(false);
   const s = stories[idx];
   const isVideo = s.media_type === "video";
 
@@ -26,7 +27,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
     if (isVideo) return;
     let startAt = performance.now(), acc = 0;
     const tick = (t) => {
-      if (!paused) { acc += t - startAt; }
+      if (!pausedRef.current) { acc += t - startAt; }
       startAt = t;
       const p = Math.min(1, acc / IMAGE_MS); setProgress(p);
       if (p >= 1) return next();
@@ -34,7 +35,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
     };
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [idx, paused]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); if (e.key === "ArrowRight") next(); if (e.key === "ArrowLeft") prev(); };
@@ -46,7 +47,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const next = () => (idx + 1 < stories.length ? setIdx(idx + 1) : onClose());
   const prev = () => setIdx(Math.max(0, idx - 1));
   const onVideoTime = (e) => { const v = e.target; if (v.duration) setProgress(v.currentTime / v.duration); };
-  const togglePause = () => { setPaused((p) => { const n = !p; if (vidRef.current) n ? vidRef.current.pause() : vidRef.current.play(); return n; }); };
+  const togglePause = () => { setPaused((p) => { const n = !p; pausedRef.current = n; if (vidRef.current) n ? vidRef.current.pause() : vidRef.current.play(); return n; }); };
   const openLink = () => { onClose(); if (s.link?.startsWith("http")) window.open(s.link, "_blank"); else nav(s.link); };
 
   return createPortal(
