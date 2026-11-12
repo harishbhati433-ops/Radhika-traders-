@@ -5,6 +5,7 @@ import api from "./lib/api";
 import { prefetchForRole } from "./lib/prefetch";
 import { PwaEntry, isStandalone } from "./components/PwaEntry";
 import { GateEntry } from "./components/GateEntry";
+import { RouteSeo } from "./components/RouteSeo";
 import { GATES, hasGate } from "./lib/gate";
 import { getToken, portalFromPath } from "./lib/portal";
 import { NetworkBanner } from "./components/NetworkBanner";
@@ -168,6 +169,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <BrowserRouter>
+        <RouteSeo />
         <ShutdownGate>
         <Suspense fallback={<Fallback />}>
           <SplashDismiss />

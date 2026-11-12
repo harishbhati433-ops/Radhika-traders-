@@ -3708,6 +3708,8 @@ async def _fresh_contact(request: Request, call_next):
         await office_timing.refresh(db)
         await attendance_policy.refresh(db)
     response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
     if request.url.path.startswith("/api/files/"):
         response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
     return response

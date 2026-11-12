@@ -757,3 +757,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - StoryViewer: handles Infinity-duration WebM (seek trick), autoplay-blocked fallback (mutes + "Tap for sound" + header mute toggle `story-mute`), loading spinner / error overlay instead of black (`story-video-loading` / `story-video-error`), `poster` from thumb.
 - Stories ring previews: videos show a real frame — `videoThumbnail()` (lib/videoCompress.js) captures a 320px JPEG at upload, stored as `thumb_url/thumb_path` (StoryIn/StoryPatch, deleted with media); old videos fall back to `<video preload=metadata>` frame; text stories show bg colour + title in chosen font; play badge `story-video-badge-{id}`. Ring 62px.
 - Verified: curl Range tests (200/206/suffix/416), customer viewer plays 720x1280 webm (t advancing, duration resolved 7.17s, progress 47%), admin upload → thumb_url saved.
+
+## 2026-06 — SEO visibility + staff-panel noindex
+- `public/robots.txt` (Allow /, Disallow /api/ + private customer pages, Sitemap link) and `public/sitemap.xml` (home, campaigns, services, about, partners, contact, app/login, app/signup, terms). Admin/employee URLs intentionally NOT in robots Disallow so Googlebot can read the noindex and drop them.
+- `components/RouteSeo.jsx` (mounted in App.js inside BrowserRouter): per-route title/description/canonical for public pages; `noindex, nofollow` + neutral title for /admin*, /employee*, gate links (/rt-control-hb27, /rt-team-9k4e), /app/* account pages, /maintenance, /offer-ended.
+- Backend middleware adds `X-Robots-Tag: noindex, nofollow` on all /api responses. Server-side JWT auth/RBAC already enforced (admin endpoints 401 without token).
+- Needs Re-publish + Search Console: submit sitemap, Removals → temporary removal of /admin/login, /employee/login, gate URLs, then URL Inspection → Request indexing so Google sees noindex.

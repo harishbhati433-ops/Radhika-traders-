@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /app/dashboard
+Disallow: /app/wallet
+Disallow: /app/withdrawals
+Disallow: /app/statements
+Disallow: /app/profile
+Disallow: /app/welcome-letter
+Disallow: /app/my-leads
+Disallow: /app/my-campaigns
+Disallow: /app/reports
+
+Sitemap: https://www.radhikatraders.net/sitemap.xml
