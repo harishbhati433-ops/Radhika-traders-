@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Megaphone, Gift, PartyPopper, Camera, Bell, Sparkles } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
 import { StoryViewer } from "./StoryViewer";
@@ -8,7 +9,16 @@ const ICONS = { "Radhika Updates": Bell, "Live Campaigns": Megaphone, Offers: Gi
 export function StoriesBar() {
   const [stories, setStories] = useState(null);
   const [openIdx, setOpenIdx] = useState(-1);
+  const { search, pathname } = useLocation();
+  const nav = useNavigate();
   useEffect(() => { api.get("/stories").then(({ data }) => setStories(data)).catch(() => setStories([])); }, []);
+  useEffect(() => {
+    const want = new URLSearchParams(search).get("story");
+    if (!want || !stories) return;
+    const i = stories.findIndex((s) => s.id === want);
+    if (i >= 0) setOpenIdx(i);
+    nav(pathname, { replace: true }); // deep link from a bell notification → open that story once
+  }, [stories, search]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!stories || !stories.length) return null;
   const markSeen = (id) => setStories((l) => l.map((s) => (s.id === id ? { ...s, seen: true } : s)));
   return (

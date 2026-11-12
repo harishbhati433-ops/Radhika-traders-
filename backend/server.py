@@ -3486,7 +3486,23 @@ async def ded_log(uid: str, admin: dict = Depends(require_admin)):
 
 _emp_router = build_employee_router(db, require_admin, log_activity, public_user)
 api.include_router(_emp_router)
-_stories_router = build_stories_router(db, require_perm, get_current_user, log_activity)
+
+
+async def announce_story(story: dict):
+    """Bell + web-push to every active customer the moment an admin publishes/republishes a story."""
+    customers = await _active_customers()
+    if not customers:
+        return
+    title = f"New Story: {story.get('title') or story.get('category') or 'Radhika Traders'}"
+    body = (story.get("caption") or "Tap to watch the latest update from Radhika Traders.")[:160]
+    link = f"/app/dashboard?story={story['id']}"
+    await push_service.notify_many([{"user_id": str(u["_id"]), "title": title, "body": body, "link": link, "type": "story",
+                                     "story_id": story["id"], "read": False, "created_at": now_iso()} for u in customers])
+    await db.broadcasts.insert_one({"kind": "story", "subject": title, "message": body, "audience": "all", "recipients": len(customers), "sent": 0, "failed": 0, "queued": 0,
+                                    "channels": ["in_app", "push"], "created_at": now_iso()})
+
+
+_stories_router = build_stories_router(db, require_perm, get_current_user, log_activity, announce=announce_story)
 api.include_router(_stories_router)
 api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.require_employee, log_activity, pan_error, aadhaar_error, lookup_ifsc_info))
 from app_lock_routes import build_app_lock_router  # noqa: E402

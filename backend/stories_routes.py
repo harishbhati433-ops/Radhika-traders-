@@ -61,7 +61,7 @@ def is_expired(s: dict, at: Optional[datetime] = None) -> bool:
     return bool(e and e <= (at or now()))
 
 
-def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
+def build_router(db, require_perm, get_current_user, log_activity, announce=None) -> APIRouter:
     r = APIRouter()
     manage = require_perm("campaigns", "edit")
     view_mgmt = require_perm("campaigns", "view")
@@ -194,7 +194,7 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
         return {"path": res["path"], "url": f"/api/files/{res['path']}", "media_type": "video" if is_video else "image", "size": len(out)}
 
     @r.post("/admin/stories", status_code=201)
-    async def create_story(body: StoryIn, request: Request, admin: dict = Depends(manage)):
+    async def create_story(body: StoryIn, request: Request, background: BackgroundTasks, admin: dict = Depends(manage)):
         if body.category not in CATEGORIES:
             raise HTTPException(status_code=400, detail="Invalid category")
         if body.media_type in ("image", "video") and not body.media_url:
@@ -208,6 +208,8 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
         doc = {**body.model_dump(), "link": link, "kind": "manual", "published_at": iso(now()) if body.active else None, "created_at": iso(now()), "updated_at": iso(now()),
                "created_by": admin.get("name", ""), "campaign_live": None}
         res = await db.stories.insert_one(doc)
+        if body.active and announce:
+            background.add_task(announce, {**doc, "id": str(res.inserted_id)})  # bell + push to every active customer the moment a story is published
         await log_activity(admin, "story_created", request, entity_type="story", entity_id=str(res.inserted_id), entity_label=body.title or body.caption[:40], detail=f"{body.media_type} · {body.category}")
         return (await hydrate([{**doc, "_id": res.inserted_id}]))[0]
 
@@ -225,7 +227,7 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
         republish: Optional[bool] = None
 
     @r.put("/admin/stories/{sid}")
-    async def update_story(sid: str, body: StoryPatch, request: Request, admin: dict = Depends(manage)):
+    async def update_story(sid: str, body: StoryPatch, request: Request, background: BackgroundTasks, admin: dict = Depends(manage)):
         if not ObjectId.is_valid(sid):
             raise HTTPException(status_code=404, detail="Story not found")
         s = await db.stories.find_one({"_id": ObjectId(sid)})
@@ -241,6 +243,8 @@ def build_router(db, require_perm, get_current_user, log_activity) -> APIRouter:
             await _delete_media(s["media_path"])
         upd["updated_at"] = iso(now())
         await db.stories.update_one({"_id": s["_id"]}, {"$set": upd})
+        if body.republish and s.get("kind") != "campaign" and announce:
+            background.add_task(announce, {**s, **upd, "id": sid})
         await log_activity(admin, "story_updated", request, entity_type="story", entity_id=sid, entity_label=s.get("title", ""), detail=", ".join(sorted(upd)))
         fresh = await db.stories.find_one({"_id": s["_id"]})
         out = (await hydrate([fresh]))[0]

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import { Bell, Megaphone, ShieldCheck, Info, CheckCheck, Wallet, Banknote, UserCog, CalendarCheck, FileText } from "lucide-react";
+import { Bell, Megaphone, ShieldCheck, Info, CheckCheck, Wallet, Banknote, UserCog, CalendarCheck, FileText, CircleDashed } from "lucide-react";
 import { PushToggle } from "./PushToggle";
 import { onPushMessage, warmAudio, syncSound } from "../lib/push";
 
