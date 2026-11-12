@@ -5,14 +5,13 @@ import { DashboardLayout } from "../../components/DashboardLayout";
 import { Leaderboard } from "../../components/Leaderboard";
 import { OfferBanners } from "../../components/OfferBanners";
 import { WelcomeModal } from "../../components/WelcomeModal";
-import { ReferEarnCard } from "../../components/ReferEarnCard";
+import { ReferEarnSection } from "../../components/ReferEarnSection";
 import { customerNav } from "./nav";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
 import { toast } from "sonner";
 import { timeGreeting, greetingEmoji, capitalizeName } from "../../lib/greeting";
-import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert, Users } from "lucide-react";
-import { Collapsible } from "../../components/Collapsible";
+import { Wallet, TrendingUp, ArrowDownToLine, Clock, Copy, ArrowRight, ShieldAlert } from "lucide-react";
 import { ScratchCards } from "../../components/ScratchCards";
 import { BonusWalletCard } from "../../components/BonusWalletCard";
 import { useT } from "../../lib/i18n";
@@ -86,7 +85,7 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      <div className="mt-6"><Collapsible id="cust-refer" icon={Users} title={t("Refer & Earn")} subtitle={t("Invite friends with your link — poster, QR code & share buttons")} badge={t("Earn")} testId="refer-collapsible"><ReferEarnCard code={user?.referral_code} /></Collapsible></div>
+      <div className="mt-6"><ReferEarnSection code={user?.referral_code} /></div>
 
       {fest && campaigns.length > 0 && <div className="mt-6"><FestivalCampaigns fest={fest} campaigns={campaigns} fileUrl={fileUrl} /></div>}
 

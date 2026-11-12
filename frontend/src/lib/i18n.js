@@ -27,6 +27,7 @@ export const HI = {
   "Available Balance": "उपलब्ध बैलेंस", "Total Earnings": "कुल कमाई", "Total Withdrawn": "कुल निकासी", "Pending Withdrawal": "पेंडिंग निकासी", "Total Credited": "कुल जमा",
   "Your Referral Code": "आपका रेफरल कोड", "Share campaigns with your code to earn.": "कमाने के लिए अपने कोड से कैंपेन शेयर करें।", "Copy Code": "कोड कॉपी करें", "Referral code copied!": "रेफरल कोड कॉपी हो गया!",
   "Refer & Earn": "रेफर करें और कमाएँ", "Invite friends with your link — poster, QR code & share buttons": "अपने लिंक से दोस्तों को बुलाएँ — पोस्टर, QR कोड और शेयर बटन", "Earn": "कमाएँ",
+  "per Eligible Referral": "हर Eligible Referral पर", "You get": "आपको मिलेगा", "Friend gets": "दोस्त को मिलेगा", "referral": "रेफरल", "Show": "देखें", "Hide": "छुपाएँ",
   "Available Campaigns": "उपलब्ध कैंपेन", "View all": "सभी देखें",
   // Wallet
   "My Wallet": "मेरा वॉलेट", "Main Wallet · Available Balance": "मुख्य वॉलेट · उपलब्ध बैलेंस", "Withdrawable amount": "निकालने योग्य राशि", "Transaction History": "लेन-देन का इतिहास", "No transactions yet.": "अभी कोई लेन-देन नहीं।",
