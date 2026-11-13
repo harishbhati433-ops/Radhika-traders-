@@ -36,6 +36,8 @@ export function StoriesBar() {
     return () => window.removeEventListener("popstate", onPop);
   }, [openIdx >= 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const closeViewer = () => { if (pushedRef.current) { pushedRef.current = false; window.history.back(); } else setOpenIdx(-1); };
+  // CTA navigation: don't go "back" (that would undo the new route) — just drop the viewer and let the router replace our history entry.
+  const leaveViewer = () => { pushedRef.current = false; setOpenIdx(-1); };
   useEffect(() => {
     const want = new URLSearchParams(search).get("story");
     if (!want || !stories) return;
@@ -60,7 +62,7 @@ export function StoriesBar() {
             </button>
         ))}
       </div>
-      {openIdx >= 0 && <StoryViewer stories={stories} start={openIdx} onClose={closeViewer} onSeen={markSeen} />}
+      {openIdx >= 0 && <StoryViewer stories={stories} start={openIdx} onClose={closeViewer} onNavigate={leaveViewer} onSeen={markSeen} />}
     </div>
   );
 }

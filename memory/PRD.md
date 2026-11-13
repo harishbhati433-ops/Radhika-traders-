@@ -802,3 +802,6 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 ## 2026-06 — Dashboard API de-dup + in-app campaign detail
 - api.js adapter: non-cacheable GETs (auth/me, notifications…) now de-duplicate identical in-flight requests; telemetry POSTs (story view/react, visit, push, notifications/read, assistant) no longer wipe the GET cache. Customer dashboard: 26 → 20 API calls, 0 duplicates.
 - CampaignDetail: logged-in customers get the page inside `DashboardLayout` (customerNav, hamburger drawer: Dashboard/Campaigns/My Leads/Wallet…) instead of the public Navbar/Footer; back link → /app/my-campaigns. Public visitors unchanged.
+
+## 2026-06 — Story CTA fix
+- Bug: after the back-button change, "Open Campaign/Learn More" called onClose() → history.back() then nav(link); the async popstate undid the navigation. Fix: StoryViewer `onNavigate` (drops viewer without history.back) + `nav(link, {replace:true})`; external links open in new tab without closing logic.

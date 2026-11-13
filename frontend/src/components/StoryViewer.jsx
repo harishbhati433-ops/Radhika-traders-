@@ -37,7 +37,7 @@ function Reactions({ story }) {
   );
 }
 
-export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
+export function StoryViewer({ stories, start = 0, onClose, onNavigate, onSeen }) {
   const nav = useNavigate();
   const [idx, setIdx] = useState(start);
   const [progress, setProgress] = useState(0);
@@ -90,7 +90,11 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const onCanPlay = (e) => { setVidState("ready"); if (!pausedRef.current && e.target.paused) tryPlay(e.target); };
   const toggleMute = () => { const v = vidRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); if (v.paused && !pausedRef.current) tryPlay(v); };
   const togglePause = () => { setPaused((p) => { const n = !p; pausedRef.current = n; if (vidRef.current) n ? vidRef.current.pause() : vidRef.current.play(); return n; }); };
-  const openLink = () => { onClose(); if (s.link?.startsWith("http")) window.open(s.link, "_blank"); else nav(s.link); };
+  const openLink = () => {
+    if (s.link?.startsWith("http")) { window.open(s.link, "_blank"); return; }
+    (onNavigate || onClose)();
+    nav(s.link, { replace: true }); // replaces the viewer's history entry → Back from the campaign returns to the dashboard
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95" data-testid="story-viewer" onClick={onClose}>
