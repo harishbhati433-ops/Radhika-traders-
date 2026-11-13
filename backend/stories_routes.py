@@ -11,9 +11,21 @@ from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from storage_service import put_object, delete_object
+from storage_service import put_object, delete_object, cache_object, is_cached
 
 logger = logging.getLogger(__name__)
+
+
+def warm_media(paths):
+    """Pull story media into the local disk cache in the background so the first viewer gets instant playback."""
+    def run():
+        for p in paths:
+            if p and not is_cached(p):
+                try:
+                    cache_object(p)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"warm_media failed for {p}: {e}")
+    asyncio.get_event_loop().run_in_executor(None, run)
 APP_NAME = "radhika-traders"
 CATEGORIES = ("Radhika Updates", "Live Campaigns", "Offers", "Festival Updates", "Office Celebrations", "Other")
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -139,6 +151,7 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
                                         {"$or": [{"kind": {"$ne": "campaign"}}, {"campaign_live": True}]}]}
         docs = await db.stories.find(flt, {"viewers": 0}).sort("published_at", -1).to_list(100)
         items = [s for s in await hydrate(docs) if s["visible"]]
+        warm_media([s.get("media_path") for s in items if s.get("media_type") == "video"])
         seen = {v["story_id"] for v in await db.story_views.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1}).to_list(200)}
         mine = {x["story_id"]: x["emoji"] for x in await db.story_reactions.find({"user_id": user["id"], "story_id": {"$in": [s["id"] for s in items]}}, {"story_id": 1, "emoji": 1}).to_list(200)}
         public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "thumb_url", "bg_color", "font", "link", "published_at", "expires_at", "company", "payout", "logo_url", "campaign_id")
@@ -240,6 +253,8 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         doc = {**body.model_dump(), "link": link, "kind": "manual", "published_at": iso(now()) if body.active else None, "created_at": iso(now()), "updated_at": iso(now()),
                "created_by": admin.get("name", ""), "campaign_live": None}
         res = await db.stories.insert_one(doc)
+        if body.media_type == "video":
+            warm_media([body.media_path])
         if body.active and announce:
             background.add_task(announce, {**doc, "id": str(res.inserted_id)})  # bell + push to every active customer the moment a story is published
         await log_activity(admin, "story_created", request, entity_type="story", entity_id=str(res.inserted_id), entity_label=body.title or body.caption[:40], detail=f"{body.media_type} · {body.category}")

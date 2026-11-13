@@ -33,7 +33,7 @@ from auth_utils import (
 )
 import email_service
 from email_service import send_otp_email, send_payment_email, send_campaign_live_email, send_campaign_status_email, campaign_live_html, campaign_status_html, send_broadcast_email, send_welcome_email, welcome_letter_paragraphs, send_report_email, send_admin_withdrawal_alert, send_email, _wrap
-from storage_service import init_storage, put_object, get_object, APP_NAME
+from storage_service import init_storage, put_object, get_object, cache_object, APP_NAME
 from share_kit import qr_png, poster_png
 from xlsx_util import xlsx_bytes
 from rbac import make_require_perm, make_log_activity, has_perm
@@ -3251,40 +3251,12 @@ async def upload_image(file: UploadFile = File(...), user: dict = Depends(get_cu
     return {"path": result["path"], "url": f"/api/files/{result['path']}"}
 
 
-MEDIA_CACHE_DIR = "/tmp/rt_media_cache"
-MEDIA_CACHE_MAX = 400 * 1024 * 1024
-
-
-def _cached_media(path: str) -> str:
-    """Download object to a local disk cache once (streamed, no RAM spike) so videos can be served with HTTP Range."""
-    import hashlib
-    from storage_service import stream_object
-    os.makedirs(MEDIA_CACHE_DIR, exist_ok=True)
-    fp = os.path.join(MEDIA_CACHE_DIR, hashlib.sha1(path.encode()).hexdigest())
-    if os.path.exists(fp) and os.path.getsize(fp) > 0:
-        os.utime(fp, None)
-        return fp
-    tmp = f"{fp}.{uuid.uuid4().hex}.part"
-    with open(tmp, "wb") as f:
-        for chunk in stream_object(path):
-            f.write(chunk)
-    os.replace(tmp, fp)
-    files = sorted((os.path.join(MEDIA_CACHE_DIR, n) for n in os.listdir(MEDIA_CACHE_DIR) if not n.endswith(".part")), key=os.path.getmtime)
-    total = sum(os.path.getsize(x) for x in files)
-    for x in files:
-        if total <= MEDIA_CACHE_MAX or x == fp:
-            break
-        total -= os.path.getsize(x)
-        os.remove(x)
-    return fp
-
-
 @api.get("/files/{path:path}")
 async def serve_file(path: str, request: Request):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
-    fp = await asyncio.to_thread(_cached_media, path)
+    fp = await asyncio.to_thread(cache_object, path)
     size = os.path.getsize(fp)
     ct = record.get("content_type") or "application/octet-stream"
     headers = {"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=31536000, immutable"}

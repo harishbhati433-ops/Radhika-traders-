@@ -1,7 +1,8 @@
 // Browser-side video re-encode (canvas + MediaRecorder) — zero server RAM/CPU.
 export const canCompressVideo = () => typeof MediaRecorder !== "undefined" && typeof HTMLCanvasElement.prototype.captureStream === "function";
 
-const MIMES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+// Prefer MP4/H.264 (hardware-decoded everywhere, incl. iPhone); fall back to WebM VP8 (cheap to decode on old Androids), then VP9.
+const MIMES = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
 
 // Reliable duration even for WebM files without duration metadata (MediaRecorder / screen recorders report Infinity).
 export const videoDuration = (file) => new Promise((res) => {
@@ -17,7 +18,7 @@ export const videoDuration = (file) => new Promise((res) => {
   v.src = url;
 });
 
-export async function compressVideo(file, { maxW = 720, maxH = 1280, videoBps = 1_500_000, audioBps = 96_000, onProgress } = {}) {
+export async function compressVideo(file, { maxW = 720, maxH = 1280, videoBps = 1_200_000, audioBps = 96_000, onProgress } = {}) {
   const mime = MIMES.find((m) => MediaRecorder.isTypeSupported(m));
   if (!mime) throw new Error("unsupported");
   const duration = await videoDuration(file);

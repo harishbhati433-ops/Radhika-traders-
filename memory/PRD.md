@@ -789,3 +789,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## 2026-06 — Secret link opening made robust
 - GateOrNotFound: spinner while checking (`gate-checking`); network error/timeout (interceptor sets status 0) → auto-retry ×2 then "Connection problem / Try again" card (`gate-offline`, `gate-retry`) with in-app-browser tip — never a false 404. Trailing punctuation copied from chat (`.,;:!?)`) stripped from the slug. Real 404 only when the server says the slug is unknown.
+
+## 2026-06 — Story video buffering + back button + perf
+- Perf check (prod): main bundle 160 KB gz, TTFB ~0.4 s, 49 lazy routes — site itself fast; the pain was video delivery.
+- Video delivery: `storage_service.cache_object()/is_cached()` (moved from server.py); `stories_routes.warm_media()` pre-downloads video media into the disk cache in the background on publish and whenever a customer loads /stories → first viewer no longer waits for storage. StoryViewer prefetches the next video story (`story-prefetch-video`, hidden preload=auto).
+- Upload: compress when > 8 MB OR bitrate > 2.5 Mbps (was only > 20 MB); 1.2 Mbps target; MediaRecorder MIME preference MP4/H.264 → WebM VP8 → VP9 for broad hardware decode (iPhone-safe when Android Chrome supports mp4 recording).
+- Back button: StoriesBar pushes a history entry when a story opens; popstate closes the viewer; X/Esc call history.back() so the dashboard stays. Verified at 390px Android UA (go_back → viewer closed, still /app/dashboard).

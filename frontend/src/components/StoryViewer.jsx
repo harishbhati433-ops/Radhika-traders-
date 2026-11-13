@@ -50,6 +50,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
   const durRef = useRef(0);
   const s = stories[idx];
   const isVideo = s.media_type === "video";
+  const nextVideo = stories.slice(idx + 1, idx + 3).find((x) => x.media_type === "video" && x.media_url) || null; // warm the next video while this one plays
 
   useEffect(() => {
     if (!s) return;
@@ -113,6 +114,7 @@ export function StoryViewer({ stories, start = 0, onClose, onSeen }) {
           {isVideo && vidState === "loading" && <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center" data-testid="story-video-loading"><Loader2 className="h-10 w-10 animate-spin text-white/80" /></div>}
           {isVideo && vidState === "error" && <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2 px-8 text-center text-white" data-testid="story-video-error"><VideoOff className="h-10 w-10 text-white/70" /><p className="text-sm text-white/80">Video load nahi ho paaya — network check karke dobara try karein</p></div>}
           {isVideo && muted && vidState === "ready" && <button type="button" onClick={toggleMute} className="absolute left-1/2 top-24 z-[15] -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-xs font-bold text-white backdrop-blur" data-testid="story-tap-sound"><VolumeX className="mr-1 inline h-4 w-4" /> Tap for sound</button>}
+          {nextVideo && <video key={`pre-${nextVideo.id}`} src={fileUrl(nextVideo.media_url)} preload="auto" muted playsInline className="hidden" aria-hidden="true" data-testid="story-prefetch-video" />}
           {s.media_type === "text" && (
             <div className="px-8 text-center text-white" data-testid="story-media-text" style={fontCss(s.font)}>
               <div className="text-3xl leading-tight drop-shadow">{s.title}</div>

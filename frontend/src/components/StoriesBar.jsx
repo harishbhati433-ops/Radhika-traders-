@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Megaphone, Gift, PartyPopper, Camera, Bell, Sparkles, Play } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
@@ -24,7 +24,18 @@ export function StoriesBar() {
   const [openIdx, setOpenIdx] = useState(-1);
   const { search, pathname } = useLocation();
   const nav = useNavigate();
+  const pushedRef = useRef(false);
   useEffect(() => { api.get("/stories").then(({ data }) => setStories(data)).catch(() => setStories([])); }, []);
+  // Mobile back button closes the viewer instead of leaving the site: push a history entry while open.
+  useEffect(() => {
+    if (openIdx < 0) return;
+    window.history.pushState({ rtStory: true }, "");
+    pushedRef.current = true;
+    const onPop = () => { pushedRef.current = false; setOpenIdx(-1); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [openIdx >= 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeViewer = () => { if (pushedRef.current) { pushedRef.current = false; window.history.back(); } else setOpenIdx(-1); };
   useEffect(() => {
     const want = new URLSearchParams(search).get("story");
     if (!want || !stories) return;
@@ -49,7 +60,7 @@ export function StoriesBar() {
             </button>
         ))}
       </div>
-      {openIdx >= 0 && <StoryViewer stories={stories} start={openIdx} onClose={() => setOpenIdx(-1)} onSeen={markSeen} />}
+      {openIdx >= 0 && <StoryViewer stories={stories} start={openIdx} onClose={closeViewer} onSeen={markSeen} />}
     </div>
   );
 }

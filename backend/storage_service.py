@@ -77,3 +77,36 @@ def delete_object(path: str) -> bool:
         return True
     resp.raise_for_status()
     return True
+
+
+MEDIA_CACHE_DIR = "/tmp/rt_media_cache"
+MEDIA_CACHE_MAX = 400 * 1024 * 1024
+
+
+def cache_object(path: str) -> str:
+    """Download an object to the local disk cache once (streamed, no RAM spike) so it can be served with HTTP Range instantly."""
+    import hashlib
+    import uuid
+    os.makedirs(MEDIA_CACHE_DIR, exist_ok=True)
+    fp = os.path.join(MEDIA_CACHE_DIR, hashlib.sha1(path.encode()).hexdigest())
+    if os.path.exists(fp) and os.path.getsize(fp) > 0:
+        os.utime(fp, None)
+        return fp
+    tmp = f"{fp}.{uuid.uuid4().hex}.part"
+    with open(tmp, "wb") as f:
+        for chunk in stream_object(path):
+            f.write(chunk)
+    os.replace(tmp, fp)
+    files = sorted((os.path.join(MEDIA_CACHE_DIR, n) for n in os.listdir(MEDIA_CACHE_DIR) if not n.endswith(".part")), key=os.path.getmtime)
+    total = sum(os.path.getsize(x) for x in files)
+    for x in files:
+        if total <= MEDIA_CACHE_MAX or x == fp:
+            break
+        total -= os.path.getsize(x)
+        os.remove(x)
+    return fp
+
+
+def is_cached(path: str) -> bool:
+    import hashlib
+    return os.path.exists(os.path.join(MEDIA_CACHE_DIR, hashlib.sha1(path.encode()).hexdigest()))
