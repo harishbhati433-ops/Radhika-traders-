@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PublicLayout } from "../components/PublicLayout";
+import { DashboardLayout } from "../components/DashboardLayout";
+import { customerNav } from "./customer/nav";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShareButtons } from "../components/ShareButtons";
 import { ShareKit, useBlobUrl } from "../components/ShareKit";
@@ -21,6 +23,10 @@ function Field({ label, value }) {
   );
 }
 
+function Shell({ inApp, title, children }) {
+  return inApp ? <DashboardLayout nav={customerNav} title={title}>{children}</DashboardLayout> : <PublicLayout>{children}</PublicLayout>;
+}
+
 export default function CampaignDetail() {
   const { slug } = useParams();
   const { user } = useAuth();
@@ -39,8 +45,13 @@ export default function CampaignDetail() {
   }, [user]);
   const poster = useBlobUrl(user?.role === "customer" ? `/share/poster/${slug}` : "", [slug, user?.role]);
 
-  if (notFound) return <PublicLayout><div className="mx-auto max-w-2xl px-6 py-24 text-center"><h1 className="font-display text-2xl font-bold">Campaign not found</h1><Link to="/campaigns" className="mt-4 inline-block text-red-600">← Back to campaigns</Link></div></PublicLayout>;
-  if (!c) return <PublicLayout><div className="flex justify-center py-32"><div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div></PublicLayout>;
+  // Logged-in customers see this page inside their app shell (Dashboard / Campaigns / Wallet menu), not the public website chrome.
+  const inApp = user?.role === "customer";
+  const shell = { inApp, title: c?.offer_name || "Campaign" };
+  const backTo = inApp ? "/app/my-campaigns" : "/campaigns";
+
+  if (notFound) return <Shell {...shell}><div className="mx-auto max-w-2xl px-6 py-24 text-center"><h1 className="font-display text-2xl font-bold">Campaign not found</h1><Link to={backTo} className="mt-4 inline-block text-red-600">← Back to campaigns</Link></div></Shell>;
+  if (!c) return <Shell {...shell}><div className="flex justify-center py-32"><div className="h-10 w-10 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div></Shell>;
 
   const origin = window.location.origin;
   const refCode = user?.referral_code;
@@ -60,15 +71,15 @@ export default function CampaignDetail() {
     `✅ 100% online · Free to apply\n\n👉 Apply using my link: ${referralLink}\n\n🏆 *Radhika Traders* · Trusted Partner for Financial Growth\n📞 WhatsApp: ${fmtWa(user?.mobile || contact.whatsapp_number)}\n\n_*T&C apply_`;
 
   return (
-    <PublicLayout>
+    <Shell {...shell}>
       {/* Banner */}
-      <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] sm:h-60">
+      <div className={`relative w-full overflow-hidden bg-gradient-to-br from-red-700 via-red-800 to-[#0B0F17] ${inApp ? "h-40 rounded-2xl sm:h-52" : "h-48 sm:h-60"}`}>
         {c.banner_url && <img src={fileUrl(c.banner_url)} alt="" className="h-full w-full object-cover opacity-40" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
       </div>
 
-      <section className="mx-auto max-w-6xl px-6 pb-16">
-        <Link to="/campaigns" className="mb-4 mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-red-600">
+      <section className={inApp ? "pb-8" : "mx-auto max-w-6xl px-6 pb-16"}>
+        <Link to={backTo} className="mb-4 mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-red-600" data-testid="campaign-back" style={{ marginLeft: inApp ? 96 : 0 }}>
           <ArrowLeft className="h-4 w-4" /> All Campaigns
         </Link>
 
@@ -173,6 +184,6 @@ export default function CampaignDetail() {
         </div>
         {user?.role === "customer" && <div className="mt-8"><ShareKit c={c} link={referralLink} user={user} /></div>}
       </section>
-    </PublicLayout>
+    </Shell>
   );
 }

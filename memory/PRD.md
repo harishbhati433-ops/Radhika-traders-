@@ -798,3 +798,7 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## 2026-06 — Story video duration raised to 60 sec
 - Admin upload accepts videos up to 60 sec (was 30), still ≤50 MB pick / ≤20 MB after client-side compression (60 s @ ~1.3 Mbps ≈ 10 MB). Server MAX_VIDEO unchanged.
+
+## 2026-06 — Dashboard API de-dup + in-app campaign detail
+- api.js adapter: non-cacheable GETs (auth/me, notifications…) now de-duplicate identical in-flight requests; telemetry POSTs (story view/react, visit, push, notifications/read, assistant) no longer wipe the GET cache. Customer dashboard: 26 → 20 API calls, 0 duplicates.
+- CampaignDetail: logged-in customers get the page inside `DashboardLayout` (customerNav, hamburger drawer: Dashboard/Campaigns/My Leads/Wallet…) instead of the public Navbar/Footer; back link → /app/my-campaigns. Public visitors unchanged.

@@ -62,12 +62,24 @@ const fetchWithRetry = async (config, tries = 3) => {
     catch (e) { if (i >= tries - 1 || !isNetFail(e) || e.response?.status === 503) throw e; await sleep(700 * (i + 1)); }
   }
 };
+// Writes that only record telemetry don't invalidate cached lists (a story view/reaction shouldn't refetch the whole dashboard).
+const NO_INVALIDATE = /\/(stories\/[^/]+\/(view|react)|visit|track|push\/|notifications\/read|assistant)/;
 api.defaults.adapter = async (config) => {
+  const isGet = (config.method || "get").toLowerCase() === "get";
   if (!cacheable(config)) {
-    const res = await netAdapter(config);
-    if ((config.method || "get").toLowerCase() !== "get") getCache.clear();
+    if (!isGet) {
+      const res = await netAdapter(config);
+      if (!NO_INVALIDATE.test(config.url || "")) getCache.clear();
+      net(true);
+      return res;
+    }
+    // Non-cacheable GET (auth/me, notifications…): still de-dupe identical in-flight requests
+    const k = cacheKey(config);
+    let q = inflight.get(k);
+    if (!q) { q = netAdapter(config).finally(() => inflight.delete(k)); inflight.set(k, q); }
+    const r = await q;
     net(true);
-    return res;
+    return { ...r, config };
   }
   const key = cacheKey(config);
   const hit = getCache.get(key);
