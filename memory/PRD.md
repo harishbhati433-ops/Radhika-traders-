@@ -795,3 +795,6 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Video delivery: `storage_service.cache_object()/is_cached()` (moved from server.py); `stories_routes.warm_media()` pre-downloads video media into the disk cache in the background on publish and whenever a customer loads /stories → first viewer no longer waits for storage. StoryViewer prefetches the next video story (`story-prefetch-video`, hidden preload=auto).
 - Upload: compress when > 8 MB OR bitrate > 2.5 Mbps (was only > 20 MB); 1.2 Mbps target; MediaRecorder MIME preference MP4/H.264 → WebM VP8 → VP9 for broad hardware decode (iPhone-safe when Android Chrome supports mp4 recording).
 - Back button: StoriesBar pushes a history entry when a story opens; popstate closes the viewer; X/Esc call history.back() so the dashboard stays. Verified at 390px Android UA (go_back → viewer closed, still /app/dashboard).
+
+## 2026-06 — Story video duration raised to 60 sec
+- Admin upload accepts videos up to 60 sec (was 30), still ≤50 MB pick / ≤20 MB after client-side compression (60 s @ ~1.3 Mbps ≈ 10 MB). Server MAX_VIDEO unchanged.

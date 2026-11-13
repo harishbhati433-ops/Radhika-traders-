@@ -31,7 +31,7 @@ function MediaUpload({ f, setF }) {
       if (type.startsWith("video/")) {
         if (file.size > MAX_PICK_VIDEO) return toast.error("Video 50 MB se bada hai");
         const dur = await videoDuration(file);
-        if (dur > 31) return toast.error(`Video ${Math.round(dur)} sec ka hai — max 30 sec allowed`);
+        if (dur > 61) return toast.error(`Video ${Math.round(dur)} sec ka hai — max 60 sec (1 minute) allowed`);
         const mbps = dur ? (file.size * 8) / dur / 1e6 : 0;
         if (file.size > COMPRESS_ABOVE || mbps > MAX_MBPS) {
           if (!canCompressVideo()) { if (file.size > MAX_UPLOAD_VIDEO) return toast.error("Video 20 MB se bada hai aur is browser me compress nahi ho sakta — Chrome use karein"); }
@@ -68,7 +68,7 @@ function MediaUpload({ f, setF }) {
         </div>
         <div className="text-xs text-slate-500">
           <button type="button" onClick={() => ref.current.click()} disabled={busy} data-testid="story-upload-btn" className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> <span data-testid="story-upload-stage">{stage || "Working…"}</span></> : <><Upload className="h-4 w-4" /> {f.media_url ? "Change" : "Upload Photo / Video"}</>}</button>
-          <div>Gallery, Files ya Drive — kahin se bhi chunein · Photo: JPG/PNG/WEBP, auto-compressed to WebP (max 8 MB) · Video: MP4/WEBM/MOV, 50 MB tak / 30 sec — bade ya heavy videos aapke phone/browser me hi auto-compress hote hain (720p, mobile-friendly) · Best size 1080×1920 (9:16)</div>
+          <div>Gallery, Files ya Drive — kahin se bhi chunein · Photo: JPG/PNG/WEBP, auto-compressed to WebP (max 8 MB) · Video: MP4/WEBM/MOV, 50 MB tak / 1 minute — bade ya heavy videos aapke phone/browser me hi auto-compress hote hain (720p, mobile-friendly; 1 min video ≈ 1 min compress time) · Best size 1080×1920 (9:16)</div>
         </div>
       </div>
     </div>
