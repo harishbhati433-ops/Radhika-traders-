@@ -64,37 +64,6 @@ def _host(endpoint: str) -> str:
     return endpoint.split("/")[2] if endpoint.startswith("http") else endpoint[:40]
 
 
-FALLBACK_DAILY_CAP = 3
-FALLBACK_SKIP_KINDS = {"reminder", "checkin_reminder", "checkout_reminder", "story", "visitor_report", "test"}
-
-
-async def _email_fallback(user_ids: list, title: str, body: str, link: str, kind: str) -> None:
-    """Customers without any push device get the alert by email instead (max 3/day each, never for nudges/stories)."""
-    if not user_ids or (kind or "").lower() in FALLBACK_SKIP_KINDS:
-        return
-    try:
-        from bson import ObjectId
-        import email_service
-        oids = [ObjectId(i) for i in user_ids if ObjectId.is_valid(i)]
-        users = await _db.users.find({"_id": {"$in": oids}, "role": "customer", "email_verified": True, "account_status": {"$nin": ["deleted", "disabled"]}}, {"email": 1, "name": 1}).to_list(500)
-        day = _now()[:10]
-        for u in users:
-            if not u.get("email") or u["email"].endswith("@employee.radhikatraders.net"):
-                continue
-            key = f"{u['_id']}:{day}"
-            r = await _db.push_fallback_quota.update_one({"_id": key}, {"$inc": {"n": 1}, "$setOnInsert": {"created_at": _now()}}, upsert=True)
-            doc = await _db.push_fallback_quota.find_one({"_id": key}, {"n": 1})
-            if doc and doc["n"] > FALLBACK_DAILY_CAP:
-                continue
-            origin = os.environ.get("PUBLIC_APP_URL") or os.environ.get("FRONTEND_URL") or "https://www.radhikatraders.net"
-            url = link if (link or "").startswith("http") else f"{origin}{link or '/app/dashboard'}"
-            html = email_service._wrap(title, f"<p style='margin:0 0 12px;font-size:15px;color:#0B0F17'>Hi {email_service.escape(u.get('name') or 'there')},</p><p style='margin:0 0 16px;font-size:15px;color:#334155'>{email_service.escape(body or '')}</p><p style='margin:0 0 20px'><a href='{url}' style='background:#DC2626;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700'>Open Radhika Traders</a></p><p style='font-size:12px;color:#64748b'>You got this by email because phone alerts are off on your device. Turn them on in the app for instant updates.</p>")
-            await email_service.enqueue_bulk(u["email"], f"{title} — Radhika Traders", html)
-            _ = r
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"push email fallback failed: {e}")
-
-
 async def send_push(user_ids: list, title: str, body: str, link: str = "", tag: str = "", kind: str = "", event_key: str = "") -> dict:
     """Pushes to every device of the given users. event_key (optional) makes the call idempotent: the same key is delivered once, ever."""
     ids = [str(u) for u in user_ids if u]
@@ -111,10 +80,7 @@ async def send_push(user_ids: list, title: str, body: str, link: str = "", tag: 
     if not subs:
         entry["reason"] = "no subscribed device — user has not turned on phone alerts"
         await _db.push_log.insert_one(entry)
-        await _email_fallback(ids, title, body, link, kind)
         return {"sent": 0, "devices": 0, "reason": entry["reason"]}
-    # Users with zero devices still get the message by email (capped) so nobody is left out.
-    await _email_fallback([i for i in ids if i not in {s["user_id"] for s in subs}], title, body, link, kind)
     payload = json.dumps({"title": title[:120], "body": (body or "")[:300], "url": link or "/", "tag": tag or kind or "rt", "type": kind, "ts": _now()})
     results = await asyncio.gather(*[asyncio.to_thread(_deliver, s["subscription"], payload) for s in subs])
     gone = [s["_id"] for s, (r, _) in zip(subs, results) if r == "gone"]

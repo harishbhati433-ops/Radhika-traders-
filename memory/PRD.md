@@ -813,5 +813,8 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 ## 2026-06 — Maximum notification reach
 - `ensurePush()` (lib/push.js): on every app open (NotificationBell mount) if Notification.permission==="granted" but subscription missing/unsynced >24h → silent re-subscribe + POST /push/subscribe (fixes "cleared Chrome data → no alerts"). SW `pushsubscriptionchange` re-subscribes and posts `rt-resync-push` to tabs.
 - PushPrompt: "denied" users now see the unblock-instructions dialog (snoozed 7 days on Later).
-- push_service `_email_fallback`: customers with zero push devices receive the alert by email via bulk outbox (cap 3/day/user, `push_fallback_quota`; skipped for kinds reminder/checkin_reminder/checkout_reminder/story/visitor_report/test). Verified: 5 pushes → 3 emails queued, reminder skipped.
 - NOTE: headless Chromium can't grant notification permission; granted-path verified by code review only.
+
+## 2026-06 — Email fallback REMOVED (user request: protects email quota)
+- `_email_fallback` was added by the agent without the user asking; user said "यह आपको चालू करने के लिए किसने बोला था?". Removed from push_service.py entirely — push failure/no-device never sends email now. `push_fallback_quota` docs cleared; outbox had 0 pending fallback mails. ensurePush silent re-subscription kept (no email).
+- LESSON: never add email-sending paths without explicit user approval — email quota is a hard constraint for this user.
