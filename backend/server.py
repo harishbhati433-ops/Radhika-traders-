@@ -177,7 +177,7 @@ class SettingsIn(BaseModel):
     withdrawal_days: Optional[List[int]] = None
     withdrawal_dates: Optional[List[int]] = None
     refer_poster_url: Optional[str] = None
-
+    campaign_types: Optional[List[str]] = None
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -197,6 +197,9 @@ async def referral_usage(code: str) -> dict:
     return {"today": today, "month": month}
 
 
+DEFAULT_CAMPAIGN_TYPES = ["First Trade", "Trade", "F&O Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"]
+
+
 async def get_settings() -> dict:
     s = await db.settings.find_one({"key": "app"}) or {}
     return {"referral_bonus": float(s.get("referral_bonus", 0)), "min_withdrawal": float(s.get("min_withdrawal", MIN_WITHDRAWAL)),
@@ -205,6 +208,7 @@ async def get_settings() -> dict:
             "referral_daily_limit": int(s.get("referral_daily_limit", 2)), "referral_monthly_limit": int(s.get("referral_monthly_limit", 10)),
             "withdrawal_days": [int(d) for d in s.get("withdrawal_days", [])], "withdrawal_dates": [int(d) for d in s.get("withdrawal_dates", [])],
             "refer_poster_url": s.get("refer_poster_url") or "",
+            "campaign_types": s.get("campaign_types") or DEFAULT_CAMPAIGN_TYPES,
             **{k: s[k] for k in ("extra_bonus_enabled", "extra_bonus_mode", "extra_bonus_amount", "extra_bonus_percent", "scratch_enabled", "scratch_mode", "scratch_percent", "scratch_amount", "scratch_min", "scratch_max") if k in s}}
 
 
@@ -749,6 +753,15 @@ async def update_settings(body: SettingsIn, admin: dict = Depends(require_admin)
         upd["withdrawal_dates"] = sorted({int(d) for d in body.withdrawal_dates if 1 <= int(d) <= 31})
     if body.refer_poster_url is not None:
         upd["refer_poster_url"] = body.refer_poster_url.strip()[:500]
+    if body.campaign_types is not None:
+        seen, types = set(), []
+        for t in body.campaign_types:
+            t = " ".join(str(t).split())[:40]
+            if t and t.lower() not in seen:
+                seen.add(t.lower()); types.append(t)
+        if not types:
+            raise HTTPException(status_code=400, detail="At least one campaign type is required")
+        upd["campaign_types"] = types[:60]
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.settings.update_one({"key": "app"}, {"$set": {**upd, "updated_at": now_iso()}}, upsert=True)

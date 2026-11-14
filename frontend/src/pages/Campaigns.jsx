@@ -6,10 +6,10 @@ import { useLivePoll } from "../lib/useLivePoll";
 import api from "../lib/api";
 import { Input } from "../components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
-
-const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
+import { useCampaignTypes } from "../components/CampaignTypeSelect";
 
 export default function Campaigns() {
+  const [TYPES] = useCampaignTypes();
   const [campaigns, setCampaigns] = useState([]);
   const [cats, setCats] = useState([]);
   const [search, setSearch] = useState("");

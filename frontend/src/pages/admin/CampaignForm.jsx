@@ -7,6 +7,7 @@ import { ImageUpload } from "../../components/ImageUpload";
 import api, { formatApiErrorDetail } from "../../lib/api";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Star } from "lucide-react";
+import { CampaignTypeSelect } from "../../components/CampaignTypeSelect";
 
 const EMPTY = {
   offer_name: "", company: "", category: "", payout_amount: 0, payout_type: "Fixed",
@@ -17,7 +18,6 @@ const EMPTY = {
   logo_url: "", banner_url: "", poster_url: "", show_in_slider: true, status: "live", offer_enabled: true, affiliate_links: [], lead_fields: [], token_passing: false, token_param: "user_id",
 };
 const LEAD_FIELDS = [["name", "Full Name"], ["mobile", "Mobile Number"], ["email", "Gmail / Email ID"], ["pan", "PAN Number"], ["dob", "Date of Birth"], ["aadhaar", "Aadhaar Number"], ["bank_account", "Bank Account Number"], ["ifsc", "IFSC Code"], ["upi", "UPI ID"], ["address", "Address"]];
-const TYPES = ["First Trade", "Trade", "Non-Trade", "Turnover", "SIP", "Lump Sum", "Account Opening", "Fund Add", "KYC Complete", "Card Activation", "Loan Disbursal", "Policy Issued", "App Install", "Lead / Form Fill"];
 
 function Row({ children, cols = 2 }) {
   return <div className={`grid gap-3 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{children}</div>;
@@ -74,9 +74,7 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
               </select>
             </div>
             <div><Label>Campaign Type</Label>
-              <select data-testid="cf-type" value={f.campaign_type} onChange={set("campaign_type")} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                {TYPES.map((t) => <option key={t}>{t}</option>)}
-              </select>
+              <CampaignTypeSelect value={f.campaign_type} onChange={(v) => setF({ ...f, campaign_type: v })} />
             </div>
             <div><Label>Status</Label>
               <select data-testid="cf-status" value={f.status} onChange={set("status")} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
