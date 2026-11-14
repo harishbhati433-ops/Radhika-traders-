@@ -19,6 +19,13 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// Self-heal: if a stale cached shell references a build chunk that no longer exists, reload once to pick up the fresh shell.
+const chunkFail = (msg) => /Loading (CSS )?chunk [\w-]+ failed|ChunkLoadError|Failed to fetch dynamically imported module/i.test(String(msg || ""));
+const healOnce = () => { if (sessionStorage.getItem("rt_chunk_reload")) return; sessionStorage.setItem("rt_chunk_reload", "1"); window.location.reload(); };
+window.addEventListener("error", (e) => { if (chunkFail(e?.message)) healOnce(); });
+window.addEventListener("unhandledrejection", (e) => { if (chunkFail(e?.reason?.message || e?.reason)) healOnce(); });
+window.addEventListener("load", () => setTimeout(() => sessionStorage.removeItem("rt_chunk_reload"), 10000));
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>

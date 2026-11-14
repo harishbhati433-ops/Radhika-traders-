@@ -128,7 +128,8 @@ function LockScreen({ user, onUnlocked, logout, bio }) {
     finally { setBusy(false); }
   };
   const started = useRef(false);
-  useEffect(() => { if (bio && !started.current) { started.current = true; tryBio(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-prompt fingerprint the moment the lock screen appears (bio may arrive a tick later from the cached→fresh status refresh).
+  useEffect(() => { if (bio && !started.current) { started.current = true; tryBio(); } }, [bio]); // eslint-disable-line react-hooks/exhaustive-deps
   const complete = async (v) => {
     setBusy(true); setErr("");
     try { await api.post("/app-lock/pin/unlock", { pin: v }); markUnlocked(user.id); onUnlocked(); }
@@ -148,16 +149,21 @@ function LockScreen({ user, onUnlocked, logout, bio }) {
 }
 
 // Wraps every protected page: mandatory PIN setup on first login, lock screen on each fresh app open / after 5 min in background.
+// The "biometric enabled?" flag is remembered per user so the lock screen + fingerprint prompt appear instantly on open (status is refreshed in the background).
+const bioKey = (uid) => `rt_bio_${uid}`;
+const cachedBio = (uid) => { try { const v = localStorage.getItem(bioKey(uid)); return v === null ? null : v === "1"; } catch { return null; } };
+const rememberBio = (uid, v) => { try { localStorage.setItem(bioKey(uid), v ? "1" : "0"); } catch {} };
+
 export function AppLockGate({ children }) {
   const { user, refresh, logout } = useAuth();
   const [open, setOpen] = useState(() => !!user && isUnlocked(user.id));
-  const [bio, setBio] = useState(null);
+  const [bio, setBio] = useState(() => (user ? cachedBio(user.id) : null));
   useEffect(() => { wireIdleLock(); const onLock = () => setOpen(false); window.addEventListener("rt:lock", onLock); return () => window.removeEventListener("rt:lock", onLock); }, []);
   const needsSetup = user && !user.app_lock?.configured && user.app_lock?.enabled !== false;
   const enabled = !!user?.app_lock?.configured && user.app_lock?.enabled !== false;
   useEffect(() => {
     if (!user || !enabled || open) return;
-    api.get("/app-lock/status", { noCache: true }).then(({ data }) => { setBio(data.biometric); if (data.locked_until) setBio(false); }).catch(() => setBio(false));
+    api.get("/app-lock/status", { noCache: true }).then(({ data }) => { const v = !!data.biometric && !data.locked_until; rememberBio(user.id, !!data.biometric); setBio(v); }).catch(() => setBio((b) => b ?? false));
   }, [user?.id, enabled, open]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!user) return children;
   if (needsSetup) return <SetupScreen user={user} logout={logout} onDone={() => { setOpen(true); refresh(); }} />;

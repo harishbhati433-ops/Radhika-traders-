@@ -805,3 +805,7 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 
 ## 2026-06 — Story CTA fix
 - Bug: after the back-button change, "Open Campaign/Learn More" called onClose() → history.back() then nav(link); the async popstate undid the navigation. Fix: StoryViewer `onNavigate` (drops viewer without history.back) + `nav(link, {replace:true})`; external links open in new tab without closing logic.
+
+## 2026-06 — Faster app open + instant fingerprint prompt
+- AppLockGate remembers the per-user biometric flag (`localStorage rt_bio_<uid>`) → lock screen renders immediately and `tryBio()` fires as soon as `bio` is truthy (effect now depends on [bio]); /app-lock/status still refreshes in the background and handles locked_until.
+- sw.js v12: navigations serve the cached app shell instantly (stale-while-revalidate) instead of network-first with 4 s wait; first visit stays network-first. index.js self-heals ChunkLoadError (one reload) in case a stale shell references a removed chunk.

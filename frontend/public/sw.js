@@ -1,4 +1,4 @@
-const CACHE = "rt-pwa-v11";
+const CACHE = "rt-pwa-v12";
 const PRECACHE = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/badge-96.png", "/images/logo-full.jpeg", "/images/logo-tile.png", "/sounds/alert.mp3"];
 const NAV_TIMEOUT_MS = 4000;
 
@@ -20,9 +20,14 @@ self.addEventListener("fetch", (e) => {
   const sameOrigin = url.origin === self.location.origin;
   if (sameOrigin && url.pathname.startsWith("/api/")) return;
 
-  // App shell: network first, but on a slow/dead network fall back to the cached shell within 4s so the app still opens.
+  // App shell: serve the cached shell instantly (fast open, no lag), refresh it from the network in the background.
+  // First visit / no cache: network with a 4s timeout.
   if (req.mode === "navigate") {
-    e.respondWith(withTimeout(fetch(req), NAV_TIMEOUT_MS).then((res) => { if (res.ok) put("/", res.clone()); return res; }).catch(() => caches.match("/")));
+    e.respondWith(caches.match("/").then((hit) => {
+      const fresh = fetch(req).then((res) => { if (res.ok) put("/", res.clone()); return res; });
+      if (hit) { e.waitUntil(fresh.catch(() => {})); return hit; }
+      return withTimeout(fresh, NAV_TIMEOUT_MS).catch(() => caches.match("/"));
+    }));
     return;
   }
 
