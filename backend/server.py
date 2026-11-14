@@ -52,6 +52,7 @@ from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked
 import staff_gates
 import two_factor
+import campaign_schedule
 import contact_settings
 import push_service
 import assistant_routes
@@ -1263,6 +1264,7 @@ async def list_campaigns(
 ):
     q = {"is_deleted": False}
     if not admin_view:
+        campaign_schedule.maybe_apply(db, announce_campaign_status, _stories_router.sync_campaign_stories)
         q["offer_enabled"] = True
         q["status"] = "live"
     if status and admin_view:
@@ -1702,6 +1704,7 @@ async def create_campaign(body: CampaignIn, request: Request, background: Backgr
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
+    campaign_schedule.normalize_schedule(doc)
     doc["slug"] = await unique_slug(body.offer_name)
     doc["is_deleted"] = False
     doc["created_at"] = now_iso()
@@ -1720,6 +1723,7 @@ async def update_campaign(cid: str, body: CampaignIn, request: Request, backgrou
     doc = body.model_dump()
     doc["affiliate_links"] = _normalize_links(doc.get("affiliate_links", []))
     doc["lead_fields"] = normalize_lead_fields(doc.get("lead_fields"))
+    campaign_schedule.normalize_schedule(doc)
     doc["updated_at"] = now_iso()
     current = await db.campaigns.find_one({"_id": ObjectId(cid)})
     if current and current.get("offer_name") != body.offer_name:
@@ -1745,13 +1749,22 @@ async def update_campaign_status(cid: str, request: Request, background: Backgro
     old = c.get("status")
     if old == status:
         return {"message": f"Already {status}", "status": status, "notified": False}
-    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": {"status": status, "updated_at": now_iso()}})
+    upd = {"status": status, "updated_at": now_iso()}
+    note = ""
+    if status == "live":
+        # Manual re-open wins over the calendar: drop dates that would immediately hide or auto-close it again.
+        today = campaign_schedule.ist_today()
+        if c.get("end_date") and c["end_date"] < today:
+            upd["end_date"] = ""; note = " · expired end date cleared"
+        if c.get("start_date") and c["start_date"] > today:
+            upd["start_date"] = ""; note += " · future start date cleared"
+    await db.campaigns.update_one({"_id": ObjectId(cid)}, {"$set": upd})
     background.add_task(_stories_router.sync_campaign_stories, True)  # live-campaign stories follow the status instantly
     # Email + in-app notice is triggered here, at API level, after the DB write succeeded — every path (UI, API, old or new campaign) notifies.
     background.add_task(announce_campaign_status, c, status, _origin(request))
     await log_activity(admin, "campaign_status_changed", request, entity_type="campaign", entity_id=cid, entity_label=c["offer_name"],
-                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{old} -> {status} · customers notified in-app (promo emails off)")
-    return {"message": "Status updated", "status": status, "notified": True}
+                       campaign_id=cid, campaign_name=c["offer_name"], status=status, detail=f"{old} -> {status} · customers notified in-app (promo emails off){note}")
+    return {"message": "Status updated" + note, "status": status, "notified": True}
 
 
 def _origin(request: Request) -> str:
@@ -1813,6 +1826,7 @@ async def cron_email_retry(request: Request, background: BackgroundTasks):
     if not secret or not token or not hmac.compare_digest(token, secret):
         raise HTTPException(status_code=401, detail="Unauthorized")
     background.add_task(email_service.process_outbox)
+    background.add_task(campaign_schedule.apply_schedule, db, announce_campaign_status, _stories_router.sync_campaign_stories)
     return {"ok": True, "queued": True}
 
 

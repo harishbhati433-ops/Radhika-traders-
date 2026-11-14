@@ -831,3 +831,10 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 - Frontend `components/CampaignTypeSelect.jsx`: `useCampaignTypes()` hook (public Campaigns filter uses it) + `CampaignTypeSelect` for admin CampaignForm — dropdown has "＋ Add new type…" (inline input, testid cf-type-new/-save) and "⚙ Manage types…" (chips with remove, cf-type-chip-*). Hardcoded TYPES arrays removed.
 - Tested via API + Playwright (add → auto-selected, remove → falls back to first type).
 - NOTE for testing: admin login via curl triggers a 2FA OTP email (quota!) — mint a token with auth_utils.create_access_token instead; headless UA gets 404 on /admin — override navigator.userAgent.
+
+## 2026-06 — Campaign start/end dates now enforced (auto live / auto close)
+- `backend/campaign_schedule.py`: `normalize_schedule(doc)` on POST/PUT /campaigns — end<start → 400; live + end_date past → 400 ("extend or clear"); live + future start_date → status **scheduled** (new status). `apply_schedule(db, announce, sync_stories)`: scheduled & start≤today(IST) → live (+announce live); live & end<today → closed (+announce closed, `auto_closed_at`). `maybe_apply` = throttled (10 min) background safety net from public GET /campaigns.
+- Runs from `POST /api/cron/email-retry` (now `*/15` — was `*/5`, which prod discards; forbidden `headers/body` keys removed from crons.yml, also from stories-cleanup). Max 5 crons already used, so no new cron entry.
+- PATCH /campaigns/{id}/status=live clears an expired end_date / future start_date (message "· expired end date cleared") so manual re-open sticks.
+- Frontend: StatusBadge "SCHEDULED" (sky), CampaignForm status option + schedule hint + testids cf-start-date/cf-end-date, AdminCampaigns shows "Auto-live on …/Auto-closes after …/Auto-closed", CampaignDetail "Coming soon" notice for scheduled.
+- Tested via API: create future-start→scheduled, past-end→400, public list hides scheduled, cron sweep opened=1 closed=1 with notifications, reopen clears end_date.

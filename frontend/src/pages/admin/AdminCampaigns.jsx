@@ -77,7 +77,11 @@ export default function AdminCampaigns() {
                 <StatusBadge status={c.status} />
                 {!c.offer_enabled && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">DISABLED</span>}
               </div>
-              <div className="text-xs text-slate-400">{c.company} · {c.category} · ₹{c.payout_amount} {c.payout_type}</div>
+              <div className="text-xs text-slate-400">{c.company} · {c.category} · ₹{c.payout_amount} {c.payout_type}
+                {c.start_date && c.status === "scheduled" && <span className="ml-2 font-semibold text-sky-600" data-testid={`starts-${c.slug}`}>Auto-live on {c.start_date}</span>}
+                {c.end_date && c.status === "live" && <span className="ml-2 font-semibold text-amber-600" data-testid={`ends-${c.slug}`}>Auto-closes after {c.end_date}</span>}
+                {c.auto_closed_at && c.status === "closed" && <span className="ml-2 font-semibold text-rose-500" data-testid={`auto-closed-${c.slug}`}>Auto-closed (end date {c.end_date})</span>}
+              </div>
             </div>
 
             {showArchived ? (

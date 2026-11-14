@@ -78,7 +78,7 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
             </div>
             <div><Label>Status</Label>
               <select data-testid="cf-status" value={f.status} onChange={set("status")} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <option value="live">Live</option><option value="paused">Paused</option><option value="closed">Closed</option>
+                <option value="live">Live</option><option value="scheduled">Scheduled (auto-live on start date)</option><option value="paused">Paused</option><option value="closed">Closed</option>
               </select>
             </div>
           </Row>
@@ -104,10 +104,11 @@ export function CampaignForm({ open, onClose, editing, cats, onSaved }) {
             <div><Label>Payment Terms</Label><Input value={f.payment_terms} onChange={set("payment_terms")} className="mt-1.5" /></div>
           </Row>
           <Row cols={3}>
-            <div><Label>Start Date</Label><Input type="date" value={f.start_date} onChange={set("start_date")} className="mt-1.5" /></div>
-            <div><Label>End Date</Label><Input type="date" value={f.end_date} onChange={set("end_date")} className="mt-1.5" /></div>
+            <div><Label>Start Date</Label><Input type="date" data-testid="cf-start-date" value={f.start_date} onChange={set("start_date")} className="mt-1.5" /></div>
+            <div><Label>End Date</Label><Input type="date" data-testid="cf-end-date" value={f.end_date} onChange={set("end_date")} className="mt-1.5" /></div>
             <div><Label>Budget</Label><Input value={f.budget} onChange={set("budget")} className="mt-1.5" /></div>
           </Row>
+          <p className="-mt-2 text-[11px] text-slate-500" data-testid="cf-schedule-hint">Dates run automatically (IST): a future start date keeps the campaign <b>Scheduled</b> and makes it live that day; after the end date it <b>auto-closes</b> at midnight. Re-opening it manually clears the expired date.</p>
           <div><Label>Important Conditions</Label><Textarea value={f.important_conditions} onChange={set("important_conditions")} className="mt-1.5" rows={2} /></div>
 
           <Row>

@@ -101,8 +101,8 @@ export default function CampaignDetail() {
             </div>
             <p className="mt-1 text-sm font-medium text-slate-500">{c.company} · {c.category}</p>
             {c.status !== "live" && (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700" data-testid="campaign-inactive-notice">
-                {c.status === "paused" ? "Offer Currently Inactive — this campaign is temporarily paused. Referral links will not redirect until it is live again." : "Offer Ended — this campaign is closed. Referral links no longer work."}
+              <div className={`mt-4 rounded-xl border p-4 text-sm font-semibold ${c.status === "scheduled" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-rose-200 bg-rose-50 text-rose-700"}`} data-testid="campaign-inactive-notice">
+                {c.status === "scheduled" ? `Coming soon — this campaign goes live on ${c.start_date}. Referral links start working that day.` : c.status === "paused" ? "Offer Currently Inactive — this campaign is temporarily paused. Referral links will not redirect until it is live again." : "Offer Ended — this campaign is closed. Referral links no longer work."}
               </div>
             )}
 

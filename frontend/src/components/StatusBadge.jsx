@@ -1,6 +1,7 @@
 export function StatusBadge({ status }) {
   const map = {
     live: { label: "LIVE", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500 rt-live-dot" },
+    scheduled: { label: "SCHEDULED", cls: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500" },
     paused: { label: "PAUSED", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
     closed: { label: "CLOSED", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
   };

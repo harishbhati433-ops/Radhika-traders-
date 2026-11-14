@@ -29,16 +29,12 @@ crons:
     timezone: "Asia/Kolkata"
     endpoint: "{{BASE_URL}}/api/cron/stories-cleanup"
     method: POST
-    headers:
-      Authorization: "Bearer {{WEBHOOK_CRON_SECRET}}"
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
   - name: email-retry
-    description: "Every 5 min: re-send emails that failed because the email provider was down or rate-limited (5 → 10 → 15 → 30 → 60 → 120 min schedule)"
-    cron: "*/5 * * * *"
+    description: "Every 15 min: re-send queued/failed emails and apply campaign start/end dates (auto live / auto close)"
+    cron: "*/15 * * * *"
     endpoint: "{{BASE_URL}}/api/cron/email-retry"
     method: POST
-    headers:
-      Authorization: "Bearer {{WEBHOOK_CRON_SECRET}}"
-      Content-Type: "application/json"
-    body: '{"event":"schedule.triggered"}'
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
