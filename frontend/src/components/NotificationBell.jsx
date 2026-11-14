@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { Bell, Megaphone, ShieldCheck, Info, CheckCheck, Wallet, Banknote, UserCog, CalendarCheck, FileText, CircleDashed } from "lucide-react";
 import { PushToggle } from "./PushToggle";
-import { onPushMessage, warmAudio, syncSound } from "../lib/push";
+import { onPushMessage, warmAudio, syncSound, ensurePush } from "../lib/push";
 
 const ICON = { campaign_live: Megaphone, campaign_status: Megaphone, kyc: ShieldCheck, broadcast: Info, wallet: Wallet, withdrawal: Banknote, account: UserCog, security: ShieldCheck, leave: CalendarCheck, attendance: CalendarCheck, lead: FileText, bonus: Wallet, salary: Banknote };
 
@@ -15,7 +15,7 @@ export function NotificationBell() {
 
   const load = () => api.get("/notifications").then(({ data }) => setData(data)).catch(() => {});
   useEffect(() => { load(); const t = setInterval(() => document.visibilityState === "visible" && load(), 60000); return () => clearInterval(t); }, []);
-  useEffect(() => { warmAudio(); syncSound(); return onPushMessage(() => load()); }, []);
+  useEffect(() => { warmAudio(); syncSound(); ensurePush().then((ok) => ok && window.dispatchEvent(new Event("rt-push-changed"))); return onPushMessage(() => load()); }, []);
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", close);

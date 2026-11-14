@@ -25,11 +25,30 @@ export async function enablePush() {
   if (!isPushSupported()) throw new Error("This browser does not support push alerts");
   const perm = await Notification.requestPermission();
   if (perm !== "granted") throw new Error("Permission was not granted. Allow notifications in browser settings.");
+  return subscribeAndSync();
+}
+
+async function subscribeAndSync() {
   const reg = await navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready);
   const { data } = await api.get("/push/vapid-public-key");
   const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(data.key) }));
   await api.post("/push/subscribe", { subscription: sub.toJSON(), device: navigator.userAgent.slice(0, 180) });
+  try { localStorage.setItem("rt_push_synced", String(Date.now())); } catch {}
   return sub;
+}
+
+// Silent repair on every app open: if the user already allowed alerts but the subscription vanished
+// (cleared site data, browser reinstall, expired endpoint) re-subscribe and re-register — no prompt, no click needed.
+export async function ensurePush() {
+  try {
+    if (!isPushSupported() || Notification.permission !== "granted") return false;
+    const last = Number(localStorage.getItem("rt_push_synced") || 0);
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (sub && Date.now() - last < 24 * 3600 * 1000) return true; // healthy & synced within a day
+    await subscribeAndSync();
+    return true;
+  } catch { return false; }
 }
 
 export async function disablePush() {
@@ -85,7 +104,10 @@ export function warmAudio() {
 
 export function onPushMessage(cb) {
   if (!("serviceWorker" in navigator)) return () => {};
-  const h = (e) => { if (e.data && e.data.type === "PUSH") { playSound(); cb && cb(e.data); } };
+  const h = (e) => {
+    if (e.data && e.data.type === "PUSH") { playSound(); cb && cb(e.data); }
+    if (e.data && e.data.type === "rt-resync-push") { try { localStorage.removeItem("rt_push_synced"); } catch {} ensurePush(); }
+  };
   navigator.serviceWorker.addEventListener("message", h);
   return () => navigator.serviceWorker.removeEventListener("message", h);
 }

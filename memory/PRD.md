@@ -809,3 +809,9 @@ FIXES: push_service.send_push now awaited everywhere, takes event_key (idempoten
 ## 2026-06 — Faster app open + instant fingerprint prompt
 - AppLockGate remembers the per-user biometric flag (`localStorage rt_bio_<uid>`) → lock screen renders immediately and `tryBio()` fires as soon as `bio` is truthy (effect now depends on [bio]); /app-lock/status still refreshes in the background and handles locked_until.
 - sw.js v12: navigations serve the cached app shell instantly (stale-while-revalidate) instead of network-first with 4 s wait; first visit stays network-first. index.js self-heals ChunkLoadError (one reload) in case a stale shell references a removed chunk.
+
+## 2026-06 — Maximum notification reach
+- `ensurePush()` (lib/push.js): on every app open (NotificationBell mount) if Notification.permission==="granted" but subscription missing/unsynced >24h → silent re-subscribe + POST /push/subscribe (fixes "cleared Chrome data → no alerts"). SW `pushsubscriptionchange` re-subscribes and posts `rt-resync-push` to tabs.
+- PushPrompt: "denied" users now see the unblock-instructions dialog (snoozed 7 days on Later).
+- push_service `_email_fallback`: customers with zero push devices receive the alert by email via bulk outbox (cap 3/day/user, `push_fallback_quota`; skipped for kinds reminder/checkin_reminder/checkout_reminder/story/visitor_report/test). Verified: 5 pushes → 3 emails queued, reminder skipped.
+- NOTE: headless Chromium can't grant notification permission; granted-path verified by code review only.

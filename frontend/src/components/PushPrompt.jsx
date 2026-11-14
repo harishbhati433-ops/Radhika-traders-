@@ -27,6 +27,7 @@ export function PushPrompt() {
     if (until > Date.now()) return;
     getPushState().then((s) => {
       if (s === "off") { setStep(isStandalone() ? "allow" : "install"); setOpen(true); return; }
+      if (s === "denied") { setStep("denied"); setOpen(true); return; } // gentle reminder (snoozed 7 days on "Later")
       if (s === "unsupported" && isIosBrowser()) { setIos(true); setStep("allow"); setOpen(true); }
     });
   }, [user?.id]);
@@ -51,7 +52,7 @@ export function PushPrompt() {
     return () => { window.removeEventListener("rt-install-changed", sync); window.removeEventListener("appinstalled", installed); };
   }, []);
 
-  const later = () => { localStorage.setItem(KEY + user.id, String(Date.now() + SNOOZE_MS)); setOpen(false); };
+  const later = () => { localStorage.setItem(KEY + user.id, String(Date.now() + (step === "denied" ? 7 * 24 * 3600 * 1000 : SNOOZE_MS))); setOpen(false); };
   const allow = async () => {
     setBusy(true);
     try { await enablePush(); playSound(); localStorage.setItem(KEY + user.id, String(Date.now() + 365 * 24 * 3600 * 1000)); setOpen(false); window.dispatchEvent(new Event("rt-push-changed")); toast.success("Alerts ON — you will now get updates even when the app is closed"); }

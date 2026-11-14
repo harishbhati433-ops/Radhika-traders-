@@ -49,6 +49,17 @@ self.addEventListener("fetch", (e) => {
 
 self.addEventListener("message", (e) => { if (e.data === "SKIP_WAITING") self.skipWaiting(); });
 
+// Browser rotated/expired the push endpoint: re-subscribe right away and tell open tabs to re-register with the server.
+self.addEventListener("pushsubscriptionchange", (e) => {
+  const key = e.oldSubscription && e.oldSubscription.options && e.oldSubscription.options.applicationServerKey;
+  e.waitUntil(
+    (key ? self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : Promise.resolve(null))
+      .catch(() => null)
+      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
+      .then((cs) => cs.forEach((c) => c.postMessage({ type: "rt-resync-push" })))
+  );
+});
+
 // Web Push: show a system notification (works with the app closed) and tell any open tab to play its alert sound.
 self.addEventListener("push", (e) => {
   let d = {};
