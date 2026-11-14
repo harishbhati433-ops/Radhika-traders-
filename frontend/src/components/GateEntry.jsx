@@ -2,8 +2,37 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { grantGate, isBot, GATE_SLUG_RE } from "../lib/gate";
+import { getSavedCredential } from "../lib/credentialStore";
+import { useAuth } from "../context/AuthContext";
+
+// Staff whose browser data was cleared land on the 404 wall. If Chrome still holds their saved login, sign them in and re-open the gate silently.
+function useStaffResume() {
+  const { pathname } = useLocation();
+  const nav = useNavigate();
+  const { loginWithToken } = useAuth();
+  useEffect(() => {
+    const portal = pathname.startsWith("/admin") ? "admin" : pathname.startsWith("/employee") ? "employee" : "";
+    if (!portal || isBot()) return;
+    let alive = true;
+    (async () => {
+      const cred = await getSavedCredential("optional");
+      if (!cred || !alive) return;
+      try {
+        const { data } = portal === "admin"
+          ? await api.post("/auth/login", { email: cred.id, password: cred.password, portal: "admin" })
+          : await api.post("/auth/employee/login", { username: cred.id, password: cred.password });
+        if (!alive) return;
+        grantGate(portal);
+        if (data.token) { loginWithToken(data.token, data.user); nav(`/${portal}`, { replace: true }); }
+        else nav(`/${portal}/login`, { replace: true, state: { autoCred: cred, twoFaPending: true } });
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
 
 export function NotFoundPage() {
+  useStaffResume();
   useEffect(() => {
     document.title = "Page not found | Radhika Traders";
     for (const n of ["robots", "googlebot"]) { let m = document.head.querySelector(`meta[name="${n}"]`); if (!m) { m = document.createElement("meta"); m.name = n; document.head.appendChild(m); } m.content = "noindex, nofollow"; }

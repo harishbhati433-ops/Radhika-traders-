@@ -10,6 +10,7 @@ import { Loader2, ShieldCheck } from "lucide-react";
 import { PasswordInput } from "../../components/PasswordInput";
 import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
 import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
+import { useAutoLogin, rememberInBrowser, PasskeyLoginButton } from "../../components/AutoLogin";
 
 const saved = () => loadRemembered("customer");
 
@@ -23,26 +24,28 @@ export default function Login() {
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
 
-  const finish = (data) => {
-    if (remember) saveRemembered("customer", email, password); else clearRemembered("customer");
+  const finish = (data, em = email, pw = password) => {
+    if (pw) { if (remember) saveRemembered("customer", em, pw); else clearRemembered("customer"); rememberInBrowser(em, pw, `Customer · ${data.user.name}`); }
     loginWithToken(data.token, data.user);
     toast.success(`Welcome back, ${data.user.name}!`);
     nav("/app/dashboard");
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const doLogin = async (em, pw) => {
+    setEmail(em); setPassword(pw);
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password, portal: "customer" });
+      const { data } = await api.post("/auth/login", { email: em, password: pw, portal: "customer" });
       if (data.otp_required) { setOtpStep(true); toast.info(data.message, { duration: 7000 }); return; }
-      finish(data);
+      finish(data, em, pw);
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Login failed");
     } finally {
       setLoading(false);
     }
   };
+  useAutoLogin(doLogin);
+  const submit = (e) => { e.preventDefault(); doLogin(email, password); };
 
   const verifyOtp = async (e) => {
     e.preventDefault();
@@ -90,6 +93,7 @@ export default function Login() {
           {loading && <Loader2 className="h-4 w-4 animate-spin" />} Login
         </button>
       </form>
+      <PasskeyLoginButton portal="customer" onSuccess={(d) => finish(d, d.user.email, "")} />
       <p className="mt-6 text-center text-sm text-slate-500">
         New here? <Link to="/app/signup" className="font-semibold text-red-600 hover:underline" data-testid="login-to-signup">Create an account</Link>
       </p>

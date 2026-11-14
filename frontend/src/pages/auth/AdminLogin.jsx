@@ -11,6 +11,7 @@ import { PasswordInput } from "../../components/PasswordInput";
 import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
 import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
 import { AdminTwoFactorStep } from "../../components/AdminTwoFactorStep";
+import { useAutoLogin, rememberInBrowser, PasskeyLoginButton } from "../../components/AutoLogin";
 
 const saved = () => loadRemembered("admin");
 
@@ -24,32 +25,34 @@ export default function AdminLogin() {
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
 
-  const finish = (data) => {
-    if (remember) saveRemembered("admin", email, password); else clearRemembered("admin");
+  const finish = (data, em = email, pw = password) => {
+    if (pw) { if (remember) saveRemembered("admin", em, pw); else clearRemembered("admin"); rememberInBrowser(em, pw, "Admin · Radhika Traders"); }
     loginWithToken(data.token, data.user);
     toast.success("Welcome, Admin!");
     nav("/admin");
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const doLogin = async (em, pw) => {
+    setEmail(em); setPassword(pw);
     setLoading(true);
     setLockMsg("");
     try {
-      const { data } = await api.post("/auth/login", { email, password, portal: "admin" });
+      const { data } = await api.post("/auth/login", { email: em, password: pw, portal: "admin" });
       if (data.two_factor_required) { setTwoFa(true); toast.success(data.message); return; }
       if (data.user.role !== "admin") {
         toast.error("This login is for admins only.");
         setLoading(false);
         return;
       }
-      finish(data);
+      finish(data, em, pw);
     } catch (err) {
       const msg = formatApiErrorDetail(err.response?.data?.detail) || "Login failed";
       if (err.response?.status === 429) setLockMsg(msg);
       toast.error(msg);
     } finally { setLoading(false); }
   };
+  useAutoLogin(doLogin);
+  const submit = (e) => { e.preventDefault(); doLogin(email, password); };
 
   if (twoFa) {
     return (
@@ -76,6 +79,7 @@ export default function AdminLogin() {
           {loading && <Loader2 className="h-4 w-4 animate-spin" />} Login to Admin Panel
         </button>
       </form>
+      <PasskeyLoginButton portal="admin" dark onSuccess={(d) => finish(d, d.user.email, "")} />
       <p className="mt-4 text-center text-sm"><Link to="/admin/forgot-password" className="font-semibold text-red-600 hover:underline" data-testid="admin-forgot-link">Forgot password?</Link></p>
       <p className="mt-3 text-center text-sm text-slate-500"><Link to="/app/login" className="font-semibold text-red-600 hover:underline">← Customer login</Link></p>
     </AuthShell>

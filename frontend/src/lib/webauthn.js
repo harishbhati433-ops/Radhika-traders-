@@ -33,3 +33,11 @@ export async function unlockBiometric() {
   if (!cred) throw new Error("Cancelled");
   return (await api.post("/app-lock/biometric/unlock/finish", credentialJSON(cred))).data;
 }
+
+// Logged-out: the App Lock fingerprint doubles as a passkey, so the account can be recovered even after browser data was cleared.
+export async function passkeyLogin(portal) {
+  const { data: o } = await api.post("/auth/passkey/options");
+  const cred = await navigator.credentials.get({ publicKey: { ...o, challenge: b64ToBytes(o.challenge), allowCredentials: [] } });
+  if (!cred) throw new Error("Cancelled");
+  return (await api.post("/auth/passkey/login", { portal, credential: credentialJSON(cred) })).data;
+}

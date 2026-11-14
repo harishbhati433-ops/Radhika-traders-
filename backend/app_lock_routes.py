@@ -225,7 +225,7 @@ def build_app_lock_router(db, get_current_user, hash_password, verify_password, 
         wa = _wa(); S = wa.structs
         opts = wa.generate_registration_options(
             rp_id=rp_id, rp_name="Radhika Traders", user_id=_b64d(handle), user_name=u.get("email") or u.get("username") or user["id"], user_display_name=u.get("name") or "Partner",
-            authenticator_selection=S.AuthenticatorSelectionCriteria(authenticator_attachment=S.AuthenticatorAttachment.PLATFORM, user_verification=S.UserVerificationRequirement.REQUIRED, resident_key=S.ResidentKeyRequirement.PREFERRED),
+            authenticator_selection=S.AuthenticatorSelectionCriteria(authenticator_attachment=S.AuthenticatorAttachment.PLATFORM, user_verification=S.UserVerificationRequirement.REQUIRED, resident_key=S.ResidentKeyRequirement.REQUIRED),
             exclude_credentials=[S.PublicKeyCredentialDescriptor(id=_b64d(c["credential_id"])) for c in existing], attestation=S.AttestationConveyancePreference.NONE, timeout=60000)
         await db.webauthn_challenges.insert_one({"user_id": user["id"], "ceremony": "register", "challenge": _b64e(opts.challenge), "origin": origin, "rp_id": rp_id, "expires_at": _now() + timedelta(minutes=5)})
         return wa.options_to_json_dict(opts)

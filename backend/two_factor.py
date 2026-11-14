@@ -25,14 +25,24 @@ def client_ip(request: Request) -> str:
     return request.headers.get("x-forwarded-for", request.client.host if request.client else "").split(",")[0].strip()
 
 
+def device_fp(request: Request) -> str:
+    fp = (request.headers.get("x-device-fp") or "").strip()
+    return fp if 8 <= len(fp) <= 64 and fp.isalnum() else ""
+
+
 async def trusted_ok(db, user: dict, request: Request) -> bool:
+    """Trusted by token (this browser profile) or, after browser data was cleared, by the same device's hardware fingerprint."""
+    uid, fp, now = str(user["_id"]), device_fp(request), _now()
     tok = request.headers.get("x-trusted-device", "")
-    if not tok:
+    rec = await db.admin_trusted_devices.find_one({"user_id": uid, "token_hash": _h(tok), "expires_at": {"$gt": now}}) if tok else None
+    if not rec and fp:
+        rec = await db.admin_trusted_devices.find_one({"user_id": uid, "device_fp": fp, "expires_at": {"$gt": now}})
+    if not rec:
         return False
-    rec = await db.admin_trusted_devices.find_one({"user_id": str(user["_id"]), "token_hash": _h(tok)})
-    if not rec or rec["expires_at"] < _now():
-        return False
-    await db.admin_trusted_devices.update_one({"_id": rec["_id"]}, {"$set": {"last_used": _now(), "ip": client_ip(request)}})
+    upd = {"last_used": now, "ip": client_ip(request)}
+    if fp and not rec.get("device_fp"):
+        upd["device_fp"] = fp
+    await db.admin_trusted_devices.update_one({"_id": rec["_id"]}, {"$set": upd})
     return True
 
 
@@ -68,7 +78,7 @@ async def verify_code(db, user: dict, code: str, on_locked=None) -> None:
 async def issue_trusted(db, user: dict, request: Request) -> str:
     tok = secrets.token_urlsafe(32)
     browser, os_name = describe_ua(request.headers.get("user-agent", ""))
-    await db.admin_trusted_devices.insert_one({"user_id": str(user["_id"]), "token_hash": _h(tok), "browser": browser, "os": os_name, "ip": client_ip(request),
+    await db.admin_trusted_devices.insert_one({"user_id": str(user["_id"]), "token_hash": _h(tok), "browser": browser, "os": os_name, "ip": client_ip(request), "device_fp": device_fp(request),
                                                "created_at": _now(), "last_used": _now(), "expires_at": (datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS)).isoformat()})
     return tok
 

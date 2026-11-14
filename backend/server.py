@@ -49,8 +49,9 @@ from contact_routes import build_router as build_contact_router
 from team_routes import build_router as build_team_router
 from stories_routes import build_router as build_stories_router
 from password_reset import build_router as build_password_reset_router
-from login_alerts import record_admin_login, notify_admin_login_locked, describe_ua
+from login_alerts import record_admin_login, notify_admin_login_locked
 import staff_gates
+import two_factor
 import contact_settings
 import push_service
 import assistant_routes
@@ -313,14 +314,7 @@ def _tdev_hash(token: str) -> str:
 
 
 async def _trusted_device_ok(user: dict, request: Request) -> bool:
-    tok = request.headers.get("x-trusted-device", "")
-    if not tok:
-        return False
-    rec = await db.admin_trusted_devices.find_one({"user_id": str(user["_id"]), "token_hash": _tdev_hash(tok)})
-    if not rec or rec["expires_at"] < now_iso():
-        return False
-    await db.admin_trusted_devices.update_one({"_id": rec["_id"]}, {"$set": {"last_used": now_iso(), "ip": _client_ip(request)}})
-    return True
+    return await two_factor.trusted_ok(db, user, request)
 
 
 async def _send_2fa_otp(user: dict) -> bool:
@@ -431,7 +425,6 @@ TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def new_lead_token() -> str:
-    import secrets
     return "RT-" + "".join(secrets.choice(TOKEN_ALPHABET) for _ in range(8))
 
 
@@ -903,11 +896,7 @@ async def login_verify_2fa(body: Login2faIn, request: Request, background: Backg
     await _log_security(str(user["_id"]), "2fa_verified", request, f"IP {_client_ip(request)}")
     out = await _finish_login(user, body, request, background)
     if body.remember_device:
-        tok = secrets.token_urlsafe(32)
-        browser, os_name = describe_ua(request.headers.get("user-agent", ""))
-        await db.admin_trusted_devices.insert_one({"user_id": str(user["_id"]), "token_hash": _tdev_hash(tok), "browser": browser, "os": os_name, "ip": _client_ip(request),
-                                                   "created_at": now_iso(), "last_used": now_iso(), "expires_at": (datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS)).isoformat()})
-        out["trusted_device"] = tok
+        out["trusted_device"] = await two_factor.issue_trusted(db, user, request)
     return out
 
 
@@ -3772,6 +3761,8 @@ api.include_router(_stories_router)
 api.include_router(build_employee_kyc_router(db, require_admin, _emp_router.require_employee, log_activity, pan_error, aadhaar_error, lookup_ifsc_info))
 from app_lock_routes import build_app_lock_router  # noqa: E402
 api.include_router(build_app_lock_router(db, get_current_user, hash_password, verify_password, send_otp_email, log_activity))
+from passkey_login import build_passkey_router  # noqa: E402
+api.include_router(build_passkey_router(db, create_access_token, public_user, _log_security, two_factor.issue_trusted))
 api.include_router(build_attendance_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_leave_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))

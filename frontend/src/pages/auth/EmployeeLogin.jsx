@@ -11,6 +11,7 @@ import { PasswordInput } from "../../components/PasswordInput";
 import { RememberMeCheckbox } from "../../components/RememberMeCheckbox";
 import { loadRemembered, saveRemembered, clearRemembered } from "../../lib/rememberLogin";
 import { AdminTwoFactorStep } from "../../components/AdminTwoFactorStep";
+import { useAutoLogin, rememberInBrowser, PasskeyLoginButton } from "../../components/AutoLogin";
 
 const saved = () => loadRemembered("employee");
 
@@ -23,24 +24,26 @@ export default function EmployeeLogin() {
   const { loginWithToken } = useAuth();
   const nav = useNavigate();
 
-  const finish = (data) => {
-    if (remember) saveRemembered("employee", username, password); else clearRemembered("employee");
+  const finish = (data, un = username, pw = password) => {
+    if (pw) { if (remember) saveRemembered("employee", un, pw); else clearRemembered("employee"); rememberInBrowser(un, pw, `Employee · ${data.user.name}`); }
     loginWithToken(data.token, data.user);
     toast.success(`Welcome, ${data.user.name}`);
     nav("/employee");
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const doLogin = async (un, pw) => {
+    setUsername(un); setPassword(pw);
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/employee/login", { username, password });
+      const { data } = await api.post("/auth/employee/login", { username: un, password: pw });
       if (data.two_factor_required) { setTwoFa(data); toast.success(data.message); return; }
-      finish(data);
+      finish(data, un, pw);
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "Login failed");
     } finally { setLoading(false); }
   };
+  useAutoLogin(doLogin);
+  const submit = (e) => { e.preventDefault(); doLogin(username, password); };
 
   if (twoFa) {
     return (
@@ -61,6 +64,7 @@ export default function EmployeeLogin() {
           {loading && <Loader2 className="h-4 w-4 animate-spin" />} Login to Workspace
         </button>
       </form>
+      <PasskeyLoginButton portal="employee" dark onSuccess={(d) => finish(d, d.user.username || "", "")} />
       <p className="mt-6 text-center text-xs text-slate-500">Forgot password? Ask your Super Admin to reset it. Login needs your password + a 6-digit email code (2-step verification).</p>
       <p className="mt-2 text-center text-sm text-slate-500"><Link to="/app/login" className="font-semibold text-red-600 hover:underline">Customer login</Link></p>
     </AuthShell>

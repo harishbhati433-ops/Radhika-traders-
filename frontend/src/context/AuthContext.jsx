@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import api from "../lib/api";
 import { currentPortal, getToken, getCachedUser, saveSession, saveUser, clearSession, resolveBucket } from "../lib/portal";
+import { forgetAutoLogin } from "../lib/credentialStore";
 
 const AuthContext = createContext(null);
 
@@ -46,6 +47,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     clearSession(portalRef.current);
     try { if (user?.id) sessionStorage.removeItem(`rt_unlocked_${user.id}`); } catch {}
+    forgetAutoLogin();
     setUserState(null);
   };
 

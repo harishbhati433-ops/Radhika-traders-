@@ -1,11 +1,15 @@
 import axios from "axios";
 import { toast } from "sonner";
 import { getToken, clearSession } from "./portal";
+import { getDeviceFingerprint } from "./device";
 
 // Admin 2-step verification: a device the owner marked "trusted" skips the email OTP for 30 days.
 const TDEV_KEY = "rt_admin_trusted_device";
 export const getTrustedDevice = () => { try { return localStorage.getItem(TDEV_KEY) || ""; } catch { return ""; } };
 export const setTrustedDevice = (t) => { try { t ? localStorage.setItem(TDEV_KEY, t) : localStorage.removeItem(TDEV_KEY); } catch {} };
+// Hardware fingerprint (not stored in the browser) lets a trusted device stay trusted after "Clear browsing data".
+let deviceFp = "";
+const getDeviceFp = () => { if (!deviceFp) { try { deviceFp = getDeviceFingerprint(); } catch {} } return deviceFp; };
 
 const ENV_URL = process.env.REACT_APP_BACKEND_URL;
 const sameHost = (() => {
@@ -108,6 +112,8 @@ api.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   const tdev = getTrustedDevice();
   if (tdev) config.headers["X-Trusted-Device"] = tdev;
+  const fp = getDeviceFp();
+  if (fp) config.headers["X-Device-Fp"] = fp;
   return config;
 });
 
