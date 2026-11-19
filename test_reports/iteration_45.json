@@ -1,0 +1,22 @@
+{
+  "summary": "About page CMS feature tested end-to-end. Backend: 8/8 pytest pass (public GET without auth, admin GET/PUT 401 without token, 400 when founder missing, 422 on empty name, save returns updated_at/updated_by, new profile gets 12-char id, hidden profile and mission:false are reflected on the public endpoint, client cannot fake 'locked', founder can be hidden). Frontend admin /admin/team: 2 profiles shown, founder badge appears and founder delete button is disabled. Add → fill → save shows a toast and the new card appears on /about as about-leader-1. Hide → save removes it from /about. Delete opens the dialog; Cancel keeps the profile; Confirm removes it and shows a toast, leaving only Radha on /about. Mission text edit shows on /about. Vision hidden → no about-vision element. Everything restored. Public /about checked at 1920 and 390: owner card and photos, leadership card with /images/radha-rajput.jpeg loaded, two mission/vision cards, 0px horizontal overflow. Regression: team-text-form, team-photos-section and team-save are present; the homepage team section renders.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "PUT /api/admin/about", "issue": "No check for duplicate profile ids, and the founder can be moved away from index 0 (the public page still handles this because it finds the founder by id). Low risk."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/team profile card photo column (160px)", "issues": ["ImageUpload 'All files' button text wraps onto 2 lines ('All / files') and looks cramped next to 'Change' in the narrow photo column"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_about_content.py", "/app/test_reports/pytest/about_results.xml"],
+  "action_items": ["Optional: widen the photo column or stack the ImageUpload buttons in the AdminAboutContent ProfileCard", "Optional: confirmDelete PUTs the whole editor state, so any unsaved edits to other profiles or mission are published along with the delete. Consider warning the user or saving only the delete."],
+  "critical_code_review_comments": ["confirmDelete in AdminAboutContent.jsx sends the full local state `a`, which includes unsaved edits, so deleting a profile also publishes pending edits", "About.jsx FounderHero hardcodes the 'Years' label and the experience text and ignores highlight_label, so editing the founder's highlight label has no effect in the hero card (the photos tile does use it)"],
+  "updated_files": ["/app/backend/tests/test_about_content.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None kept. Before testing there was no settings{key:'about'} doc (defaults were served). The final state is a doc whose content is identical to DEFAULT_ABOUT (founder + Radha visible, original mission/vision), so updated_at is now set in the admin UI.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_about_content.py reads the admin JWT from /tmp/jwt (mint it with the command in the review request) and restores the content in module teardown. The UI test uses localStorage/sessionStorage injection plus a Chrome UA. A 'Notifications are blocked' modal with a 'Later' button shows on admin pages."
+}
