@@ -20,7 +20,7 @@ export const adminNav = [
   { to: "/admin/employees", label: "Employees", icon: UserCog, group: "Team & HR", adminOnly: true },
   { to: "/admin/activity-logs", label: "Activity Logs", icon: History, group: "Team & HR", adminOnly: true },
   { to: "/admin/contact", label: "Contact & Support", icon: Headphones, group: "Website & Settings", adminOnly: true },
-  { to: "/admin/team", label: "Team Photos", icon: Camera, group: "Website & Settings", adminOnly: true },
+  { to: "/admin/team", label: "About & Team", icon: Camera, group: "Website & Settings", adminOnly: true },
   { to: "/admin/attendance", label: "Attendance & Salary", icon: CalendarCheck, group: "Team & HR", adminOnly: true },
   { to: "/admin/employee-kyc", label: "Employee KYC", icon: ShieldCheck, group: "Team & HR", adminOnly: true },
   { to: "/employee/attendance", label: "My Attendance", icon: CalendarCheck, employeeOnly: true },

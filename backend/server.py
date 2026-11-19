@@ -47,6 +47,7 @@ import office_timing
 import attendance_policy
 from contact_routes import build_router as build_contact_router
 from team_routes import build_router as build_team_router
+from about_routes import build_router as build_about_router
 from stories_routes import build_router as build_stories_router
 from password_reset import build_router as build_password_reset_router
 from login_alerts import record_admin_login, notify_admin_login_locked
@@ -3794,6 +3795,7 @@ api.include_router(build_attendance_router(db, require_admin, _emp_router.requir
 api.include_router(build_leave_router(db, require_admin, _emp_router.require_employee, log_activity))
 api.include_router(build_contact_router(db, require_admin, log_activity))
 api.include_router(build_team_router(db, require_admin, log_activity))
+api.include_router(build_about_router(db, require_admin, log_activity))
 api.include_router(build_search_router(db, get_current_user, has_perm))
 
 

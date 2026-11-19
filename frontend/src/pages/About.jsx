@@ -1,8 +1,111 @@
+import { useEffect, useState } from "react";
 import { PublicLayout } from "../components/PublicLayout";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Target, Telescope } from "lucide-react";
+import api, { fileUrl } from "../lib/api";
+
+const FOUNDER_ID = "founder-harish-bhati";
+
+function FounderHero({ p }) {
+  return (
+    <>
+      <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
+        <div className="flex items-center gap-4">
+          <img src="/images/harish-bhati-face.jpeg" alt={p.name} className="h-20 w-20 rounded-full border-2 border-amber-400 object-cover" data-testid="about-owner-avatar" />
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-amber-700">{p.title}</div>
+            <div className="mt-1 font-display text-xl font-bold text-slate-900">{p.name}</div>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-slate-600">{p.bio}</p>
+        {p.highlight && (
+          <div className="mt-4 flex items-center gap-3">
+            <div className="rounded-xl bg-red-600 px-3 py-2 text-center text-white">
+              <div className="font-display text-2xl font-extrabold leading-none">{p.highlight}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider">Years</div>
+            </div>
+            <div className="text-xs text-slate-500">Market experience in financial services & affiliate marketing</div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function FounderPhotos({ p }) {
+  return (
+    <div className="grid grid-cols-5 gap-4 rt-fade-up" data-testid="about-owner-photos">
+      <div className="col-span-3 relative overflow-hidden rounded-3xl shadow-xl h-[420px] sm:h-[560px]">
+        <img src={fileUrl(p.photo_url) || "/images/harish-bhati.jpeg"} alt={`${p.name} — ${p.title}, Radhika Traders`} className="h-full w-full object-cover object-top" data-testid="about-owner-photo-main" />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 text-white">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">{p.title}</div>
+          <div className="font-display text-xl font-bold">{p.name}</div>
+        </div>
+      </div>
+      <div className="col-span-2 flex flex-col gap-4">
+        <div className="relative flex-1 overflow-hidden rounded-3xl shadow-xl">
+          <img src="/images/harish-bhati-2.jpeg" alt={p.name} className="h-full w-full object-cover object-top" data-testid="about-owner-photo-2" />
+        </div>
+        {p.highlight && (
+          <div className="rounded-3xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-5 text-white">
+            <div className="font-display text-4xl font-extrabold text-amber-300">{p.highlight}</div>
+            <div className="text-xs font-semibold uppercase tracking-wider">{p.highlight_label}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeaderCard({ p, i }) {
+  return (
+    <article className="group grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl sm:grid-cols-[260px_1fr]" data-testid={`about-leader-${i}`}>
+      <div className="relative h-72 sm:h-full">
+        {p.photo_url ? <img src={fileUrl(p.photo_url)} alt={`${p.name} — ${p.title}`} className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center bg-slate-100 font-display text-5xl font-extrabold text-slate-300">{p.name[0]}</div>}
+      </div>
+      <div className="flex flex-col justify-center p-6 sm:p-8">
+        <div className="text-xs font-bold uppercase tracking-wider text-red-600">{p.title}</div>
+        <h3 className="mt-2 font-display text-2xl font-extrabold text-slate-950">{p.name}</h3>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{p.bio}</p>
+        {p.highlight && (
+          <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl bg-slate-950 px-4 py-2.5 text-white">
+            <span className="font-display text-2xl font-extrabold text-amber-300">{p.highlight}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">{p.highlight_label}</span>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MissionVision({ mission, vision }) {
+  if (!mission && !vision) return null;
+  const blocks = [mission && { ...mission, icon: Target, k: "mission", tone: "from-red-700 to-[#0B0F17] text-white", iconTone: "bg-white/15 text-amber-300" },
+                  vision && { ...vision, icon: Telescope, k: "vision", tone: "from-amber-50 to-white text-slate-900 border border-amber-200", iconTone: "bg-red-600 text-white" }].filter(Boolean);
+  return (
+    <section className="mt-16 rt-fade-up" data-testid="about-mission-vision">
+      <span className="text-xs font-bold uppercase tracking-wider text-red-600">What drives us</span>
+      <h2 className="mt-2 font-display text-2xl font-bold text-slate-950 sm:text-3xl">Mission & Vision</h2>
+      <div className={`mt-6 grid gap-5 ${blocks.length > 1 ? "lg:grid-cols-2" : ""}`}>
+        {blocks.map((b) => (
+          <div key={b.k} className={`relative overflow-hidden rounded-3xl bg-gradient-to-br p-7 sm:p-9 ${b.tone}`} data-testid={`about-${b.k}`}>
+            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${b.iconTone}`}><b.icon className="h-6 w-6" /></div>
+            <h3 className="mt-5 font-display text-xl font-extrabold sm:text-2xl">{b.title}</h3>
+            <p className={`mt-3 text-sm leading-relaxed sm:text-base ${b.k === "mission" ? "text-white/85" : "text-slate-600"}`}>{b.text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function About() {
   const areas = ["Demat Accounts", "Savings A/C", "Credit Cards", "Insurance", "Loan Assistance", "Financial Products", "Affiliate Campaigns", "Digital Marketing"];
+  const [a, setA] = useState(null);
+  useEffect(() => { api.get("/about/public").then(({ data }) => setA(data)).catch(() => setA({ profiles: [], mission: null, vision: null })); }, []);
+  const profiles = a?.profiles || [];
+  const founder = profiles.find((p) => p.id === FOUNDER_ID);
+  const others = profiles.filter((p) => p.id !== FOUNDER_ID);
+
   return (
     <PublicLayout>
       <section className="mx-auto max-w-7xl px-6 py-16">
@@ -16,54 +119,28 @@ export default function About() {
             <p className="mt-4 text-base text-slate-600">
               Our team brings <strong>3+ years of individual experience</strong> and <strong>6+ years of combined expertise</strong> in the financial and digital marketing space.
             </p>
-            <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
-              <div className="flex items-center gap-4">
-                <img src="/images/harish-bhati-face.jpeg" alt="Harish Bhati" className="h-20 w-20 rounded-full border-2 border-amber-400 object-cover" data-testid="about-owner-avatar" />
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Owner & Founder</div>
-                  <div className="mt-1 font-display text-xl font-bold text-slate-900">Harish Bhati</div>
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Harish Bhati has been working in the financial & affiliate marketing market for <strong>7 years</strong>. With deep hands-on experience across demat accounts, banking products, insurance and digital campaigns, he leads Radhika Traders with a vision to help partners earn genuinely and customers choose the right financial products.
-              </p>
-              <div className="mt-4 flex items-center gap-3">
-                <div className="rounded-xl bg-red-600 px-3 py-2 text-center text-white">
-                  <div className="font-display text-2xl font-extrabold leading-none">7+</div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider">Years</div>
-                </div>
-                <div className="text-xs text-slate-500">Market experience in financial services & affiliate marketing</div>
-              </div>
-            </div>
+            {founder && <FounderHero p={founder} />}
           </div>
-          <div className="grid grid-cols-5 gap-4 rt-fade-up" data-testid="about-owner-photos">
-            <div className="col-span-3 relative overflow-hidden rounded-3xl shadow-xl" style={{ height: 560 }}>
-              <img src="/images/harish-bhati.jpeg" alt="Harish Bhati — Owner & Founder, Radhika Traders"
-                className="h-full w-full object-cover object-top" data-testid="about-owner-photo-main" />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 text-white">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Owner & Founder</div>
-                <div className="font-display text-xl font-bold">Harish Bhati</div>
-              </div>
-            </div>
-            <div className="col-span-2 flex flex-col gap-4">
-              <div className="relative flex-1 overflow-hidden rounded-3xl shadow-xl">
-                <img src="/images/harish-bhati-2.jpeg" alt="Harish Bhati" className="h-full w-full object-cover object-top" data-testid="about-owner-photo-2" />
-              </div>
-              <div className="rounded-3xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-5 text-white">
-                <div className="font-display text-4xl font-extrabold text-amber-300">7+</div>
-                <div className="text-xs font-semibold uppercase tracking-wider">Years in the Market</div>
-              </div>
-            </div>
-          </div>
+          {founder && <FounderPhotos p={founder} />}
         </div>
+
+        {others.length > 0 && (
+          <div className="mt-16 rt-fade-up" data-testid="about-leadership">
+            <span className="text-xs font-bold uppercase tracking-wider text-red-600">Leadership</span>
+            <h2 className="mt-2 font-display text-2xl font-bold text-slate-950 sm:text-3xl">The people who run Radhika Traders</h2>
+            <div className="mt-6 grid gap-6">{others.map((p, i) => <LeaderCard key={p.id} p={p} i={i} />)}</div>
+          </div>
+        )}
+
+        <MissionVision mission={a?.mission} vision={a?.vision} />
 
         <div className="mt-16">
           <h2 className="font-display text-2xl font-bold text-slate-950 sm:text-3xl">What we work with</h2>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {areas.map((a) => (
-              <div key={a} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-4">
+            {areas.map((ar) => (
+              <div key={ar} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-4">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-                <span className="text-sm font-semibold text-slate-800">{a}</span>
+                <span className="text-sm font-semibold text-slate-800">{ar}</span>
               </div>
             ))}
           </div>

@@ -9,6 +9,9 @@ import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Save, Trash2, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
+import { AdminAboutContent } from "./AdminAboutContent";
+
+const TITLE = "Website: About & Team";
 
 export default function AdminTeam() {
   const [t, setT] = useState(null);
@@ -34,10 +37,15 @@ export default function AdminTeam() {
   };
   const toggleVisible = (v) => { const next = { ...t, visible: v }; setT(next); save(next, v ? "Team section is now visible on the homepage" : "Team section hidden from the homepage"); };
 
-  if (!t) return <DashboardLayout nav={adminNav} title="Team Photos"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></DashboardLayout>;
+  if (!t) return <DashboardLayout nav={adminNav} title={TITLE}><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></DashboardLayout>;
 
   return (
-    <DashboardLayout nav={adminNav} title="Team Photos">
+    <DashboardLayout nav={adminNav} title={TITLE}>
+      <h2 className="mb-1 font-display text-xl font-bold text-slate-900">About Page — Leadership, Mission & Vision</h2>
+      <p className="mb-4 text-sm text-slate-500">Everything below is live on <a href="/about" target="_blank" rel="noreferrer" className="font-semibold text-red-600 underline">radhikatraders.net/about</a> the moment you press Save & publish.</p>
+      <AdminAboutContent />
+
+      <h2 className="mb-1 font-display text-xl font-bold text-slate-900">Homepage — Team Photos</h2>
       <p className="mb-4 text-sm text-slate-500">Controls the "Radhika Traders Team" section on the public homepage. Upload photos, reorder them, change the heading, or hide the whole section.</p>
 
       <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-2" data-testid="team-text-form">
