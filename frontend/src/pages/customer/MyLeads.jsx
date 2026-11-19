@@ -53,7 +53,7 @@ export default function MyLeads() {
         {shown.map((l) => (
           <div key={l.id} data-testid={`my-lead-${l.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div><div className="inline-flex items-center gap-0.5 font-semibold text-slate-900">{l.customer_name || "Customer"}<CopyValue value={l.customer_name} label="Name" testId={`my-lead-copy-name-${l.id}`} /> <span className="ml-1 inline-flex items-center font-mono text-[10px] text-slate-400">{l.lead_id}<CopyValue value={l.lead_id} label="Lead ID" testId={`my-lead-copy-id-${l.id}`} /></span>{l.token && <span className="ml-1 inline-flex items-center rounded bg-amber-50 px-1 font-mono text-[10px] font-bold text-amber-800" data-testid={`my-lead-token-${l.id}`}>{l.token}<CopyValue value={l.token} label="User Unique ID" testId={`my-lead-copy-token-${l.id}`} /></span>}</div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500"><CampaignChip name={l.campaign_name} testId={`my-lead-campaign-${l.id}`} /><span>{(l.created_at || "").slice(0, 10)}</span></div>{l.reject_reason && <div className="text-xs text-rose-600">{t("Reason:")} {l.reject_reason}</div>}</div>
+              <div><div className="inline-flex items-center gap-0.5 font-semibold text-slate-900">{l.customer_name || "Customer"}<CopyValue value={l.customer_name} label="Name" testId={`my-lead-copy-name-${l.id}`} /> <span className="ml-1 inline-flex items-center font-mono text-[11px] text-slate-500">{l.lead_id}<CopyValue value={l.lead_id} label="Lead ID" testId={`my-lead-copy-id-${l.id}`} /></span>{l.token && <span className="ml-1 inline-flex items-center rounded bg-amber-50 px-1 font-mono text-[11px] font-bold text-amber-800" data-testid={`my-lead-token-${l.id}`}>{l.token}<CopyValue value={l.token} label="User Unique ID" testId={`my-lead-copy-token-${l.id}`} /></span>}</div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500"><CampaignChip name={l.campaign_name} testId={`my-lead-campaign-${l.id}`} /><span>{(l.created_at || "").slice(0, 10)}</span></div>{l.reject_reason && <div className="text-xs text-rose-600">{t("Reason:")} {l.reject_reason}</div>}</div>
               <div className="flex gap-1.5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${TONE[l.status]}`} data-testid={`my-lead-status-${l.id}`}>{t(l.status)}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${TONE[l.account_status]}`}>{t(A_LABEL[l.account_status] || l.account_status)}</span></div>
             </div>
             {l.status === "duplicate" && (
@@ -66,7 +66,7 @@ export default function MyLeads() {
                 {l.details.map((d) => (
                   <div key={d.key} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2" data-testid={`my-lead-field-${l.id}-${d.key}`}>
                     <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{d.label}</div>
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{d.label}</div>
                       <div className="break-all text-sm font-semibold text-slate-800">{d.key === "mobile" ? <a href={`tel:${d.value}`} className="text-red-600">{d.value}</a> : d.value}</div>
                     </div>
                     <CopyValue value={d.value} label={d.label} testId={`my-lead-copy-${l.id}-${d.key}`} />

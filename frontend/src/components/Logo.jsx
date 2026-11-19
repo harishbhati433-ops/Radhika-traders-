@@ -8,7 +8,7 @@ export function Logo({ light = false, size = "md" }) {
         <div className={`whitespace-nowrap font-display font-extrabold ${title} ${light ? "text-white" : "text-slate-900"}`} style={{ letterSpacing: "-0.5px" }}>
           RADHIKA <span className="text-red-600">TRADERS</span>
         </div>
-        <div className={`text-[9px] font-semibold uppercase tracking-[0.2em] ${light ? "text-amber-300" : "text-amber-600"}`}>
+        <div className={`hidden text-[9px] font-semibold uppercase tracking-[0.2em] min-[400px]:block ${light ? "text-amber-300" : "text-amber-600"}`}>
           Trusted Partner for Financial Growth
         </div>
       </div>

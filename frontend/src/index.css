@@ -54,6 +54,13 @@ h1, h2, h3, h4, .font-display { font-family: 'Outfit', system-ui, -apple-system,
 
 ::selection { background: var(--rt-gold-accent); color: #0B0F17; }
 
+/* Mobile: 16px inputs stop iOS Safari from auto-zooming on focus; pages end above the floating buttons (notch-safe). */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
+  main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); }
+  button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+}
+
 .rt-gradient-btn {
   background: linear-gradient(to right, #DC2626, #991B1B);
   color: #fff;

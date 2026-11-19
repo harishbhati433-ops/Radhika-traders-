@@ -47,15 +47,15 @@ export default function Campaigns() {
               <Input data-testid="campaign-search" placeholder="Search by name or company..." value={search}
                 onChange={(e) => setSearch(e.target.value)} className="pl-9" />
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto rt-scroll">
-              <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400" />
+            <div className="grid grid-cols-2 items-center gap-2 lg:flex">
+              <SlidersHorizontal className="hidden h-4 w-4 shrink-0 text-slate-400 lg:block" />
               <select data-testid="filter-category" value={category} onChange={(e) => setCategory(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
                 <option value="">All Categories</option>
                 {cats.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
               <select data-testid="filter-type" value={ctype} onChange={(e) => setCtype(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
                 <option value="">All Types</option>
                 {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
