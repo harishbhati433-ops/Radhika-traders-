@@ -13,7 +13,7 @@ DEFAULT_ABOUT = {
         {"id": FOUNDER_ID, "locked": True, "visible": True, "name": "Harish Bhati", "title": "Owner & Founder", "photo_url": "/images/harish-bhati.jpeg", "photo2_url": "/images/harish-bhati-2.jpeg", "photo_pos": "center",
          "bio": "Harish Bhati has been working in the financial & affiliate marketing market for 7 years. With deep hands-on experience across demat accounts, banking products, insurance and digital campaigns, he leads Radhika Traders with a vision to help partners earn genuinely and customers choose the right financial products.",
          "highlight": "7+", "highlight_label": "Years in the Market"},
-        {"id": "radha-rajput", "locked": False, "visible": True, "name": "Radha Rajput", "title": "Head of Operations & Management", "photo_url": "/images/radha-rajput.jpeg", "photo2_url": "", "photo_pos": "top",
+        {"id": "radha-rajput", "locked": False, "visible": True, "name": "Radha Rajput", "title": "Head of Operations & Management", "email": "radha.managementnet@gmail.com", "photo_url": "/images/radha-rajput.jpeg", "photo2_url": "", "photo_pos": "top",
          "bio": "Radha Rajput leads day-to-day operations and management at Radhika Traders — from campaign execution and partner support to payouts and team coordination. Her process-driven approach keeps every lead, payment and celebration running smoothly for our partners and customers.",
          "highlight": "", "highlight_label": ""},
     ],
@@ -30,6 +30,7 @@ class ProfileIn(BaseModel):
     visible: bool = True
     name: str = Field(..., min_length=1, max_length=80)
     title: str = Field(..., min_length=1, max_length=100)
+    email: str = Field("", max_length=120)
     photo_url: str = Field("", max_length=500)
     photo2_url: str = Field("", max_length=500)
     photo_pos: str = Field("center", pattern="^(top|center|bottom)$")
@@ -56,7 +57,7 @@ def build_router(db, require_admin, log_activity) -> APIRouter:
     async def current() -> dict:
         doc = await db.settings.find_one({"key": "about"}, {"_id": 0, "key": 0}) or {}
         a = {**DEFAULT_ABOUT, **doc}
-        a["profiles"] = [{"photo2_url": "", "photo_pos": "center", **p} for p in a["profiles"]]
+        a["profiles"] = [{"email": "", "photo2_url": "", "photo_pos": "center", **p} for p in a["profiles"]]
         return a
 
     @r.get("/about/public")
@@ -81,8 +82,11 @@ def build_router(db, require_admin, log_activity) -> APIRouter:
             d = p.model_dump()
             d["id"] = d["id"] or uuid.uuid4().hex[:12]
             d["locked"] = d["id"] == FOUNDER_ID
-            for k in ("name", "title", "photo_url", "photo2_url", "bio", "highlight", "highlight_label"):
+            for k in ("name", "title", "email", "photo_url", "photo2_url", "bio", "highlight", "highlight_label"):
                 d[k] = " ".join(d[k].split()) if k != "bio" else d[k].strip()
+            d["email"] = d["email"].lower()
+            if d["email"] and ("@" not in d["email"] or "." not in d["email"].split("@")[-1]):
+                raise HTTPException(status_code=400, detail=f"'{d['email']}' is not a valid email address.")
             profiles.append(d)
         new = {"profiles": profiles, "mission": body.mission.model_dump(), "vision": body.vision.model_dump()}
         for k in ("mission", "vision"):

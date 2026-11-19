@@ -9,7 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 import { Loader2, Save, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, Plus, Lock, UserRound, Target, Telescope } from "lucide-react";
 
-const blankProfile = () => ({ id: "", locked: false, visible: true, name: "", title: "", photo_url: "", photo2_url: "", photo_pos: "center", bio: "", highlight: "", highlight_label: "" });
+const blankProfile = () => ({ id: "", locked: false, visible: true, name: "", title: "", email: "", photo_url: "", photo2_url: "", photo_pos: "center", bio: "", highlight: "", highlight_label: "" });
 const POS = [["top", "Top (face near the top)"], ["center", "Center"], ["bottom", "Bottom"]];
 
 function ProfileCard({ p, i, total, onChange, onMove, onDelete }) {
@@ -53,6 +53,7 @@ function ProfileCard({ p, i, total, onChange, onMove, onDelete }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label>Name</Label><Input data-testid={`${tid}-name`} value={p.name} onChange={set("name")} maxLength={80} className="mt-1.5" /></div>
           <div><Label>Designation / Post</Label><Input data-testid={`${tid}-title`} value={p.title} onChange={set("title")} maxLength={100} className="mt-1.5" placeholder="e.g. Head of Operations & Management" /></div>
+          <div className="sm:col-span-2"><Label>Contact email (optional, shown on website)</Label><Input type="email" data-testid={`${tid}-email`} value={p.email || ""} onChange={set("email")} maxLength={120} className="mt-1.5" placeholder="name@gmail.com" /></div>
           <div className="sm:col-span-2"><Label>Description</Label><Textarea data-testid={`${tid}-bio`} value={p.bio} onChange={set("bio")} maxLength={1200} className="mt-1.5 min-h-[88px]" /></div>
           <div><Label>Highlight (optional)</Label><Input data-testid={`${tid}-highlight`} value={p.highlight} onChange={set("highlight")} maxLength={12} className="mt-1.5" placeholder="e.g. 7+" /></div>
           <div><Label>Highlight label</Label><Input data-testid={`${tid}-highlight-label`} value={p.highlight_label} onChange={set("highlight_label")} maxLength={40} className="mt-1.5" placeholder="e.g. Years in the Market" /></div>

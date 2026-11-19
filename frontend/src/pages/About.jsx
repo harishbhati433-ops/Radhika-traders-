@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { PublicLayout } from "../components/PublicLayout";
-import { CheckCircle2, Target, Telescope } from "lucide-react";
+import { CheckCircle2, Target, Telescope, Mail } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
 
 const FOUNDER_ID = "founder-harish-bhati";
+
+const EmailLink = ({ email, testId, light = false }) => email ? (
+  <a href={`mailto:${email}`} data-testid={testId} className={`mt-3 inline-flex items-center gap-1.5 text-xs font-semibold hover:underline sm:text-sm ${light ? "text-amber-200" : "text-red-600"}`}><Mail className="h-4 w-4" /> {email}</a>
+) : null;
 
 function FounderHero({ p }) {
   return (
@@ -17,6 +21,7 @@ function FounderHero({ p }) {
           </div>
         </div>
         <p className="mt-3 text-sm text-slate-600">{p.bio}</p>
+        <EmailLink email={p.email} testId="about-owner-email" />
         {p.highlight && (
           <div className="mt-4 flex items-center gap-3">
             <div className="rounded-xl bg-red-600 px-3 py-2 text-center text-white">
@@ -69,6 +74,7 @@ function LeaderCard({ p, i }) {
         <div className="text-xs font-bold uppercase tracking-wider text-red-600">{p.title}</div>
         <h3 className="mt-2 font-display text-2xl font-extrabold text-slate-950">{p.name}</h3>
         <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{p.bio}</p>
+        <EmailLink email={p.email} testId={`about-leader-${i}-email`} />
         {p.highlight && (
           <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl bg-slate-950 px-4 py-2.5 text-white">
             <span className="font-display text-2xl font-extrabold text-amber-300">{p.highlight}</span>
