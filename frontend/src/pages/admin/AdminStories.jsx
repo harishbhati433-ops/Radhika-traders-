@@ -142,6 +142,7 @@ function StoryCard({ s, onEdit, onPatch, onDelete, onViewers }) {
           <span className="inline-flex items-center gap-1" data-testid={`story-unique-${s.id}`}><Users className="h-3.5 w-3.5" /> {s.unique_viewers} Unique</span>
           <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 font-semibold text-rose-700" data-testid={`story-hearts-${s.id}`}>❤️ {s.hearts ?? 0}</span>
           <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 font-semibold text-orange-700" data-testid={`story-fires-${s.id}`}>🔥 {s.fires ?? 0}</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 font-semibold text-sky-700" data-testid={`story-shares-${s.id}`} title={Object.entries(s.shares_by || {}).map(([p, n]) => `${p}: ${n}`).join(" · ") || "No shares yet"}>↗ {s.shares ?? 0} Shares{s.shares ? ` (${Object.entries(s.shares_by || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([p, n]) => `${p} ${n}`).join(", ")})` : ""}</span>
           <label className="inline-flex items-center gap-1 font-semibold"><input type="checkbox" checked={!!s.auto_expire} onChange={(e) => onPatch(s, { auto_expire: e.target.checked })} className="h-3.5 w-3.5 accent-red-600" data-testid={`story-expire-${s.id}`} /> 24h expiry</label>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">

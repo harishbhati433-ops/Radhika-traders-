@@ -42,6 +42,7 @@ const About = lazy(() => import("./pages/About"));
 const Services = lazy(() => import("./pages/Services"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const StoryPublic = lazy(() => import("./pages/StoryPublic"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const Partners = lazy(() => import("./pages/Partners"));
 const Signup = lazy(() => import("./pages/auth/Signup"));
@@ -174,6 +175,7 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/campaign/:slug" element={<CampaignDetail />} />
+            <Route path="/s/:id" element={<StoryPublic />} />
             <Route path="/partners" element={<Partners />} />
             <Route path="/offer-ended" element={<OfferEnded />} />
             <Route path="/join/:slug" element={<LeadForm />} />

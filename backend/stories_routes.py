@@ -120,11 +120,12 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
         payout = c.get("payout_amount")
         return {"title": c.get("offer_name", ""), "caption": benefit or (f"Payout ₹{payout} · Live now" if payout else "Live campaign"),
                 "media_url": c.get("poster_url") or c.get("logo_url") or "", "media_type": "image" if (c.get("poster_url") or c.get("logo_url")) else "text",
-                "link": f"/campaign/{c.get('slug', '')}" if c.get("slug") else "/campaigns", "company": c.get("company", ""), "payout": payout, "logo_url": c.get("logo_url", "")}
+                "link": f"/campaign/{c.get('slug', '')}" if c.get("slug") else "/campaigns", "company": c.get("company", ""), "payout": payout, "logo_url": c.get("logo_url", ""),
+                "slug": c.get("slug", ""), "has_lead_form": bool(c.get("has_lead_form"))}
 
     async def hydrate(stories: list) -> list:
         cids = [ObjectId(s["campaign_id"]) for s in stories if s.get("kind") == "campaign" and ObjectId.is_valid(s.get("campaign_id", ""))]
-        camps = {str(c["_id"]): c for c in await db.campaigns.find({"_id": {"$in": cids}}, {"offer_name": 1, "customer_benefit": 1, "banner_tagline": 1, "payout_amount": 1, "poster_url": 1, "logo_url": 1, "slug": 1, "company": 1, "status": 1}).to_list(500)} if cids else {}
+        camps = {str(c["_id"]): c for c in await db.campaigns.find({"_id": {"$in": cids}}, {"offer_name": 1, "customer_benefit": 1, "banner_tagline": 1, "payout_amount": 1, "poster_url": 1, "logo_url": 1, "slug": 1, "company": 1, "status": 1, "has_lead_form": 1}).to_list(500)} if cids else {}
         out = []
         for s in stories:
             d = {k: v for k, v in s.items() if k != "_id"}
@@ -195,14 +196,51 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
     # ---------- admin ----------
     async def _stats(ids: list) -> dict:
         agg = await db.story_views.aggregate([{"$match": {"story_id": {"$in": ids}}}, {"$group": {"_id": "$story_id", "unique": {"$sum": 1}, "total": {"$sum": "$count"}}}]).to_list(500)
-        out = {a["_id"]: {"total_views": a["total"], "unique_viewers": a["unique"], "hearts": 0, "fires": 0} for a in agg}
+        out = {a["_id"]: {"total_views": a["total"], "unique_viewers": a["unique"], "hearts": 0, "fires": 0, "shares": 0, "shares_by": {}} for a in agg}
         ragg = await db.story_reactions.aggregate([{"$match": {"story_id": {"$in": ids}}}, {"$group": {"_id": {"s": "$story_id", "e": "$emoji"}, "n": {"$sum": 1}}}]).to_list(1000)
         for a in ragg:
-            d = out.setdefault(a["_id"]["s"], {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0})
+            d = out.setdefault(a["_id"]["s"], {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0, "shares": 0, "shares_by": {}})
             d["hearts" if a["_id"]["e"] == "heart" else "fires"] += a["n"]
+        sagg = await db.story_shares.aggregate([{"$match": {"story_id": {"$in": ids}}}, {"$group": {"_id": {"s": "$story_id", "p": "$platform"}, "n": {"$sum": 1}}}]).to_list(2000)
+        for a in sagg:
+            d = out.setdefault(a["_id"]["s"], {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0, "shares": 0, "shares_by": {}})
+            d["shares"] += a["n"]
+            d["shares_by"][a["_id"]["p"]] = a["n"]
         return out
 
-    EMPTY_STATS = {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0}
+    EMPTY_STATS = {"total_views": 0, "unique_viewers": 0, "hearts": 0, "fires": 0, "shares": 0, "shares_by": {}}
+
+    SHARE_PLATFORMS = {"whatsapp", "instagram", "facebook", "telegram", "download", "copy", "native"}
+
+    class ShareIn(BaseModel):
+        platform: str = Field(..., max_length=20)
+
+    @r.post("/stories/{sid}/share", status_code=202)
+    async def share_story(sid: str, body: ShareIn, user: dict = Depends(get_current_user)):
+        p = body.platform.lower()
+        if p not in SHARE_PLATFORMS or not ObjectId.is_valid(sid):
+            raise HTTPException(status_code=400, detail="Unknown share platform")
+        await db.story_shares.insert_one({"story_id": sid, "user_id": user["id"], "platform": p, "at": iso(now())})
+        return {"ok": True}
+
+    @r.get("/stories/{sid}/public")
+    async def public_story(sid: str, ref: Optional[str] = None):
+        """Logged-out landing for shared stories: the story + the sharer's referral so the visitor becomes their lead."""
+        if not ObjectId.is_valid(sid):
+            raise HTTPException(status_code=404, detail="Story not found")
+        doc = await db.stories.find_one({"_id": ObjectId(sid), "active": True}, {"viewers": 0})
+        items = await hydrate([doc]) if doc else []
+        if not items or not items[0]["visible"]:
+            raise HTTPException(status_code=404, detail="This story has expired or is no longer available.")
+        s = items[0]
+        public_keys = ("id", "kind", "title", "caption", "category", "media_type", "media_url", "thumb_url", "bg_color", "font", "link", "published_at", "company", "payout", "logo_url", "slug", "has_lead_form")
+        out = {k: s.get(k) for k in public_keys}
+        out["referrer"] = None
+        if ref:
+            u = await db.users.find_one({"referral_code": ref, "role": "customer", "account_status": {"$nin": ["disabled", "deleted"]}}, {"name": 1, "referral_code": 1})
+            if u:
+                out["referrer"] = {"name": (u.get("name") or "").split(" ")[0], "code": u["referral_code"]}
+        return out
 
     @r.get("/admin/stories")
     async def admin_list(_: dict = Depends(view_mgmt)):

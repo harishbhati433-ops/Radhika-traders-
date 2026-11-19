@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { X, ChevronLeft, ChevronRight, ExternalLink, Pause, Play, Volume2, VolumeX, Loader2, VideoOff } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ExternalLink, Pause, Play, Volume2, VolumeX, Loader2, VideoOff, Share2 } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
 import { fontCss } from "../lib/storyFonts";
+import { useAuth } from "../context/AuthContext";
+import { StoryShareSheet } from "./StoryShareSheet";
 
 const IMAGE_MS = 5000;
 const seenThisSession = new Set();
@@ -39,7 +41,9 @@ function Reactions({ story }) {
 
 export function StoryViewer({ stories, start = 0, onClose, onNavigate, onSeen }) {
   const nav = useNavigate();
+  const { user } = useAuth();
   const [idx, setIdx] = useState(start);
+  const [sharing, setSharing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -90,6 +94,9 @@ export function StoryViewer({ stories, start = 0, onClose, onNavigate, onSeen })
   const onCanPlay = (e) => { setVidState("ready"); if (!pausedRef.current && e.target.paused) tryPlay(e.target); };
   const toggleMute = () => { const v = vidRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); if (v.paused && !pausedRef.current) tryPlay(v); };
   const togglePause = () => { setPaused((p) => { const n = !p; pausedRef.current = n; if (vidRef.current) n ? vidRef.current.pause() : vidRef.current.play(); return n; }); };
+  const setHold = (on) => { if (pausedRef.current !== on) togglePause(); };
+  const openShare = () => { setHold(true); setSharing(true); };
+  const closeShare = () => { setSharing(false); setHold(false); };
   const openLink = () => {
     if (s.link?.startsWith("http")) { window.open(s.link, "_blank"); return; }
     (onNavigate || onClose)();
@@ -108,6 +115,7 @@ export function StoryViewer({ stories, start = 0, onClose, onNavigate, onSeen })
           <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-[#0B0F17]">{s.logo_url ? <img src={fileUrl(s.logo_url)} alt="" className="h-full w-full bg-white object-contain p-1" /> : <span className="font-display text-sm font-extrabold text-amber-400">RT</span>}</span>
           <div className="min-w-0 flex-1 leading-tight"><div className="truncate text-sm font-bold" data-testid="story-viewer-title">{s.kind === "campaign" ? s.title : "Radhika Traders"}</div><div className="truncate text-[11px] text-white/70">{s.category} · {ago(s.published_at)}</div></div>
           {isVideo && <button type="button" onClick={toggleMute} className="rounded-full bg-white/15 p-2" data-testid="story-mute">{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}
+          <button type="button" onClick={openShare} className="rounded-full bg-white/15 p-2" data-testid="story-share" aria-label="Share story"><Share2 className="h-4 w-4" /></button>
           <button type="button" onClick={togglePause} className="rounded-full bg-white/15 p-2" data-testid="story-pause">{paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button>
           <button type="button" onClick={onClose} className="rounded-full bg-white/15 p-2" data-testid="story-close" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
@@ -132,9 +140,11 @@ export function StoryViewer({ stories, start = 0, onClose, onNavigate, onSeen })
           {s.media_type !== "text" && (s.title || s.caption) && <div className="mb-3"><div className="font-display text-lg font-bold">{s.title}</div>{s.caption && <p className="text-sm text-white/85" data-testid="story-caption">{s.caption}</p>}</div>}
           <div className="flex items-center gap-3">
             <Reactions story={s} />
+            <button type="button" onClick={openShare} data-testid="story-share-cta" className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2.5 text-sm font-bold text-white active:scale-[.98]"><Share2 className="h-4 w-4" /> Share</button>
             {s.link && <button type="button" onClick={openLink} data-testid="story-cta" className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 active:scale-[.98]"><ExternalLink className="h-4 w-4" /> {s.kind === "campaign" ? "Open Campaign" : "Learn More"}</button>}
           </div>
         </div>
+        {sharing && <StoryShareSheet story={s} user={user} onClose={closeShare} />}
         {/* tap zones */}
         <button type="button" aria-label="Previous" onClick={prev} className="absolute inset-y-24 left-0 z-10 w-1/3" data-testid="story-prev" />
         <button type="button" aria-label="Next" onClick={next} className="absolute inset-y-24 right-0 z-10 w-1/3" data-testid="story-next" />
