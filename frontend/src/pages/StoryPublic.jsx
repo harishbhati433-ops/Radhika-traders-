@@ -1,12 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowRight, ExternalLink, Gift, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, Gift, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
 import axios from "axios";
 import { Logo } from "../components/Logo";
 import { fileUrl } from "../lib/api";
 import { fontCss } from "../lib/storyFonts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// Tries to autoplay WITH sound; if the browser blocks it, plays muted and shows a one-tap "Sound on" button.
+function StoryVideo({ s }) {
+  const ref = useRef(null);
+  const [muted, setMuted] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = false;
+    v.play().then(() => setMuted(false)).catch(() => { v.muted = true; setMuted(true); setBlocked(true); v.play().catch(() => {}); });
+  }, [s.media_url]);
+  const unmute = () => { const v = ref.current; if (!v) return; v.muted = false; setMuted(false); setBlocked(false); v.play().catch(() => {}); };
+  const toggle = () => { const v = ref.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); };
+  return (
+    <>
+      <video ref={ref} src={fileUrl(s.media_url)} poster={s.thumb_url ? fileUrl(s.thumb_url) : undefined} playsInline autoPlay loop controls preload="auto" className="h-full w-full object-cover" data-testid="story-public-video" onClick={blocked ? unmute : undefined} />
+      {blocked && <button type="button" onClick={unmute} data-testid="story-public-unmute" className="absolute inset-x-0 bottom-20 mx-auto flex w-fit items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-xl animate-pulse"><Volume2 className="h-4 w-4" /> Tap for sound</button>}
+      {!blocked && <button type="button" onClick={toggle} aria-label={muted ? "Unmute" : "Mute"} data-testid="story-public-mute" className="absolute right-3 top-3 rounded-full bg-black/55 p-2 text-white backdrop-blur">{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}
+    </>
+  );
+}
 
 // Public landing for a shared story: /s/:id?ref=CODE — the visitor joins or applies as the sharer's referral.
 export default function StoryPublic() {
@@ -39,7 +61,7 @@ export default function StoryPublic() {
         <main className="mx-auto grid max-w-5xl gap-8 px-5 pb-16 pt-2 lg:grid-cols-[minmax(0,420px)_1fr] lg:items-center">
           <div className="relative mx-auto aspect-[9/16] w-full max-w-[420px] overflow-hidden rounded-3xl bg-slate-900 shadow-2xl ring-1 ring-white/10" data-testid="story-public-media">
             {s.media_type === "image" && <img src={fileUrl(s.media_url)} alt={s.title} className="h-full w-full object-cover" />}
-            {s.media_type === "video" && <video src={fileUrl(s.media_url)} poster={s.thumb_url ? fileUrl(s.thumb_url) : undefined} controls playsInline autoPlay muted loop className="h-full w-full object-cover" />}
+            {s.media_type === "video" && <StoryVideo s={s} />}
             {s.media_type === "text" && (
               <div className="flex h-full flex-col items-center justify-center px-8 text-center" style={{ background: `linear-gradient(180deg, ${s.bg_color || "#7f1d1d"}, #0B0F17)`, ...fontCss(s.font) }}>
                 <div className="text-3xl leading-tight drop-shadow">{s.title}</div>
@@ -48,6 +70,7 @@ export default function StoryPublic() {
               </div>
             )}
             <div className="absolute left-3 top-3 rounded-full bg-black/50 px-3 py-1 text-[11px] font-bold backdrop-blur">{s.category}</div>
+            {s.media_type !== "video" && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-xs font-semibold text-white/80">Radhika Traders · Story</div>}
           </div>
 
           <section className="rt-fade-up">

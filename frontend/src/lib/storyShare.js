@@ -2,7 +2,8 @@
 import api, { fileUrl } from "./api";
 import { fontCss } from "./storyFonts";
 
-export const storyShareUrl = (story, code) => `${window.location.origin}/s/${story.id}${code ? `?ref=${encodeURIComponent(code)}` : ""}`;
+// Share link goes through the backend card (/api/s/…) so WhatsApp/FB/Telegram get a real thumbnail + title; humans are redirected to /s/… instantly.
+export const storyShareUrl = (story, code) => `${window.location.origin}/api/s/${story.id}${code ? `?ref=${encodeURIComponent(code)}` : ""}`;
 
 export const storyShareText = (story, url) => {
   const head = story.kind === "campaign" ? `🔥 ${story.title}${story.payout ? ` — Payout ₹${story.payout}` : ""}` : `✨ ${story.title || "Radhika Traders"}`;

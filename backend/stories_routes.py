@@ -9,6 +9,7 @@ from typing import Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from storage_service import put_object, delete_object, cache_object, is_cached
@@ -225,6 +226,9 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
 
     @r.get("/stories/{sid}/public")
     async def public_story(sid: str, ref: Optional[str] = None):
+        return await _public_payload(sid, ref)
+
+    async def _public_payload(sid: str, ref: Optional[str]):
         """Logged-out landing for shared stories: the story + the sharer's referral so the visitor becomes their lead."""
         if not ObjectId.is_valid(sid):
             raise HTTPException(status_code=404, detail="Story not found")
@@ -241,6 +245,110 @@ def build_router(db, require_perm, get_current_user, log_activity, announce=None
             if u:
                 out["referrer"] = {"name": (u.get("name") or "").split(" ")[0], "code": u["referral_code"]}
         return out
+
+    # ---- Shared-link preview card (WhatsApp / Instagram / Facebook / Telegram unfurl this; humans are redirected to the app page) ----
+    BOT_UA = ("whatsapp", "facebookexternalhit", "facebot", "twitterbot", "telegrambot", "linkedinbot", "slackbot", "discordbot", "pinterest", "applebot", "skypeuripreview", "vkshare", "embedly", "iframely", "googlebot", "bingbot", "snapchat", "instagram")
+    og_cache: dict = {}
+
+    def _base(request: Request) -> str:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+        return f"{request.headers.get('x-forwarded-proto', 'https')}://{host}"
+
+    def _abs(base: str, url: str) -> str:
+        return url if url.startswith("http") else f"{base}{url if url.startswith('/') else '/api/files/' + url}"
+
+    def _esc(s: str) -> str:
+        from html import escape
+        return escape(s or "", quote=True)
+
+    @r.get("/s/{sid}", include_in_schema=False)
+    async def share_card(sid: str, request: Request, ref: Optional[str] = None):
+        base = _base(request)
+        spa = f"{base}/s/{sid}" + (f"?ref={ref}" if ref else "")
+        ua = (request.headers.get("user-agent") or "").lower()
+        if not any(b in ua for b in BOT_UA):
+            return RedirectResponse(spa, status_code=302)
+        try:
+            s = await _public_payload(sid, ref)
+        except HTTPException:
+            s = {"title": "Radhika Traders", "caption": "Yeh story expire ho gayi hai — latest offers dekhein.", "media_type": "text", "media_url": "", "thumb_url": ""}
+        title = s.get("title") or "Radhika Traders"
+        payout = f" · Payout ₹{s['payout']}" if s.get("payout") else ""
+        desc = (s.get("caption") or "Trusted Partner for Financial Growth — ₹0 investment, genuine campaigns, on-time payouts.")[:200] + payout
+        img = f"{base}/api/stories/{sid}/og.jpg"
+        video = _abs(base, s["media_url"]) if s.get("media_type") == "video" and s.get("media_url") else ""
+        vtype = "video/webm" if video.lower().endswith(".webm") else "video/mp4"
+        video_tags = (f'<meta property="og:type" content="video.other"><meta property="og:video" content="{_esc(video)}"><meta property="og:video:secure_url" content="{_esc(video)}">'
+                      f'<meta property="og:video:type" content="{vtype}"><meta property="og:video:width" content="720"><meta property="og:video:height" content="1280">'
+                      f'<meta name="twitter:card" content="player"><meta name="twitter:player:stream" content="{_esc(video)}">') if video else '<meta property="og:type" content="article"><meta name="twitter:card" content="summary_large_image">'
+        html = f"""<!doctype html><html lang="hi"><head><meta charset="utf-8"><title>{_esc(title)} — Radhika Traders</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<meta property="og:site_name" content="Radhika Traders"><meta property="og:title" content="{_esc(title)}"><meta property="og:description" content="{_esc(desc)}">
+<meta property="og:url" content="{_esc(spa)}"><meta property="og:image" content="{_esc(img)}"><meta property="og:image:secure_url" content="{_esc(img)}"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:title" content="{_esc(title)}"><meta name="twitter:description" content="{_esc(desc)}"><meta name="twitter:image" content="{_esc(img)}">{video_tags}
+<link rel="canonical" href="{_esc(spa)}"><meta http-equiv="refresh" content="0;url={_esc(spa)}"></head>
+<body style="font-family:system-ui;background:#0B0F17;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0"><a href="{_esc(spa)}" style="color:#fde68a">Open story →</a><script>location.replace({spa!r})</script></body></html>"""
+        return HTMLResponse(html, headers={"Cache-Control": "public, max-age=300"})
+
+    @r.get("/stories/{sid}/og.jpg", include_in_schema=False)
+    async def og_image(sid: str):
+        """1200×630 JPEG for link previews: image story → letterboxed photo; video → its thumbnail; text → branded card in the story colour."""
+        if sid in og_cache:
+            return Response(og_cache[sid], media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+        doc = await db.stories.find_one({"_id": ObjectId(sid)}, {"media_path": 1, "thumb_path": 1, "media_type": 1, "bg_color": 1, "campaign_id": 1, "kind": 1}) if ObjectId.is_valid(sid) else None
+        src_path = ""
+        if doc:
+            src_path = doc.get("thumb_path") if doc.get("media_type") == "video" else doc.get("media_path") if doc.get("media_type") == "image" else ""
+            if not src_path and doc.get("kind") == "campaign" and doc.get("campaign_id"):
+                c = await db.campaigns.find_one({"_id": ObjectId(doc["campaign_id"])}, {"poster_url": 1, "logo_url": 1})
+                for u in ((c or {}).get("poster_url"), (c or {}).get("logo_url")):
+                    if u and u.startswith("/api/files/"):
+                        src_path = u[len("/api/files/"):]; break
+        data = await asyncio.to_thread(_render_og, src_path, (doc or {}).get("bg_color") or "#7f1d1d")
+        if len(og_cache) > 60:
+            og_cache.clear()
+        og_cache[sid] = data
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+
+    def _render_og(src_path: str, bg: str) -> bytes:
+        from io import BytesIO
+        from PIL import Image, ImageDraw, ImageFilter
+        W, H = 1200, 630
+        try:
+            r_, g_, b_ = tuple(int(bg.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        except Exception:
+            r_, g_, b_ = (127, 29, 29)
+        canvas = Image.new("RGB", (W, H), (r_, g_, b_))
+        photo = None
+        if src_path:
+            try:
+                photo = Image.open(cache_object(src_path)).convert("RGB")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"og image source failed {src_path}: {e}")
+        if photo is not None:
+            blur = photo.copy(); blur.thumbnail((W, W)); blur = blur.resize((W, H)).filter(ImageFilter.GaussianBlur(28))
+            canvas.paste(Image.blend(blur, Image.new("RGB", (W, H), (11, 15, 23)), 0.45), (0, 0))
+            fg = photo.copy(); fg.thumbnail((W - 80, H - 40))
+            canvas.paste(fg, ((W - fg.width) // 2, (H - fg.height) // 2))
+        else:
+            d = ImageDraw.Draw(canvas, "RGBA")
+            for i in range(6):
+                d.ellipse([120 + i * 190, 60 + (i % 2) * 320, 420 + i * 190, 360 + (i % 2) * 320], fill=(255, 255, 255, 14))
+            try:
+                logo = Image.open("/app/frontend/public/images/logo-full.jpeg").convert("RGB"); logo.thumbnail((640, 220))
+                canvas.paste(logo, ((W - logo.width) // 2, (H - logo.height) // 2 - 40))
+            except Exception:  # noqa: BLE001
+                pass
+            d.rounded_rectangle([W // 2 - 220, H - 150, W // 2 + 220, H - 70], radius=40, fill=(251, 191, 36, 255))
+            try:
+                from PIL import ImageFont
+                font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 34)
+            except Exception:  # noqa: BLE001
+                font = None
+            d.text((W // 2, H - 110), "TAP TO VIEW STORY", fill=(11, 15, 23), anchor="mm", font=font)
+        out = BytesIO()
+        canvas.save(out, "JPEG", quality=82, optimize=True)
+        return out.getvalue()
 
     @r.get("/admin/stories")
     async def admin_list(_: dict = Depends(view_mgmt)):
