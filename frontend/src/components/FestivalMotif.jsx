@@ -68,6 +68,17 @@ function Dandiya() {
   );
 }
 
+// Dussehra: Ram's bow & arrow with the Ravan-dahan glow — distinct from Navratri's dandiya sticks.
+function BowArrow() {
+  return (
+    <div className="motif" data-testid="festival-motif-dussehra">
+      <span className="glyph-halo" style={{ "--c": "#fbbf24" }} /><span className="glyph-halo h2" />
+      <span className="glyph" role="img" aria-label="dussehra">🏹</span>
+      {[0, 1, 2].map((i) => <span key={i} className="spark" style={{ left: `${22 + i * 26}%`, top: `${8 + (i % 2) * 12}%`, background: "#fb923c", animationDelay: `${i * 0.5}s` }} />)}
+    </div>
+  );
+}
+
 function Glyph({ ch, label, extra }) {
   return (
     <div className="motif" data-testid={`festival-motif-${label}`}>
@@ -87,6 +98,7 @@ const MAP = {
   newyear: <Fireworks />,
   rakhi: <Rakhi />,
   navratri: <Dandiya />,
+  dussehra: <BowArrow />,
   ganesh: <Glyph ch={<span style={{ color: "var(--fest-accent2)", fontFamily: "serif", fontWeight: 700 }}>ॐ</span>} label="ganesh" />,
   janmashtami: <Glyph ch="🦚" label="janmashtami" extra={<span className="flute" />} />,
   shivratri: <Glyph ch="🔱" label="shivratri" extra={<span className="moon" />} />,

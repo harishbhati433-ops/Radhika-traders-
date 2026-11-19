@@ -22,11 +22,16 @@ SEED = {
              "note": "Holika Dahan + Dhulandi",
              "dates": {2025: ["2025-03-13", "2025-03-14"], 2026: ["2026-03-03", "2026-03-04"], 2027: ["2027-03-21", "2027-03-22"], 2028: ["2028-03-10", "2028-03-11"], 2029: ["2029-02-28", "2029-03-01"], 2030: ["2030-03-19", "2030-03-20"],
                        2031: ["2031-03-08", "2031-03-09"], 2032: ["2032-03-26", "2032-03-27"], 2033: ["2033-03-15", "2033-03-16"], 2034: ["2034-03-04", "2034-03-05"], 2035: ["2035-03-23", "2035-03-24"]}},
-    "navratri": {"wish": "शुभ नवरात्रि", "name": "Navratri – Dussehra", "emoji": "🔱", "headline_hi": "शक्ति के साथ, सफलता की ओर!", "headline_en": "Nine nights of power, a season of success", "tagline": "Trusted Partner for Financial Growth",
-                 "greeting": "नवरात्रि व विजयादशमी की शुभकामनाएँ! माँ दुर्गा आपको शक्ति और समृद्धि दें।", "priority": 70, "palette": {"bg": "#2a0a0a", "accent": "#ef4444", "accent2": "#fbbf24", "glow": "#f43f5e", "text": "#fff1f2"},
-                 "note": "Navratri day 1 → Dussehra",
-                 "dates": {2025: ["2025-09-22", "2025-10-02"], 2026: ["2026-10-11", "2026-10-20"], 2027: ["2027-09-30", "2027-10-09"], 2028: ["2028-09-19", "2028-09-27"], 2029: ["2029-10-08", "2029-10-16"], 2030: ["2030-09-27", "2030-10-06"],
-                           2031: ["2031-10-17", "2031-10-25"], 2032: ["2032-10-05", "2032-10-14"], 2033: ["2033-09-24", "2033-10-03"], 2034: ["2034-10-13", "2034-10-22"], 2035: ["2035-10-03", "2035-10-11"]}},
+    "navratri": {"wish": "शुभ नवरात्रि", "name": "Navratri", "emoji": "🔱", "headline_hi": "शक्ति के साथ, सफलता की ओर!", "headline_en": "Nine nights of power, a season of success", "tagline": "Trusted Partner for Financial Growth",
+                 "greeting": "नवरात्रि की हार्दिक शुभकामनाएँ! माँ दुर्गा आपको शक्ति, स्वास्थ्य और समृद्धि दें।", "priority": 70, "palette": {"bg": "#2a0a0a", "accent": "#ef4444", "accent2": "#fbbf24", "glow": "#f43f5e", "text": "#fff1f2"},
+                 "note": "Pratipada → Maha Navami (9 nights)",
+                 "dates": {2025: ["2025-09-22", "2025-10-01"], 2026: ["2026-10-11", "2026-10-19"], 2027: ["2027-09-30", "2027-10-08"], 2028: ["2028-09-19", "2028-09-26"], 2029: ["2029-10-08", "2029-10-15"], 2030: ["2030-09-27", "2030-10-05"],
+                           2031: ["2031-10-17", "2031-10-24"], 2032: ["2032-10-05", "2032-10-13"], 2033: ["2033-09-24", "2033-10-02"], 2034: ["2034-10-13", "2034-10-21"], 2035: ["2035-10-03", "2035-10-10"]}},
+    "dussehra": {"wish": "शुभ विजयादशमी", "name": "Dussehra", "emoji": "🏹", "headline_hi": "बुराई पर अच्छाई की जीत, कमाई में नई उड़ान!", "headline_en": "Victory of good over evil — a new high for your earnings", "tagline": "Trusted Partner for Financial Growth",
+                 "greeting": "दशहरा व विजयादशमी की हार्दिक शुभकामनाएँ! श्रीराम की कृपा से आपके जीवन की हर बुराई का अंत हो और विजय सदा आपके साथ रहे।", "priority": 72, "palette": {"bg": "#1f0d05", "accent": "#f97316", "accent2": "#fde68a", "glow": "#fbbf24", "text": "#fff7ed"},
+                 "note": "Vijayadashami (1 day, Ravan Dahan)",
+                 "dates": {2025: ["2025-10-02", "2025-10-02"], 2026: ["2026-10-20", "2026-10-20"], 2027: ["2027-10-09", "2027-10-09"], 2028: ["2028-09-27", "2028-09-27"], 2029: ["2029-10-16", "2029-10-16"], 2030: ["2030-10-06", "2030-10-06"],
+                           2031: ["2031-10-25", "2031-10-25"], 2032: ["2032-10-14", "2032-10-14"], 2033: ["2033-10-03", "2033-10-03"], 2034: ["2034-10-22", "2034-10-22"], 2035: ["2035-10-11", "2035-10-11"]}},
     "ganesh": {"wish": "गणपति बप्पा मोरया", "name": "Ganesh Chaturthi", "emoji": "🕉️", "headline_hi": "गणपति बप्पा मोरया! विघ्न हरें, कमाई बढ़े", "headline_en": "Ganpati Bappa Morya — remove obstacles, grow your earnings", "tagline": "Trusted Partner for Financial Growth",
                "greeting": "गणेश चतुर्थी की हार्दिक शुभकामनाएँ! बप्पा आपके सभी विघ्न दूर करें और समृद्धि लाएँ।", "priority": 75, "palette": {"bg": "#1c0a04", "accent": "#f97316", "accent2": "#fde047", "glow": "#fb923c", "text": "#fff7ed"},
                "note": "Ganesh Chaturthi → Anant Chaturdashi (10 days)",
@@ -95,8 +100,8 @@ def _windows_around(f: dict, today: date):
             yield y, w
 
 
-FIREWORKS_ALWAYS = {"diwali", "newyear"}
-FIREWORKS_LAST_DAY = {"navratri": "शुभ विजयादशमी"}  # Dussehra = last day of the Navratri window
+FIREWORKS_ALWAYS = {"diwali", "newyear", "dussehra"}  # Dussehra = Ravan Dahan crackers
+FIREWORKS_LAST_DAY: dict = {}
 
 
 def _public(f: dict, start=None, end=None, mode="scheduled", today=None) -> dict:
@@ -115,6 +120,12 @@ def build_festival_router(db, require_admin, get_current_user_optional, log_acti
     cache = {"at": 0.0, "value": None}
 
     async def ensure_seed():
+        # One-time split: the old combined "Navratri – Dussehra" entry becomes Navratri (9 nights) + a separate Dussehra day.
+        old = await db.festival_themes.find_one({"key": "navratri", "name": {"$regex": "Dussehra"}})
+        if old:
+            s = SEED["navratri"]
+            await db.festival_themes.update_one({"key": "navratri"}, {"$set": {"name": s["name"], "wish": s["wish"], "greeting": s["greeting"], "note": s["note"], "dates": {str(y): v for y, v in s["dates"].items()}}})
+            cache["value"] = None
         if await db.festival_themes.estimated_document_count() >= len(SEED):
             return
         for key, f in SEED.items():
