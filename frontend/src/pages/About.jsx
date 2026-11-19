@@ -10,7 +10,7 @@ function FounderHero({ p }) {
     <>
       <div className="mt-6 rounded-2xl border border-amber-300/40 bg-amber-500/5 p-5" data-testid="about-owner-card">
         <div className="flex items-center gap-4">
-          <img src="/images/harish-bhati-face.jpeg" alt={p.name} className="h-20 w-20 rounded-full border-2 border-amber-400 object-cover" data-testid="about-owner-avatar" />
+          <img src={fileUrl(p.photo_url) || "/images/harish-bhati-face.jpeg"} alt={p.name} className="h-20 w-20 shrink-0 rounded-full border-2 border-amber-400 object-cover" style={{ objectPosition: p.photo_pos || "center" }} data-testid="about-owner-avatar" />
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-amber-700">{p.title}</div>
             <div className="mt-1 font-display text-xl font-bold text-slate-900">{p.name}</div>
@@ -32,26 +32,29 @@ function FounderHero({ p }) {
 }
 
 function FounderPhotos({ p }) {
+  const pos = p.photo_pos || "center";
   return (
     <div className="grid grid-cols-5 gap-4 rt-fade-up" data-testid="about-owner-photos">
-      <div className="col-span-3 relative overflow-hidden rounded-3xl shadow-xl h-[420px] sm:h-[560px]">
-        <img src={fileUrl(p.photo_url) || "/images/harish-bhati.jpeg"} alt={`${p.name} — ${p.title}, Radhika Traders`} className="h-full w-full object-cover object-top" data-testid="about-owner-photo-main" />
+      <div className={`relative overflow-hidden rounded-3xl shadow-xl h-[420px] sm:h-[560px] ${p.photo2_url ? "col-span-3" : "col-span-5"}`}>
+        <img src={fileUrl(p.photo_url) || "/images/harish-bhati.jpeg"} alt={`${p.name} — ${p.title}, Radhika Traders`} className="h-full w-full object-cover" style={{ objectPosition: pos }} data-testid="about-owner-photo-main" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 text-white">
           <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">{p.title}</div>
           <div className="font-display text-xl font-bold">{p.name}</div>
         </div>
       </div>
-      <div className="col-span-2 flex flex-col gap-4">
-        <div className="relative flex-1 overflow-hidden rounded-3xl shadow-xl">
-          <img src="/images/harish-bhati-2.jpeg" alt={p.name} className="h-full w-full object-cover object-top" data-testid="about-owner-photo-2" />
-        </div>
-        {p.highlight && (
-          <div className="rounded-3xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-5 text-white">
-            <div className="font-display text-4xl font-extrabold text-amber-300">{p.highlight}</div>
-            <div className="text-xs font-semibold uppercase tracking-wider">{p.highlight_label}</div>
+      {p.photo2_url && (
+        <div className="col-span-2 flex flex-col gap-4">
+          <div className="relative flex-1 overflow-hidden rounded-3xl shadow-xl">
+            <img src={fileUrl(p.photo2_url)} alt={p.name} className="h-full w-full object-cover object-top" data-testid="about-owner-photo-2" />
           </div>
-        )}
-      </div>
+          {p.highlight && (
+            <div className="rounded-3xl bg-gradient-to-br from-red-700 to-[#0B0F17] p-5 text-white">
+              <div className="font-display text-4xl font-extrabold text-amber-300">{p.highlight}</div>
+              <div className="text-xs font-semibold uppercase tracking-wider">{p.highlight_label}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -60,7 +63,7 @@ function LeaderCard({ p, i }) {
   return (
     <article className="group grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-xl sm:grid-cols-[260px_1fr]" data-testid={`about-leader-${i}`}>
       <div className="relative h-72 sm:h-full">
-        {p.photo_url ? <img src={fileUrl(p.photo_url)} alt={`${p.name} — ${p.title}`} className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]" /> : <div className="flex h-full items-center justify-center bg-slate-100 font-display text-5xl font-extrabold text-slate-300">{p.name[0]}</div>}
+        {p.photo_url ? <img src={fileUrl(p.photo_url)} alt={`${p.name} — ${p.title}`} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" style={{ objectPosition: p.photo_pos || "center" }} /> : <div className="flex h-full items-center justify-center bg-slate-100 font-display text-5xl font-extrabold text-slate-300">{p.name[0]}</div>}
       </div>
       <div className="flex flex-col justify-center p-6 sm:p-8">
         <div className="text-xs font-bold uppercase tracking-wider text-red-600">{p.title}</div>

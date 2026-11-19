@@ -9,7 +9,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 import { Loader2, Save, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, Plus, Lock, UserRound, Target, Telescope } from "lucide-react";
 
-const blankProfile = () => ({ id: "", locked: false, visible: true, name: "", title: "", photo_url: "", bio: "", highlight: "", highlight_label: "" });
+const blankProfile = () => ({ id: "", locked: false, visible: true, name: "", title: "", photo_url: "", photo2_url: "", photo_pos: "center", bio: "", highlight: "", highlight_label: "" });
+const POS = [["top", "Top (face near the top)"], ["center", "Center"], ["bottom", "Bottom"]];
 
 function ProfileCard({ p, i, total, onChange, onMove, onDelete }) {
   const set = (k) => (e) => onChange({ ...p, [k]: e.target.value });
@@ -32,8 +33,22 @@ function ProfileCard({ p, i, total, onChange, onMove, onDelete }) {
       </div>
       <div className="grid gap-4 md:grid-cols-[160px_1fr]">
         <div>
-          {p.photo_url ? <img src={fileUrl(p.photo_url)} alt="" className="mb-2 h-40 w-full rounded-xl object-cover object-top" data-testid={`${tid}-photo`} /> : <div className="mb-2 flex h-40 items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400">No photo</div>}
+          {p.photo_url ? <img src={fileUrl(p.photo_url)} alt="" className="mb-2 h-40 w-full rounded-xl object-cover" style={{ objectPosition: p.photo_pos || "center" }} data-testid={`${tid}-photo`} /> : <div className="mb-2 flex h-40 items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400">No photo</div>}
           <ImageUpload label="" value={p.photo_url} onChange={(url) => onChange({ ...p, photo_url: url })} testId={`${tid}-upload`} />
+          <Label className="mt-3 block text-xs">Photo focus (crop)</Label>
+          <select data-testid={`${tid}-photo-pos`} value={p.photo_pos || "center"} onChange={set("photo_pos")} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+            {POS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          {p.locked && (
+            <div className="mt-3">
+              <Label className="block text-xs">Second photo (About page, optional)</Label>
+              {p.photo2_url && <img src={fileUrl(p.photo2_url)} alt="" className="my-1 h-20 w-full rounded-lg object-cover object-top" data-testid={`${tid}-photo2`} />}
+              <div className="flex items-center gap-2">
+                <ImageUpload label="" value={p.photo2_url} onChange={(url) => onChange({ ...p, photo2_url: url })} testId={`${tid}-upload2`} />
+                {p.photo2_url && <button type="button" onClick={() => onChange({ ...p, photo2_url: "" })} data-testid={`${tid}-photo2-remove`} className="text-xs font-semibold text-rose-600 hover:underline">Remove</button>}
+              </div>
+            </div>
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label>Name</Label><Input data-testid={`${tid}-name`} value={p.name} onChange={set("name")} maxLength={80} className="mt-1.5" /></div>

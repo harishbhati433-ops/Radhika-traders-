@@ -9,14 +9,17 @@ function LeadershipStrip() {
   useEffect(() => { api.get("/about/public").then(({ data }) => setPeople(data.profiles || [])).catch(() => {}); }, []);
   if (!people.length) return null;
   return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2" data-testid="home-leadership">
+    <div className={`mt-8 grid gap-4 ${people.length > 1 ? "sm:grid-cols-2" : ""}`} data-testid="home-leadership">
       {people.map((p, i) => (
-        <Link to="/about" key={p.id} className="group flex items-center gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-lg sm:p-5" data-testid={`home-leader-${i}`}>
-          <img src={fileUrl(p.photo_url) || "/images/harish-bhati-face.jpeg"} alt={`${p.name} — ${p.title}`} loading="lazy" decoding="async" className="h-20 w-20 shrink-0 rounded-2xl border-2 border-amber-400 object-cover object-top sm:h-24 sm:w-24" />
-          <div className="min-w-0">
-            <div className="truncate text-[11px] font-bold uppercase tracking-wider text-red-600">{p.title}</div>
-            <div className="mt-1 font-display text-lg font-extrabold text-slate-950 sm:text-xl">{p.name}</div>
-            <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-red-600">Read profile <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></div>
+        <Link to="/about" key={p.id} className="group flex overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-lg" data-testid={`home-leader-${i}`}>
+          <div className="relative w-32 shrink-0 self-stretch sm:w-40">
+            {p.photo_url ? <img src={fileUrl(p.photo_url)} alt={`${p.name} — ${p.title}`} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" style={{ objectPosition: p.photo_pos || "center" }} /> : <div className="absolute inset-0 flex items-center justify-center bg-slate-100 font-display text-4xl font-extrabold text-slate-300">{p.name[0]}</div>}
+          </div>
+          <div className="flex min-h-[11rem] min-w-0 flex-col justify-center p-5 sm:min-h-[12rem] sm:p-6">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-red-600">{p.title}</div>
+            <div className="mt-1 font-display text-xl font-extrabold text-slate-950 sm:text-2xl">{p.name}</div>
+            {p.bio && <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-500 sm:text-sm">{p.bio}</p>}
+            <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-slate-700 group-hover:text-red-600">Read profile <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></div>
           </div>
         </Link>
       ))}
