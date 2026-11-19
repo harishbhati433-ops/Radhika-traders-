@@ -1,5 +1,28 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import api, { fileUrl } from "../lib/api";
+
+// Leadership strip under the team photos — same profiles the admin manages on the About page.
+function LeadershipStrip() {
+  const [people, setPeople] = useState([]);
+  useEffect(() => { api.get("/about/public").then(({ data }) => setPeople(data.profiles || [])).catch(() => {}); }, []);
+  if (!people.length) return null;
+  return (
+    <div className="mt-8 grid gap-4 sm:grid-cols-2" data-testid="home-leadership">
+      {people.map((p, i) => (
+        <Link to="/about" key={p.id} className="group flex items-center gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-lg sm:p-5" data-testid={`home-leader-${i}`}>
+          <img src={fileUrl(p.photo_url) || "/images/harish-bhati-face.jpeg"} alt={`${p.name} — ${p.title}`} loading="lazy" decoding="async" className="h-20 w-20 shrink-0 rounded-2xl border-2 border-amber-400 object-cover object-top sm:h-24 sm:w-24" />
+          <div className="min-w-0">
+            <div className="truncate text-[11px] font-bold uppercase tracking-wider text-red-600">{p.title}</div>
+            <div className="mt-1 font-display text-lg font-extrabold text-slate-950 sm:text-xl">{p.name}</div>
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-red-600">Read profile <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></div>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 const DEFAULT_TEAM = {
   visible: true, eyebrow: "Our People", heading: "Radhika Traders Team",
@@ -34,6 +57,7 @@ export function TeamSection() {
           </div>
         )}
       </div>
+      <LeadershipStrip />
     </section>
   );
 }
